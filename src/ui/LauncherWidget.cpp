@@ -1183,6 +1183,9 @@ void LauncherWidget::onDeleteProfile() {
   dialog->deleteLater();
 }
 
+// REVIEW BEFORE BETA: Audit finding #13 — this method shares ~300 lines of
+// near-identical code with onLaunchAll() below. Deferred dedup due to subtle
+// behavioral differences. See docs/audit-report-phase1.md for details.
 void LauncherWidget::onLaunchSelected() {
   if (m_gw2Path.isEmpty()) {
     // Styled warning dialog
@@ -1543,13 +1546,13 @@ void LauncherWidget::onLaunchSelected() {
   }
 }
 
+// REVIEW BEFORE BETA: Audit finding #13 — this method shares ~300 lines of
+// near-identical code with onLaunchSelected() above. Deferred dedup due to
+// subtle behavioral differences. See docs/audit-report-phase1.md for details.
 void LauncherWidget::onLaunchAll() {
   if (m_gw2Path.isEmpty()) {
     // Styled warning dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(380);
+    auto *d = UIHelpers::createStyledDialog(this, 380);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -1577,10 +1580,7 @@ void LauncherWidget::onLaunchAll() {
   const QList<AccountProfile> &profiles = m_profileManager->profiles();
   if (profiles.isEmpty()) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -1758,10 +1758,7 @@ void LauncherWidget::onLaunchAll() {
 
   if (launched == 0 && alreadyRunning == 0) {
     // Styled warning dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(380);
+    auto *d = UIHelpers::createStyledDialog(this, 380);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -1810,10 +1807,7 @@ void LauncherWidget::onCheckForUpdates() {
 
   if (selectedIds.isEmpty()) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(300);
+    auto *d = UIHelpers::createStyledDialog(this, 300);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -1838,10 +1832,7 @@ void LauncherWidget::onCheckForUpdates() {
   }
 
   // Styled confirmation dialog
-  auto *d = new QDialog(this);
-  d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-  d->setAttribute(Qt::WA_TranslucentBackground);
-  d->setMinimumWidth(450);
+  auto *d = UIHelpers::createStyledDialog(this, 450);
   auto *ol = new QVBoxLayout(d);
   ol->setContentsMargins(0, 0, 0, 0);
   auto *bg = new QWidget();
@@ -1936,10 +1927,7 @@ void LauncherWidget::onCheckForUpdates() {
       patched++;
 
       // Styled patching dialog
-      auto *d = new QDialog(this);
-      d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-      d->setAttribute(Qt::WA_TranslucentBackground);
-      d->setMinimumWidth(400);
+      auto *d = UIHelpers::createStyledDialog(this, 400);
       auto *ol = new QVBoxLayout(d);
       ol->setContentsMargins(0, 0, 0, 0);
       auto *bg = new QWidget();
@@ -2006,10 +1994,7 @@ void LauncherWidget::onCloneProfile() {
   QList<QString> selectedIds = getSelectedProfileIds();
   if (selectedIds.size() > 1) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2046,10 +2031,7 @@ void LauncherWidget::onCloneProfile() {
 
   if (!profile) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(300);
+    auto *d = UIHelpers::createStyledDialog(this, 300);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2166,10 +2148,7 @@ void LauncherWidget::onMoveProfileUp() {
 
   if (toggledCount == 0) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(300);
+    auto *d = UIHelpers::createStyledDialog(this, 300);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2194,10 +2173,7 @@ void LauncherWidget::onMoveProfileUp() {
   }
   if (toggledCount > 1) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2267,10 +2243,7 @@ void LauncherWidget::onMoveProfileDown() {
 
   if (toggledCount == 0) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(300);
+    auto *d = UIHelpers::createStyledDialog(this, 300);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2295,10 +2268,7 @@ void LauncherWidget::onMoveProfileDown() {
   }
   if (toggledCount > 1) {
     // Styled info dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2364,10 +2334,7 @@ void LauncherWidget::onSettings() {
     if (dir.exists("Gw2-64.exe") || dir.exists("Gw2.exe")) {
       setGw2Path(path);
       // Styled success dialog
-      auto *d = new QDialog(this);
-      d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-      d->setAttribute(Qt::WA_TranslucentBackground);
-      d->setMinimumWidth(300);
+      auto *d = UIHelpers::createStyledDialog(this, 300);
       auto *ol = new QVBoxLayout(d);
       ol->setContentsMargins(0, 0, 0, 0);
       auto *bg = new QWidget();
@@ -2390,10 +2357,7 @@ void LauncherWidget::onSettings() {
       d->deleteLater();
     } else {
       // Styled warning dialog
-      auto *d = new QDialog(this);
-      d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-      d->setAttribute(Qt::WA_TranslucentBackground);
-      d->setMinimumWidth(380);
+      auto *d = UIHelpers::createStyledDialog(this, 380);
       auto *ol = new QVBoxLayout(d);
       ol->setContentsMargins(0, 0, 0, 0);
       auto *bg = new QWidget();
@@ -2443,11 +2407,7 @@ void LauncherWidget::onExportProfile() {
     }
 
     // Styled success dialog
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint |
-                      Qt::WindowStaysOnTopHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2485,10 +2445,7 @@ void LauncherWidget::onExportProfile() {
   }
 
   if (!profile) {
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(300);
+    auto *d = UIHelpers::createStyledDialog(this, 300);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2520,11 +2477,7 @@ void LauncherWidget::onExportProfile() {
     return;
 
   if (m_profileManager->exportProfile(profile->id, filePath)) {
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint |
-                      Qt::WindowStaysOnTopHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2551,10 +2504,7 @@ void LauncherWidget::onExportProfile() {
     d->exec();
     d->deleteLater();
   } else {
-    auto *d = new QDialog(this);
-    d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    d->setAttribute(Qt::WA_TranslucentBackground);
-    d->setMinimumWidth(350);
+    auto *d = UIHelpers::createStyledDialog(this, 350);
     auto *ol = new QVBoxLayout(d);
     ol->setContentsMargins(0, 0, 0, 0);
     auto *bg = new QWidget();
@@ -2604,10 +2554,7 @@ void LauncherWidget::onImportProfile() {
   updateProfileList();
 
   // Show result dialog
-  auto *d = new QDialog(this);
-  d->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-  d->setAttribute(Qt::WA_TranslucentBackground);
-  d->setMinimumWidth(350);
+  auto *d = UIHelpers::createStyledDialog(this, 350);
   auto *ol = new QVBoxLayout(d);
   ol->setContentsMargins(0, 0, 0, 0);
   auto *bg = new QWidget();

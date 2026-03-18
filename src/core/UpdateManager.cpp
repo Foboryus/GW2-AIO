@@ -8,7 +8,6 @@
  * - Per-path build ID storage (QSettings)
  * - Exe timestamp verification to detect binary changes
  * - Pre-launch gating (canLaunch)
- * - Crash invalidation (onPatchCrashDetected)
  * - Clean GW2 launch for updates with Job Object monitoring
  *
  * DO NOT ADD:

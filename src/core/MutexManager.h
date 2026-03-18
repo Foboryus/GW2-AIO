@@ -48,19 +48,24 @@ signals:
 
 private:
 #ifdef Q_OS_WIN
-  struct SYSTEM_HANDLE_TABLE_ENTRY_INFO {
-    USHORT UniqueProcessId;
-    USHORT CreatorBackTraceIndex;
-    UCHAR ObjectTypeIndex;
-    UCHAR HandleAttributes;
-    USHORT HandleValue;
+  // Use Extended handle info (class 64) — supports PIDs > 65535.
+  // The older SYSTEM_HANDLE_TABLE_ENTRY_INFO (class 16) truncates PIDs
+  // to USHORT which silently fails on modern Windows.
+  struct SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX {
     PVOID Object;
+    ULONG_PTR UniqueProcessId;
+    ULONG_PTR HandleValue;
     ULONG GrantedAccess;
+    USHORT CreatorBackTraceIndex;
+    USHORT ObjectTypeIndex;
+    ULONG HandleAttributes;
+    ULONG Reserved;
   };
 
-  struct SYSTEM_HANDLE_INFORMATION {
-    ULONG NumberOfHandles;
-    SYSTEM_HANDLE_TABLE_ENTRY_INFO Handles[1];
+  struct SYSTEM_HANDLE_INFORMATION_EX {
+    ULONG_PTR NumberOfHandles;
+    ULONG_PTR Reserved;
+    SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX Handles[1];
   };
 
   typedef NTSTATUS(WINAPI *NtQuerySystemInformationFunc)(
@@ -78,8 +83,8 @@ private:
   HMODULE m_ntdll = nullptr;
 
   bool initNtFunctions();
-  QList<SYSTEM_HANDLE_TABLE_ENTRY_INFO> getProcessHandles(DWORD processId);
-  QString getHandleName(HANDLE hProcess, USHORT handleValue);
-  bool closeRemoteHandle(DWORD processId, USHORT handleValue);
+  QList<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX> getProcessHandles(DWORD processId);
+  QString getHandleName(HANDLE hProcess, ULONG_PTR handleValue);
+  bool closeRemoteHandle(DWORD processId, ULONG_PTR handleValue);
 #endif
 };

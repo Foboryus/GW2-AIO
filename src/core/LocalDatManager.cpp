@@ -471,9 +471,29 @@ bool LocalDatManager::preserveOriginalAppData() {
       return false;
     }
 
-    // Remove original folder after successful copy
+    // Verify the copy contains at least as many files as the original
+    // before destroying the original (guards against partial copy from
+    // disk-full or permission errors that didn't fail QFile::copy)
+    int sourceCount = QDir(m_gw2AppDataPath)
+                          .entryList(QDir::Files | QDir::NoDotAndDotDot)
+                          .size();
+    int destCount = QDir(m_defaultFolderPath)
+                        .entryList(QDir::Files | QDir::NoDotAndDotDot)
+                        .size();
+    if (destCount < sourceCount) {
+      QString msg = QString("Copy verification failed: _default has %1 files "
+                            "but original has %2")
+                        .arg(destCount)
+                        .arg(sourceCount);
+      qWarning() << msg;
+      emit error(msg);
+      return false;
+    }
+
+    // Remove original folder after verified copy
     QDir(m_gw2AppDataPath).removeRecursively();
-    qInfo() << "Preserved via copy (rename failed)";
+    qInfo() << "Preserved via copy (rename failed, verified"
+            << destCount << "files)";
 
   } else {
     qInfo() << "Renamed" << m_gw2AppDataPath << "to _default";

@@ -459,13 +459,16 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
     // Note: gw2Path and m_pidPaths[pid] already set above when starting process
     // monitor
 
+    // REVIEW BEFORE BETA: Audit finding #2 — this pipe server is near-identical
+    // to the Steam/Epic one at ~L1134. Deferred dedup due to different security
+    // models (default DACL here vs NULL DACL for Steam/Epic). See
+    // docs/audit-report-phase1.md for details.
     // Start pipe server in background thread - stays alive for entire game
     // session
     std::thread([this, pid, profile, pipeName, shouldPositionWindow,
                  gw2Path]() {
 #ifdef Q_OS_WIN
       bool shouldContinue = true;
-      bool receivedLoaded = false;
 
       while (shouldContinue) {
         // Create named pipe
@@ -496,8 +499,6 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
                     << "):" << buffer;
 
             if (strcmp(buffer, "LOADED") == 0) {
-              receivedLoaded = true;
-
               // Mark as successfully loaded (GPU active) and sync build ID
               QMetaObject::invokeMethod(
                   this,
@@ -577,6 +578,11 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
             m_dllInjector->inject(static_cast<DWORD>(pid), helperDllPath);
           } else {
             qWarning() << "Helper DLL not found:" << helperDllPath;
+            // DOCUMENTED EXCEPTION to "NO TIMERS for window positioning" rule:
+            // This 45s fallback only fires when the helper DLL is missing
+            // (build misconfiguration or manual deletion). Under normal
+            // operation, the DLL signals via named pipe which is event-based.
+            // Without the DLL there is no alternative signal source.
             // Fallback to 45 second timer for window positioning
             if (shouldPositionWindow) {
               QTimer::singleShot(45000, this, [this, pid, profile]() {
@@ -1129,6 +1135,10 @@ void LaunchManager::onGW2WindowDetected(qint64 pid,
       startProcessMonitor(hProcess, pid, profile, gw2Path);
     }
 
+    // REVIEW BEFORE BETA: Audit finding #2 — this pipe server is near-identical
+    // to the standalone one at ~L462. Deferred dedup due to different security
+    // models (NULL DACL here vs default DACL for standalone). See
+    // docs/audit-report-phase1.md for details.
     // Create pipe server for session tracking (event-based communication with
     // helper DLL)
     QString pipeName = QString("\\\\.\\pipe\\GW2AIO_%1").arg(pid);
@@ -1162,7 +1172,6 @@ void LaunchManager::onGW2WindowDetected(qint64 pid,
       qInfo() << "Pipe server ready (event-based, open security):" << pipeName;
 
       bool shouldContinue = true;
-      bool receivedLoaded = false;
 
       while (shouldContinue) {
         if (ConnectNamedPipe(hPipe, nullptr) ||
@@ -1175,7 +1184,6 @@ void LaunchManager::onGW2WindowDetected(qint64 pid,
             buffer[bytesRead] = '\0';
             if (strcmp(buffer, "LOADED") == 0) {
               qInfo() << "EVENT: Got LOADED from PID:" << pid;
-              receivedLoaded = true;
 
               // Mark as successfully loaded (GPU active) and sync build ID
               QMetaObject::invokeMethod(

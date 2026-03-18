@@ -95,9 +95,9 @@ QList<DWORD> MutexManager::findGW2Processes() const {
   return pids;
 }
 
-QList<MutexManager::SYSTEM_HANDLE_TABLE_ENTRY_INFO>
+QList<MutexManager::SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX>
 MutexManager::getProcessHandles(DWORD processId) {
-  QList<SYSTEM_HANDLE_TABLE_ENTRY_INFO> handles;
+  QList<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX> handles;
 
   if (!m_NtQuerySystemInformation) {
     return handles;
@@ -120,8 +120,8 @@ MutexManager::getProcessHandles(DWORD processId) {
       return handles;
     }
 
-    // SystemHandleInformation = 16
-    status = m_NtQuerySystemInformation(16, buffer, bufferSize, &returnLength);
+    // SystemExtendedHandleInformation = 64 (supports PIDs > 65535)
+    status = m_NtQuerySystemInformation(64, buffer, bufferSize, &returnLength);
   } while (status == 0xC0000004); // STATUS_INFO_LENGTH_MISMATCH
 
   if (status != 0) { // Not STATUS_SUCCESS
@@ -130,10 +130,10 @@ MutexManager::getProcessHandles(DWORD processId) {
   }
 
   // Parse the handle list
-  auto *info = static_cast<SYSTEM_HANDLE_INFORMATION *>(buffer);
+  auto *info = static_cast<SYSTEM_HANDLE_INFORMATION_EX *>(buffer);
   qInfo() << "Total system handles:" << info->NumberOfHandles;
-  for (ULONG i = 0; i < info->NumberOfHandles; i++) {
-    if (info->Handles[i].UniqueProcessId == static_cast<USHORT>(processId)) {
+  for (ULONG_PTR i = 0; i < info->NumberOfHandles; i++) {
+    if (info->Handles[i].UniqueProcessId == static_cast<ULONG_PTR>(processId)) {
       handles.append(info->Handles[i]);
     }
   }
@@ -142,7 +142,7 @@ MutexManager::getProcessHandles(DWORD processId) {
   return handles;
 }
 
-QString MutexManager::getHandleName(HANDLE hProcess, USHORT handleValue) {
+QString MutexManager::getHandleName(HANDLE hProcess, ULONG_PTR handleValue) {
   if (!m_NtQueryObject) {
     return QString();
   }
@@ -183,7 +183,7 @@ QString MutexManager::getHandleName(HANDLE hProcess, USHORT handleValue) {
   return name;
 }
 
-bool MutexManager::closeRemoteHandle(DWORD processId, USHORT handleValue) {
+bool MutexManager::closeRemoteHandle(DWORD processId, ULONG_PTR handleValue) {
   HANDLE hProcess = OpenProcess(PROCESS_DUP_HANDLE, FALSE, processId);
   if (!hProcess) {
     return false;
@@ -211,7 +211,7 @@ bool MutexManager::closeMutex(DWORD processId) {
     return false;
   }
 
-  QList<SYSTEM_HANDLE_TABLE_ENTRY_INFO> handles = getProcessHandles(processId);
+  QList<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX> handles = getProcessHandles(processId);
   qInfo() << "Found" << handles.size() << "handles for process" << processId;
 
   bool found = false;
