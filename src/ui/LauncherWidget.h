@@ -157,4 +157,14 @@ private:
 
   // Pre-flight credential refresh: returns true if launch should proceed
   bool runPreFlightRefresh(const QList<AccountProfile> &profiles);
+
+  // Per-profile build update: if the profile's dat hasn't been through
+  // the current GW2 build, launches GW2 cleanly to patch. Returns true
+  // if launch should proceed (profile is verified or non-standalone).
+  bool runPerProfileBuildUpdate(AccountProfile &profile);
+
+  // Batch build update: runs Phase 1 (-image dedup) and Phase 2
+  // (per-profile Local.dat refresh) for all profiles needing updates.
+  // Returns true if all updates succeeded or none were needed.
+  bool runBatchBuildUpdate(QList<AccountProfile> &profiles);
 };
