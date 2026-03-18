@@ -1,0 +1,100 @@
+name: Build GW2 AIO Manager
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+env:
+  QT_VERSION: '6.6.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        modules: 'qtnetworkauth'
+        cache: true
+    
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      run: cmake --build build --config Release --parallel
+    
+    - name: Run Tests
+      run: |
+        cd build/tests
+        ctest -C Release --output-on-failure
+      continue-on-error: true
+    
+    - name: Deploy Qt
+      run: |
+        windeployqt --release --no-translations build/Release/GW2AIO.exe
+    
+    - name: Create Portable Package
+      run: |
+        mkdir dist
+        xcopy /s /e build\Release dist\GW2AIO\
+        echo "Portable mode" > dist\GW2AIO\portable.txt
+        Compress-Archive -Path dist\GW2AIO -DestinationPath dist\GW2AIO_Portable.zip
+      shell: pwsh
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GW2AIO-Windows-x64
+        path: dist/GW2AIO_Portable.zip
+    
+    - name: Upload to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/GW2AIO_Portable.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-installer:
+    runs-on: windows-latest
+    needs: build-windows
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Download Build
+      uses: actions/download-artifact@v4
+      with:
+        name: GW2AIO-Windows-x64
+    
+    - name: Install NSIS
+      run: choco install nsis -y
+    
+    - name: Extract Build
+      run: Expand-Archive GW2AIO_Portable.zip -DestinationPath build/Release
+      shell: pwsh
+    
+    - name: Build Installer
+      run: |
+        cd installer
+        makensis installer.nsi
+    
+    - name: Upload Installer
+      uses: softprops/action-gh-release@v1
+      with:
+        files: installer/GW2AIO_Setup_*.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

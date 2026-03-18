@@ -1,0 +1,1056 @@
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  Automatic MOC and UIC for target GW2AIO
+  MutexManager.cpp
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,11): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [38]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [38]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(52,16):
+      while trying to match the argument list '(QDebug, const char [38])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,11): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [67]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [67]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(54,19):
+      while trying to match the argument list '(QDebug, const char [67])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,9): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [35]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(58,17):
+      while trying to match the argument list '(QDebug, const char [35])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,7): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [35]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [35]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(61,15):
+      while trying to match the argument list '(QDebug, const char [35])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,5): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [30]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [30]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(65,13):
+      while trying to match the argument list '(QDebug, const char [30])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,3): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [22]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [22]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(132,8):
+      while trying to match the argument list '(QDebug, const char [22])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,3): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [42]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(201,8):
+      while trying to match the argument list '(QDebug, const char [42])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,5): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [23]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [23]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(206,13):
+      while trying to match the argument list '(QDebug, const char [23])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,3): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [6]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [6]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(213,8):
+      while trying to match the argument list '(QDebug, const char [6])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,7): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [25]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [25]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(225,12):
+      while trying to match the argument list '(QDebug, const char [25])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,7): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [28]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [28]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(230,12):
+      while trying to match the argument list '(QDebug, const char [28])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,9): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [42]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [42]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(234,14):
+      while trying to match the argument list '(QDebug, const char [42])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,9): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [29]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [29]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(236,17):
+      while trying to match the argument list '(QDebug, const char [29])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,3): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [32]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(242,8):
+      while trying to match the argument list '(QDebug, const char [32])'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,5): error C2027: use of undefined type 'QDebug' [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+      see declaration of 'QDebug'
+  
+G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10): error C2678: binary '<<': no operator found which takes a left-hand operand of type 'QDebug' (or there is no acceptable conversion) [G:\Alura\GW2\AIO\build\GW2AIO.vcxproj]
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qobject.h(473,22):
+      could be 'QDebug operator <<(QDebug,const QObject *)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'QDebug operator <<(QDebug,const QObject *)': cannot convert argument 1 from 'QDebug' to 'QDebug'
+              G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+              use of undefined type 'QDebug'
+              C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+              see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(700,21):
+      or       'QDataStream &operator <<(QDataStream &,QKeyCombination)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'QDataStream &operator <<(QDataStream &,QKeyCombination)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(554,28):
+      or       'QDataStream &operator <<(QDataStream &,QChar)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'QDataStream &operator <<(QDataStream &,QChar)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qstring.h(1592,28):
+      or       'QDataStream &operator <<(QDataStream &,const QString &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'QDataStream &operator <<(QDataStream &,const QString &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qbytearray.h(763,28):
+      or       'QDataStream &operator <<(QDataStream &,const QByteArray &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'QDataStream &operator <<(QDataStream &,const QByteArray &)': cannot convert argument 1 from 'QDebug' to 'QDataStream &'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(640,49):
+      or       'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<QTypeTraits::has_ostream_operator<QDataStream,T,void>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,QDataStream&>::type operator <<(QDataStream &,const std::pair<_Ty1,_Ty2> &)': could not deduce template argument for 'const std::pair<_Ty1,_Ty2> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(627,77):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiMap<Key,T> &)': could not deduce template argument for 'const QMultiMap<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(615,72):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMap<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMap<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMap<Key,T> &)': could not deduce template argument for 'const QMap<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(603,78):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QMultiHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QMultiHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QMultiHash<Key,T> &)': could not deduce template argument for 'const QMultiHash<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(591,73):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QHash<Key,T>,Key>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>,std::disjunction<std::is_base_of<QHash<Key,T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QHash<Key,T> &)': could not deduce template argument for 'const QHash<Key,T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(578,62):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QSet<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QSet<T> &)': could not deduce template argument for 'const QSet<T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(566,63):
+      or       'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'enable_if<std::conjunction_v<std::disjunction<std::is_base_of<QList<T>,T>,QTypeTraits::has_ostream_operator<QDataStream,T,void>>>,QDataStream&>::type operator <<(QDataStream &,const QList<T> &)': could not deduce template argument for 'const QList<T> &' from 'const char [32]'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(537,1):
+      or       'enable_if<std::is_enum<_Ty>::value,QDataStream&>::type operator <<(QDataStream &,const T &)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          use of undefined type 'QDebug'
+          C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qtypeinfo.h(15,7):
+          see declaration of 'QDebug'
+      C:\vcpkg\installed\x64-windows\include\Qt6\QtCore\qdatastream.h(523,21):
+      or       'QDataStream &operator <<(QDataStream &,QFlags<Enum>)'
+          G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+          'QDataStream &operator <<(QDataStream &,QFlags<Enum>)': could not deduce template argument for 'QFlags<Enum>' from 'const char [32]'
+      G:\Alura\GW2\AIO\src\core\MutexManager.cpp(247,10):
+      while trying to match the argument list '(QDebug, const char [32])'
+  
+  Automatic MOC and UIC for target GW2AIOHelper
+  GW2AIOHelper.vcxproj -> G:\Alura\GW2\AIO\build\Release\Release\GW2AIOHelper.dll

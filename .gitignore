@@ -1,0 +1,46 @@
+# Build files
+build/
+cmake-build-*/
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+CMakeUserPresets.json
+
+# Qt generated
+*_autogen/
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Cache
+.cache/
+
+# Log files
+*.LOG
+*.log
+dbgview.log
+
+# Internal dev folders (local only)
+.agent/
+docs/
+features/
+
+# Release packages
+*.zip
+
+# Build system artifacts
+compile_commands.json

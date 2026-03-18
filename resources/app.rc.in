@@ -1,0 +1,4 @@
+// Windows Resource File for GW2 AIO Manager
+// This sets the application icon that appears in Task Manager, taskbar, etc.
+
+IDI_ICON1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/icons/app-icon16x16.ico"

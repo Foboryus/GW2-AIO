@@ -1,0 +1,22 @@
+CompileFlags:
+  Add:
+    - "-IC:/vcpkg/installed/x64-windows/include"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtCore"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtGui"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtWidgets"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtQml"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtQuick"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtNetwork"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtOpenGL"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtOpenGLWidgets"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtXml"
+    - "-IC:/vcpkg/installed/x64-windows/include/Qt6/QtSvg"
+    - "-Isrc"
+    - "-DAPP_VERSION=\"0.1.0\""
+    - "-std=c++17"
+
+Diagnostics:
+  UnusedIncludes: None
+  Suppress:
+    - drv_unknown_argument

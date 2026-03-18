@@ -1,0 +1,157 @@
+{
+    "markerpacks": [
+        {
+            "name": "Lady Elyssa's Guides",
+            "id": "LadyElyssa",
+            "description": "Chest runs, festivals, gathering, hero points, map completion",
+            "author": "Lady Elyssa",
+            "sourceUrl": "https://github.com/LadyElyssa/LadyElyssaTacoTrails",
+            "filename": "LadyElyssa.taco",
+            "downloadurl": "https://github.com/LadyElyssa/LadyElyssaTacoTrails/releases/latest/download/LadyElyssa.taco",
+            "enabledbydefault": false,
+            "autoDownloadOnInstall": true
+        },
+        {
+            "name": "Lady Elyssa's Achievements",
+            "id": "LadyElyssaAP",
+            "description": "Achievement and collection guides",
+            "author": "Lady Elyssa",
+            "sourceUrl": "https://github.com/LadyElyssa/LadyElyssaAchievementGuides",
+            "filename": "LadyElyssaAP.taco",
+            "downloadurl": "https://github.com/LadyElyssa/LadyElyssaAchievementGuides/releases/latest/download/LadyElyssaAP.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Tekkit's All-In-One",
+            "id": "Tekkit",
+            "description": "Festivals, JPs, achievements, gathering, map completion",
+            "author": "Tekkit",
+            "sourceUrl": "https://www.tekkitsworkshop.net",
+            "filename": "tw_ALL_IN_ONE.taco",
+            "downloadurl": "https://www.tekkitsworkshop.net/downloads/tw_ALL_IN_ONE.taco",
+            "backupurl": "https://github.com/BoyC/TekkitBackup/raw/main/tw_ALL_IN_ONE.taco",
+            "enabledbydefault": true,
+            "autoDownloadOnInstall": true
+        },
+        {
+            "name": "Teh's Trails",
+            "id": "Tehs",
+            "description": "Fast map completion trails",
+            "author": "Teh",
+            "sourceUrl": "https://github.com/xrandox/TehsTrails",
+            "filename": "TehsTrails.taco",
+            "downloadurl": "https://github.com/xrandox/TehsTrails/raw/main/TehsTrails/TehsTrails.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Movement on the World",
+            "id": "Mow",
+            "description": "Scenic routes",
+            "author": "Sutcenes",
+            "sourceUrl": "https://github.com/Sutcenes/MovementOnTheWorld_TacoSupport",
+            "filename": "MoW.taco",
+            "downloadurl": "https://github.com/Sutcenes/MovementOnTheWorld_TacoSupport/releases/latest/download/MoW.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Nexploration",
+            "id": "Nexploration",
+            "description": "End of Dragons map completion",
+            "author": "Nexrym",
+            "sourceUrl": "https://github.com/Nexrym/Nexploration",
+            "filename": "Nexploration.taco",
+            "downloadurl": "https://github.com/Nexrym/Nexploration/releases/latest/download/Nexploration.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Metal Marker Myriad",
+            "id": "MMM",
+            "description": "Various markers collection",
+            "author": "Metallis",
+            "sourceUrl": "https://github.com/Metallis/Metal-Marker-Myriad",
+            "filename": "metal_marker_myriad.taco",
+            "downloadurl": "https://github.com/Metallis/Metal-Marker-Myriad/releases/latest/download/Metal-Marker-Myriad.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "[fast] TacO Markers",
+            "id": "fast",
+            "description": "Solo farming routes",
+            "author": "[fast] Community",
+            "sourceUrl": "https://fast.farming-community.eu",
+            "filename": "fast_TacO_pack.taco",
+            "downloadurl": "https://fast.farming-community.eu/fast/markers/fast_TacO_pack.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Hero's Marker Pack",
+            "id": "Heros",
+            "description": "Fractals, raids, strikes, dungeons (large icons)",
+            "author": "QuitarHero",
+            "sourceUrl": "https://github.com/QuitarHero/Heros-Marker-Pack",
+            "filename": "hero.blish.pack.taco",
+            "downloadurl": "https://github.com/QuitarHero/Heros-Marker-Pack/releases/latest/download/Hero.Blish.Pack.zip",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Zippy",
+            "id": "zippy",
+            "description": "Zipline locations",
+            "author": "Girbilcannon",
+            "sourceUrl": "https://github.com/Girbilcannon/zippy",
+            "filename": "Zippy.taco",
+            "downloadurl": "https://github.com/Girbilcannon/zippy/releases/latest/download/Zippy.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Pewpew's Power Paths",
+            "id": "Pewpew",
+            "description": "Power trails and routes",
+            "author": "Girbilcannon",
+            "sourceUrl": "https://github.com/Girbilcannon/Pewpews-Power-Paths",
+            "filename": "Pewpews_Power_Paths.taco",
+            "downloadurl": "https://github.com/Girbilcannon/Pewpews-Power-Paths/releases/latest/download/Pewpews_Power_Paths.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Tyria [DRFT]",
+            "id": "DRFT",
+            "description": "Beetle racetracks",
+            "author": "n1nj44r91",
+            "sourceUrl": "https://github.com/n1nj44r91/Tyria-Drift-DRFT-GW2-TacO-Racetracks",
+            "filename": "DRFT_Main.taco",
+            "downloadurl": "https://github.com/n1nj44r91/Tyria-Drift-DRFT-GW2-TacO-Racetracks/releases/latest/download/DRFT_Main.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "Tyria [DRFT] Grand Prix",
+            "id": "DRFT_GP",
+            "description": "Grand prix beetle racetracks",
+            "author": "n1nj44r91",
+            "sourceUrl": "https://github.com/n1nj44r91/Tyria-Drift-DRFT-GW2-TacO-Grand-Prix-Tracks",
+            "filename": "DRFT_GP.taco",
+            "downloadurl": "https://github.com/n1nj44r91/Tyria-Drift-DRFT-GW2-TacO-Grand-Prix-Tracks/releases/latest/download/DRFT_GP.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "[MOAR] Meta and HP Trains",
+            "id": "MOAR",
+            "description": "Meta event and hero point trains",
+            "author": "MOAR Community",
+            "sourceUrl": "https://moar-loot.web.app",
+            "filename": "moar.taco",
+            "downloadurl": "https://moar-loot.web.app/releases/moar.taco",
+            "enabledbydefault": false
+        },
+        {
+            "name": "GW2 Twisted Castle",
+            "id": "TwistedCastle",
+            "description": "Twisted Castle raid wing guide",
+            "author": "SZG5",
+            "sourceUrl": "https://github.com/SZG5/gw2-twisted-castle",
+            "filename": "TwistedCastle.taco",
+            "downloadurl": "https://github.com/SZG5/gw2-twisted-castle/releases/latest/download/TwistedCastle.taco",
+            "enabledbydefault": false
+        }
+    ]
+}

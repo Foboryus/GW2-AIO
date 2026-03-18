@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Rich gold gradient -->
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8C547"/>
+      <stop offset="50%" style="stop-color:#C09C57"/>
+      <stop offset="100%" style="stop-color:#8B7340"/>
+    </linearGradient>
+    
+    <!-- Lighter gold for highlights -->
+    <linearGradient id="goldLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F4D87A"/>
+      <stop offset="100%" style="stop-color:#C09C57"/>
+    </linearGradient>
+    
+    <!-- Dark background -->
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" style="stop-color:#2a2a2a"/>
+      <stop offset="100%" style="stop-color:#121212"/>
+    </radialGradient>
+    
+    <!-- Subtle shadow -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="124" fill="url(#bg)" stroke="url(#gold)" stroke-width="5"/>
+  
+  <!-- Main gear group with shadow -->
+  <g filter="url(#shadow)">
+    <!-- Gear teeth - 8 teeth with rounded tops -->
+    <g fill="url(#gold)">
+      <!-- Top -->
+      <path d="M115 22 L115 50 Q115 55 120 55 L136 55 Q141 55 141 50 L141 22 Q128 18 115 22Z"/>
+      <!-- Bottom -->
+      <path d="M115 234 L115 206 Q115 201 120 201 L136 201 Q141 201 141 206 L141 234 Q128 238 115 234Z"/>
+      <!-- Left -->
+      <path d="M22 115 L50 115 Q55 115 55 120 L55 136 Q55 141 50 141 L22 141 Q18 128 22 115Z"/>
+      <!-- Right -->
+      <path d="M234 115 L206 115 Q201 115 201 120 L201 136 Q201 141 206 141 L234 141 Q238 128 234 115Z"/>
+      
+      <!-- Top-right -->
+      <path d="M191 43 L171 65 Q168 69 172 73 L183 84 Q187 88 191 85 L213 65 Q207 52 191 43Z"/>
+      <!-- Top-left -->
+      <path d="M65 43 L85 65 Q88 69 84 73 L73 84 Q69 88 65 85 L43 65 Q49 52 65 43Z"/>
+      <!-- Bottom-right -->
+      <path d="M191 213 L171 191 Q168 187 172 183 L183 172 Q187 168 191 171 L213 191 Q207 204 191 213Z"/>
+      <!-- Bottom-left -->
+      <path d="M65 213 L85 191 Q88 187 84 183 L73 172 Q69 168 65 171 L43 191 Q49 204 65 213Z"/>
+    </g>
+    
+    <!-- Outer gear ring -->
+    <circle cx="128" cy="128" r="78" fill="none" stroke="url(#gold)" stroke-width="22"/>
+    
+    <!-- Inner bevel ring -->
+    <circle cx="128" cy="128" r="78" fill="none" stroke="url(#goldLight)" stroke-width="2" opacity="0.6"/>
+    
+    <!-- Center hole -->
+    <circle cx="128" cy="128" r="48" fill="url(#bg)" stroke="url(#gold)" stroke-width="4"/>
+    
+    <!-- Inner decorative ring -->
+    <circle cx="128" cy="128" r="35" fill="none" stroke="url(#gold)" stroke-width="2" opacity="0.4"/>
+    
+    <!-- Center hub -->
+    <circle cx="128" cy="128" r="18" fill="url(#goldLight)" stroke="url(#gold)" stroke-width="2"/>
+    
+    <!-- Center dot -->
+    <circle cx="128" cy="128" r="6" fill="url(#bg)"/>
+  </g>
+  
+  <!-- Subtle outer glow -->
+  <circle cx="128" cy="128" r="118" fill="none" stroke="#C09C57" stroke-width="1" opacity="0.3"/>
+</svg>

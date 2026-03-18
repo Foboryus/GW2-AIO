@@ -1,0 +1,109 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/main.qml</file>
+        <file>qml/components/GW2Button.qml</file>
+        <file>qml/components/GW2Card.qml</file>
+        <file>qml/components/GW2Toggle.qml</file>
+        <!-- Navigation icons -->
+        <file>icons/home.svg</file>
+        <file>icons/box.svg</file>
+        <file>icons/play.svg</file>
+        <file>icons/grid.svg</file>
+        <file>icons/play-circle.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/globe.svg</file>
+        <file>icons/palette.svg</file>
+        <file>icons/map-pin.svg</file>
+        <file>icons/compass.svg</file>
+        <!-- Action icons -->
+        <file>icons/refresh.svg</file>
+        <file>icons/download.svg</file>
+        <file>icons/folder.svg</file>
+        <file>icons/plus.svg</file>
+        <file>icons/edit.svg</file>
+        <file>icons/copy.svg</file>
+        <file>icons/trash.svg</file>
+        <file>icons/chevron-up.svg</file>
+        <file>icons/chevron-down.svg</file>
+        <file>icons/chevron-right.svg</file>
+        <file>icons/eye.svg</file>
+        <file>icons/check-square.svg</file>
+        <file>icons/layers.svg</file>
+        <!-- Grid status icons (colored) -->
+        <file>icons/check-green.svg</file>
+        <file>icons/alert-yellow.svg</file>
+        <file>icons/alert-red.svg</file>
+        <file>icons/alert-triangle.svg</file>
+        <!-- Profile icons (colored) -->
+        <file>icons/profile-game.svg</file>
+        <file>icons/profile-sword.svg</file>
+        <file>icons/profile-shield.svg</file>
+        <file>icons/profile-star.svg</file>
+        <file>icons/profile-layers.svg</file>
+        <file>icons/profile-sun.svg</file>
+        <file>icons/profile-moon.svg</file>
+        <file>icons/profile-alert.svg</file>
+        <file>icons/profile-user.svg</file>
+        <file>icons/profile-clock.svg</file>
+        <file>icons/profile-zap.svg</file>
+        <file>icons/profile-heart.svg</file>
+        <file>icons/profile-target.svg</file>
+        <file>icons/profile-compass.svg</file>
+        <file>icons/profile-hexagon.svg</file>
+        <file>icons/profile-infinity.svg</file>
+        <file>icons/profile-music.svg</file>
+        <file>icons/profile-crescent.svg</file>
+        <file>icons/profile-flame.svg</file>
+        <file>icons/profile-stack.svg</file>
+        <!-- Additional UI icons (gold) -->
+        <file>icons/save.svg</file>
+        <file>icons/book.svg</file>
+        <file>icons/lightbulb.svg</file>
+        <file>icons/x.svg</file>
+        <file>icons/minus.svg</file>
+        <file>icons/minus-gold.svg</file>
+        <file>icons/upload.svg</file>
+        <file>icons/layout.svg</file>
+        <file>icons/lock.svg</file>
+        <file>icons/monitor.svg</file>
+        <file>icons/terminal.svg</file>
+        <file>icons/keyboard.svg</file>
+        <file>icons/tool.svg</file>
+        <!-- Status icons (colored) -->
+        <file>icons/check-circle.svg</file>
+        <file>icons/x-circle.svg</file>
+        <file>icons/wifi.svg</file>
+        <file>icons/wifi-off.svg</file>
+        <file>icons/refresh-dark.svg</file>
+        <!-- Ping status circles -->
+        <file>icons/circle-green.svg</file>
+        <file>icons/circle-yellow.svg</file>
+        <file>icons/circle-red.svg</file>
+        <file>icons/circle-gray.svg</file>
+        <!-- Spinbox arrows -->
+        <file>icons/spin-up.svg</file>
+        <file>icons/spin-down.svg</file>
+        <!-- Profile status indicators -->
+        <file>icons/status-args.svg</file>
+        <file>icons/status-window.svg</file>
+        <file>icons/status-gfx.svg</file>
+        <file>icons/status-addons.svg</file>
+        <!-- Network status icons -->
+        <file>icons/status-network-global.svg</file>
+        <file>icons/status-network-custom.svg</file>
+        <!-- Platform icons -->
+        <file>icons/steam.svg</file>
+        <file>icons/epic.svg</file>
+        <!-- Overlay icons -->
+        <file>icons/overlay-marker.svg</file>
+        <!-- App icon -->
+        <file>icons/app-icon.svg</file>
+        <file>icons/player-indicator.svg</file>
+        <!-- D3D11 HLSL shaders -->
+        <file alias="shaders/marker.hlsl">../src/rendering/shaders/marker.hlsl</file>
+        <file alias="shaders/trail.hlsl">../src/rendering/shaders/trail.hlsl</file>
+        <file alias="shaders/sprite.hlsl">../src/rendering/shaders/sprite.hlsl</file>
+        <!-- Bundled data files -->
+        <file alias="data/marker_packs.json">../data/marker_packs.json</file>
+    </qresource>
+</RCC>
