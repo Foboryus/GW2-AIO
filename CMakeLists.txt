@@ -58,6 +58,7 @@ set(CORE_SOURCES
     src/core/AtomicFileWriter.cpp
     src/core/CefManager.cpp
     src/core/CredentialRefreshManager.cpp
+    src/core/DllInjector.cpp
 )
 
 set(CORE_HEADERS
@@ -128,7 +129,7 @@ set(UI_SOURCES
     src/ui/HotkeyEditor.cpp
     src/ui/ToggleSwitch.cpp
     src/ui/StyledTooltip.cpp
-    src/ui/SystemTray.cpp
+
     src/ui/GridCell.cpp
     # Profile tab widgets
     src/ui/profile/ArgumentsTabWidget.cpp
@@ -149,7 +150,7 @@ set(UI_HEADERS
     src/ui/OverlayWindow.h
     src/ui/OverlayMenuWidget.h
     src/ui/ExclusionZoneEditor.h
-    src/ui/SystemTray.h
+
     src/ui/ErrorDialog.h
     src/ui/HotkeyEditor.h
     src/ui/FontRenderer.h

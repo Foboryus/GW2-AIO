@@ -110,6 +110,7 @@ inline void SplashScreen::createPixmap() {
 
   // === Title — right of the logo ===
   int textStartX = logoX + logoSize + 20;
+  // REVIEW BEFORE BETA: hardcoded "Segoe UI" font — consider ThemeManager
   QFont titleFont("Segoe UI", 26, QFont::Bold);
   painter.setFont(titleFont);
   painter.setPen(accentColor);

@@ -157,6 +157,7 @@ inline QWidget *createTitleBar(QWidget *parent, const QString &title,
 
   // Logo/icon (larger)
   auto *iconLabel = new QLabel(titleBar);
+  // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
   iconLabel->setStyleSheet("background: transparent; border: none;");
   setThemedPixmap(iconLabel, iconName, 24);
   titleLayout->addWidget(iconLabel);
@@ -164,6 +165,7 @@ inline QWidget *createTitleBar(QWidget *parent, const QString &title,
   // Title (larger font) — themed
   auto *titleLabel = new QLabel(title, titleBar);
   const auto &tc = ThemeManager::instance().activeTheme().colors;
+  // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
   titleLabel->setStyleSheet(
       QString("color: %1; font-size: %2px; font-weight: bold; margin-left: "
               "10px; background: transparent; border: none;")
@@ -178,6 +180,7 @@ inline QWidget *createTitleBar(QWidget *parent, const QString &title,
     auto *indicator = new QLabel(titleBar);
     indicator->setFixedSize(22, 22);
     applySaveIndicatorRole(indicator);
+    // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
     indicator->setStyleSheet("background: transparent; border: none;");
     setThemedPixmap(indicator, "check-circle", 18);
     indicator->setToolTip("All changes saved");
@@ -192,6 +195,7 @@ inline QWidget *createTitleBar(QWidget *parent, const QString &title,
   closeBtn->setIconSize(QSize(14, 14));
   closeBtn->setFixedSize(28, 28);
   const auto &ct = ThemeManager::instance().activeTheme().buttons.close;
+  // REVIEW BEFORE BETA: inline setStyleSheet for close button (uses ThemeManager values)
   closeBtn->setStyleSheet(
       QString("QPushButton { background: %1; border: 1px solid %2; "
               "border-radius: 4px; }"
@@ -441,6 +445,7 @@ inline QWidget *createPageHeader(QWidget *parent, const QString &title,
     auto *iconLabel = new QLabel(container);
     setThemedPixmap(iconLabel, iconName, 22);
     iconLabel->setFixedSize(22, 22);
+    // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
     iconLabel->setStyleSheet("background: transparent; border: none;");
     layout->addWidget(iconLabel);
   }

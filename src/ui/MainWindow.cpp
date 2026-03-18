@@ -20,12 +20,12 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QIcon>
-#include <QInputDialog>
+
 #include <QLineEdit>
 #include <QListWidget>
 #include <QLoggingCategory>
 #include <QMenu>
-#include <QMessageBox>
+
 #include <QPointer>
 #include <QScrollArea>
 #include <QStandardPaths>
@@ -633,12 +633,14 @@ void MainWindow::setupUI() {
   // App icon (use SVG app icon)
   auto *appIcon = new QLabel();
   UIHelpers::setThemedPixmap(appIcon, "app-icon", 24);
+  // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
   appIcon->setStyleSheet("background: transparent; border: none;");
   titleBarLayout->addWidget(appIcon);
 
   // Title (larger like ProfileEditor)
   auto *titleLabel = new QLabel("GW2 AIO Manager");
   UIHelpers::applyGoldColorRole(titleLabel);
+  // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
   titleLabel->setStyleSheet(
       QString("font-size: %1px; font-weight: bold; margin-left: 4px;")
           .arg(ThemeManager::instance().activeTheme().layout.fontSizeTitle));
@@ -1148,6 +1150,7 @@ void MainWindow::showThemes() {
   qint64 switchMs = t.elapsed();
   m_currentNavIndex = 6;
   updateNavButtonStyles();
+  // DEV LOG — remove before release
   qDebug() << "[Perf] showThemes: pageSwitch=" << switchMs
            << "ms total=" << t.elapsed() << "ms";
 }
@@ -1171,6 +1174,7 @@ void MainWindow::updateNavButtonStyles() {
     }
   }
   qint64 ms = t.elapsed();
+  // DEV LOG — remove before release
   if (ms > 10) {
     qDebug() << "[Perf] updateNavButtonStyles took" << ms << "ms";
   }
@@ -1264,6 +1268,7 @@ void MainWindow::updateTrayMenu() {
   });
 
   const auto &t = ThemeManager::instance().activeTheme();
+  // REVIEW BEFORE BETA: inline setStyleSheet for tray menu (uses ThemeManager values)
   m_trayMenu->setStyleSheet(
       QString(
           "QMenu { background: %1; border: 1px solid %2; padding: 8px 0px; "
@@ -1312,6 +1317,7 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message,
                              qintptr *result) {
   MSG *msg = static_cast<MSG *>(message);
   if (msg->message == WM_DROPFILES) {
+    // DEV LOG — remove before release
     qInfo() << "DIAG: WM_DROPFILES received in nativeEvent";
     HDROP hDrop = reinterpret_cast<HDROP>(msg->wParam);
     UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, nullptr, 0);

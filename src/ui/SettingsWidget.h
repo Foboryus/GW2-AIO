@@ -24,7 +24,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
+
 #include <QProcess>
 #include <QPropertyAnimation>
 #include <QPushButton>

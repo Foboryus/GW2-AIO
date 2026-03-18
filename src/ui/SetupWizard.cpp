@@ -55,12 +55,14 @@ void SetupWizard::setupUI() {
   // App icon
   auto *appIcon = new QLabel();
   UIHelpers::setThemedPixmap(appIcon, "app-icon", 24);
+  // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
   appIcon->setStyleSheet("background: transparent; border: none;");
   titleBarLayout->addWidget(appIcon);
 
   // Title
   m_titleLabel = new QLabel("Setup Wizard");
   UIHelpers::applyGoldColorRole(m_titleLabel);
+  // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
   m_titleLabel->setStyleSheet(
       QString("font-size: %1px; font-weight: bold;")
           .arg(ThemeManager::instance().activeTheme().layout.fontSizeTitle));
@@ -277,6 +279,7 @@ QWidget *SetupWizard::createFeaturesPage() {
 
     auto *nameLabel = new QLabel(name);
     UIHelpers::applyGoldColorRole(nameLabel);
+    // REVIEW BEFORE BETA: inline setStyleSheet (uses ThemeManager values)
     nameLabel->setStyleSheet(
         QString("font-weight: bold; font-size: %1px;")
             .arg(ThemeManager::instance().activeTheme().layout.fontSizeNormal));
