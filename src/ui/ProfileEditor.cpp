@@ -391,6 +391,7 @@ void ProfileEditor::switchToTab(int index) {
   }
 }
 
+// REVIEW BEFORE BETA: inline styles — refactor to UIHelpers role-based styling
 void ProfileEditor::applyTabStyle(QPushButton *btn, bool active) {
   if (active) {
     btn->setStyleSheet("QPushButton {"

@@ -1,7 +1,7 @@
 #include "GraphicsTabWidget.h"
 
 #include <QComboBox>
-#include <QDateTime>
+
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -14,7 +14,7 @@
 #include <QScreen>
 #include <QSlider>
 #include <QStandardPaths>
-#include <QTextStream>
+
 #include <QVBoxLayout>
 
 #include "core/DataService.h"
@@ -699,36 +699,21 @@ void GraphicsTabWidget::onLoadFromGW2Clicked() {
 void GraphicsTabWidget::load() {
   m_loading = true;
 
-  // Debug logging for load
-  QFile logFile(
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-      "/gfx_debug.log");
-  if (!logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
-    return;
-  QTextStream log(&logFile);
-  log << "\n=== GraphicsTabWidget::load() "
-      << QDateTime::currentDateTime().toString() << " ===\n";
-  log << "  m_profile.gfxSettingsPath: " << m_profile.gfxSettingsPath << "\n";
-  log << "  m_profile.useCustomGfx: " << m_profile.useCustomGfx << "\n";
-  log << "  File exists: " << QFile::exists(m_profile.gfxSettingsPath) << "\n";
+  // DEV LOG — remove before release
+  qInfo() << "GraphicsTabWidget::load() gfxSettingsPath:"
+          << m_profile.gfxSettingsPath
+          << "useCustomGfx:" << m_profile.useCustomGfx
+          << "exists:" << QFile::exists(m_profile.gfxSettingsPath);
 
   // Load from saved file if exists
   if (!m_profile.gfxSettingsPath.isEmpty() &&
       QFile::exists(m_profile.gfxSettingsPath)) {
-    // Close log file before parseGfxFile (it logs to same file)
-    logFile.close();
-
     GFXManager gfxMgr(m_dataService ? m_dataService->savedGfxDir() : QString());
     GfxSettings settings = gfxMgr.parseGfxFile(m_profile.gfxSettingsPath);
 
-    // Reopen log file
-    if (!logFile.open(QIODevice::WriteOnly | QIODevice::Append |
-                      QIODevice::Text))
-      return;
-    log.setDevice(&logFile);
-
-    log << "  Loaded preset from file: " << settings.presetName << "\n";
-    log << "  Loaded shadows: " << settings.shadows << "\n";
+    // DEV LOG — remove before release
+    qInfo() << "  Loaded preset:" << settings.presetName
+            << "shadows:" << settings.shadows;
     loadSettingsToUI(settings);
     // Restore saved preset name
     m_presetCombo->setCurrentText(settings.presetName);
@@ -736,13 +721,13 @@ void GraphicsTabWidget::load() {
                            QFileInfo(m_profile.gfxSettingsPath).fileName());
     UIHelpers::applyHintRole(m_statusLabel);
   } else {
-    log << "  Loading default High preset (no saved file)\n";
+    // DEV LOG — remove before release
+    qInfo() << "  Loading default High preset (no saved file)";
     // Load default High preset
     GfxSettings defaults = GFXManager::getPreset("High");
     loadSettingsToUI(defaults);
     m_presetCombo->setCurrentText("High");
   }
-  logFile.close();
 
   m_useCustomGfxToggle->setChecked(m_profile.useCustomGfx);
 
@@ -755,19 +740,10 @@ void GraphicsTabWidget::load() {
 void GraphicsTabWidget::save() {
   m_profile.useCustomGfx = m_useCustomGfxToggle->isChecked();
 
-  // Direct file logging for debugging
-  QFile logFile(
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-      "/gfx_debug.log");
-  if (!logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
-    return;
-  QTextStream log(&logFile);
-  log << "\n=== GraphicsTabWidget::save() "
-      << QDateTime::currentDateTime().toString() << " ===\n";
-  log << "  useCustomGfx: " << m_profile.useCustomGfx << "\n";
-  log << "  nickname: " << m_profile.nickname << "\n";
-  log << "  existing gfxSettingsPath: " << m_profile.gfxSettingsPath << "\n";
-  log << "  presetCombo currentText: " << m_presetCombo->currentText() << "\n";
+  // DEV LOG — remove before release
+  qInfo() << "GraphicsTabWidget::save() useCustomGfx:" << m_profile.useCustomGfx
+          << "nickname:" << m_profile.nickname
+          << "preset:" << m_presetCombo->currentText();
 
   // ALWAYS save GFX settings when profile is saved (if nickname is valid)
   // The toggle only controls whether settings are APPLIED on launch
@@ -778,14 +754,13 @@ void GraphicsTabWidget::save() {
     QString saveDir = gfxMgr.savedGfxPath();
     QString destPath = saveDir + m_profile.id + "_GFX.xml";
 
-    log << "  saveDir: " << saveDir << "\n";
-    log << "  destPath: " << destPath << "\n";
-    log << "  settings.presetName: " << settings.presetName << "\n";
+    // DEV LOG — remove before release
+    qInfo() << "  Writing GFX to:" << destPath;
 
     if (gfxMgr.writeGfxFile(destPath, settings)) {
       m_profile.gfxSettingsPath = destPath;
-      log << "  SUCCESS: gfxSettingsPath set to: " << m_profile.gfxSettingsPath
-          << "\n";
+      // DEV LOG — remove before release
+      qInfo() << "  SUCCESS: gfxSettingsPath set to:" << destPath;
 
       // Only show warning if toggle is off (save indicator handles success)
       if (!m_profile.useCustomGfx) {
@@ -793,12 +768,12 @@ void GraphicsTabWidget::save() {
         UIHelpers::applyWarningColorRole(m_statusLabel);
       }
     } else {
-      log << "  FAIL: Could not write GFX file!\n";
+      qWarning() << "  FAIL: Could not write GFX file to:" << destPath;
       m_statusLabel->setText("Failed to save settings");
       UIHelpers::applyErrorColorRole(m_statusLabel);
     }
   } else {
-    log << "  SKIPPED: nickname is empty\n";
+    // DEV LOG — remove before release
+    qInfo() << "  SKIPPED: profile ID is empty";
   }
-  logFile.close();
 }

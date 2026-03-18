@@ -94,6 +94,8 @@ void GeneralTabWidget::setupUI() {
   auto *accountGroup = new QGroupBox("Account Provider");
   auto *accountLayout = new QVBoxLayout(accountGroup);
 
+  // REVIEW BEFORE BETA: raw QDialog with inline styles — refactor to
+  // UIHelpers::createStyledDialog
   // Helper lambda to show Steam/Epic limitations dialog
   auto showProviderLimitations = [this](const QString &provider) {
     QDialog dialog(this);

@@ -8,7 +8,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMessageBox>
+
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QVBoxLayout>
@@ -33,7 +33,7 @@ void LoginTabWidget::setupUI() {
   auto *datLayout = new QVBoxLayout(datGroup);
 
   auto *datInfo = new QLabel(
-      "GW2 stores your login in Local.dat. Save it for instant login.\\n"
+      "GW2 stores your login in Local.dat. Save it for instant login.\n"
       "Steps: Log in normally → check 'Remember' boxes → close GW2 → Save");
   datInfo->setWordWrap(true);
   UIHelpers::applyHintRole(datInfo);

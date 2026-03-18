@@ -93,11 +93,13 @@ void NetworkTabWidget::setupUI() {
     if (args.isEmpty()) {
       m_globalArgsLabel->setText("Current: Using ArenaNet defaults");
       UIHelpers::applySuccessColorRole(m_globalArgsLabel);
+      // REVIEW BEFORE BETA: hardcoded 11px — use ThemeManager fontSizeHint
       m_globalArgsLabel->setStyleSheet(
           "font-size: 11px; margin-left: 52px; font-family: monospace;");
     } else {
       m_globalArgsLabel->setText("Current: " + args.join("  "));
       UIHelpers::applyGoldColorRole(m_globalArgsLabel);
+      // REVIEW BEFORE BETA: hardcoded 11px — use ThemeManager fontSizeHint
       m_globalArgsLabel->setStyleSheet(
           "font-size: 11px; margin-left: 52px; font-family: monospace;");
     }
