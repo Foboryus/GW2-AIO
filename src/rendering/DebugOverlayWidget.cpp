@@ -12,6 +12,7 @@ DebugOverlayWidget::DebugOverlayWidget(MumbleLink *mumble, QWidget *parent)
   setAttribute(Qt::WA_ShowWithoutActivating);
 
   // Dark semi-transparent background
+  // REVIEW BEFORE BETA: inline setStyleSheet (debug tool — intentionally not themed)
   setStyleSheet(
       "QWidget { background: rgba(20, 20, 20, 200); border-radius: 6px; }"
       "QLabel { color: #00FF00; font-family: 'Consolas', monospace; "

@@ -151,6 +151,7 @@ void D3D11Context::endFrame() {
 
   if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
     qWarning() << "D3D11 device lost — reinitializing";
+    // REVIEW BEFORE BETA: device-lost recovery not yet implemented
     // TODO: Handle device lost (recreate device + resources)
     m_initialized = false;
   }

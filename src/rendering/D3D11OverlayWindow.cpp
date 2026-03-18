@@ -340,6 +340,7 @@ bool D3D11OverlayWindow::createOverlayWindow() {
   }
 
   m_glyphAtlas = new GlyphAtlas(&m_d3dContext);
+  // REVIEW BEFORE BETA: hardcoded "Segoe UI" font — consider ThemeManager
   if (!m_glyphAtlas->build("Segoe UI", 12, true)) {
     qWarning() << "D3D11Overlay: GlyphAtlas build failed";
     delete m_glyphAtlas;
@@ -791,6 +792,7 @@ void D3D11OverlayWindow::render() {
       // Rebuild glyph atlas if font size changed
       int fontSize = m_markerSettings->distanceFontSize();
       if (m_glyphAtlas && m_glyphAtlas->currentFontSize() != fontSize) {
+        // REVIEW BEFORE BETA: hardcoded "Segoe UI" font — consider ThemeManager
         m_glyphAtlas->build("Segoe UI", fontSize, true);
       }
     }
@@ -826,6 +828,7 @@ void D3D11OverlayWindow::render() {
     m_trailPipeline->renderMinimap();
   }
 
+  // REVIEW BEFORE BETA: OverlayMenuRenderer not yet implemented
   // TODO phase A: OverlayMenuRenderer::render()
 
   m_d3dContext.endFrame();
