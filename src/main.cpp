@@ -1,7 +1,6 @@
 #include <QApplication>
 #include <QGuiApplication>
 #include <QIcon>
-#include <QMessageBox>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QScreen>

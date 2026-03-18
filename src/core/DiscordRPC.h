@@ -1,5 +1,10 @@
+// REVIEW BEFORE BETA: all inline — split to .h/.cpp pair. DEV LOG at L203.
 #pragma once
 
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QDebug>
+#include <QDir>
 #include <QObject>
 #include <QString>
 #include <QTimer>

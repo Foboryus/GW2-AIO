@@ -1,5 +1,7 @@
+// REVIEW BEFORE BETA: all inline stub — split to .h/.cpp when feature is implemented. DEV LOG at L47, L53.
 #pragma once
 
+#include <QDebug>
 #include <QObject>
 #include <QString>
 #include <QMap>

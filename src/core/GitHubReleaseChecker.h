@@ -1,3 +1,4 @@
+// REVIEW BEFORE BETA: all inline (179 lines) — split to .h/.cpp pair.
 #pragma once
 
 #include <QObject>
