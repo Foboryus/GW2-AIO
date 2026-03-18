@@ -11,10 +11,8 @@
 
 #include "GFXManager.h"
 
-#include <QDateTime>
 #include <QDebug>
 #include <QDomDocument>
-#include <QTextStream>
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>
 
@@ -190,27 +188,11 @@ GfxSettings GFXManager::getPreset(const QString &presetName) {
 GfxSettings GFXManager::parseGfxFile(const QString &path) {
   GfxSettings settings;
 
-  // Debug logging
-  QFile debugLog(
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-      "/gfx_debug.log");
-  if (!debugLog.open(QIODevice::WriteOnly | QIODevice::Append |
-                     QIODevice::Text))
-    return settings;
-  QTextStream log(&debugLog);
-  log << "\n=== GFXManager::parseGfxFile() "
-      << QDateTime::currentDateTime().toString() << " ===\n";
-  log << "  Path: " << path << "\n";
-
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    log << "  ERROR: Cannot open file!\n";
-    debugLog.close();
     qWarning() << "GFXManager: Cannot open file:" << path;
     return settings;
   }
-
-  log << "  File opened successfully, size: " << file.size() << " bytes\n";
 
   QXmlStreamReader xml(&file);
 
@@ -245,10 +227,9 @@ GfxSettings GFXManager::parseGfxFile(const QString &path) {
     else if (name == "dpiScaling")
       settings.dpiScaling = (value == "true");
     // Quality
-    else if (name == "shadows") {
+    else if (name == "shadows")
       settings.shadows = value;
-      log << "  PARSED shadows: " << value << "\n";
-    } else if (name == "reflections")
+    else if (name == "reflections")
       settings.reflections = value;
     else if (name == "textureDetail")
       settings.textureDetail = value;
@@ -283,14 +264,11 @@ GfxSettings GFXManager::parseGfxFile(const QString &path) {
     else if (name == "depthBlur")
       settings.depthBlur = (value == "true");
     // AIO extension: save preset name
-    else if (name == "aioPreset") {
+    else if (name == "aioPreset")
       settings.presetName = value;
-      log << "  PARSED aioPreset: " << value << "\n";
-    }
   }
 
   if (xml.hasError()) {
-    log << "  XML parse error: " << xml.errorString() << "\n";
     qWarning() << "GFXManager: XML parse error:" << xml.errorString();
   }
 
@@ -300,13 +278,12 @@ GfxSettings GFXManager::parseGfxFile(const QString &path) {
     settings.presetName = "Custom";
   }
 
-  log << "  Final parsed values:\n";
-  log << "    shadows: " << settings.shadows << "\n";
-  log << "    presetName: " << settings.presetName << "\n";
-  debugLog.close();
   return settings;
 }
 
+// REVIEW BEFORE BETA — Audit #5: writeGfxFile does not use AtomicFileWriter.
+// Direct write risks data loss on crash. Deferred because changing write pattern
+// could break GW2's XML parser expectations. GW2 can regenerate this file.
 bool GFXManager::writeGfxFile(const QString &path, const GfxSettings &s) {
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {

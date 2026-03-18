@@ -49,7 +49,7 @@ void SettingsManager::beginGroup(const QString &group) {
 
 void SettingsManager::endGroup() { m_settings->endGroup(); }
 
-bool SettingsManager::exportToFile(const QString &filePath) const {
+bool SettingsManager::exportToFile(const QString &filePath) {
   QJsonObject root;
 
   // Export all settings
@@ -73,7 +73,7 @@ bool SettingsManager::exportToFile(const QString &filePath) const {
   file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
   file.close();
 
-  emit const_cast<SettingsManager *>(this)->settingsExported(filePath);
+  emit settingsExported(filePath);
   qInfo() << "Settings exported to:" << filePath;
   return true;
 }

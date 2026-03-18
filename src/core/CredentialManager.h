@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QByteArray>
+#include <QDebug>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -78,24 +79,32 @@ inline bool CredentialManager::storeCredential(const QString& key,
     // Encrypt the password
     QByteArray encryptedPassword = encrypt(password.toUtf8());
     if (encryptedPassword.isEmpty()) {
+        qWarning() << "CredentialManager: Failed to encrypt password for key:" << key;
         return false;
     }
+    
+    // Keep wstring temporaries alive until CredWriteW completes
+    std::wstring keyW = key.toStdWString();
+    std::wstring userW = username.toStdWString();
+    QString comment = QString("GW2AIO|%1").arg(username);
+    std::wstring commentW = comment.toStdWString();
     
     // Prepare credential structure
     CREDENTIALW cred = {};
     cred.Type = CRED_TYPE_GENERIC;
-    cred.TargetName = const_cast<LPWSTR>(key.toStdWString().c_str());
-    cred.UserName = const_cast<LPWSTR>(username.toStdWString().c_str());
+    cred.TargetName = const_cast<LPWSTR>(keyW.c_str());
+    cred.UserName = const_cast<LPWSTR>(userW.c_str());
     cred.CredentialBlobSize = static_cast<DWORD>(encryptedPassword.size());
     cred.CredentialBlob = reinterpret_cast<LPBYTE>(encryptedPassword.data());
     cred.Persist = CRED_PERSIST_LOCAL_MACHINE;
-    
-    // Also store in comment for retrieval
-    QString comment = QString("GW2AIO|%1").arg(username);
-    std::wstring commentW = comment.toStdWString();
     cred.Comment = const_cast<LPWSTR>(commentW.c_str());
     
-    return CredWriteW(&cred, 0) == TRUE;
+    if (CredWriteW(&cred, 0) != TRUE) {
+        qWarning() << "CredentialManager: CredWriteW failed for key:" << key
+                   << "error:" << GetLastError();
+        return false;
+    }
+    return true;
 }
 
 inline bool CredentialManager::retrieveCredential(const QString& key,
@@ -103,8 +112,11 @@ inline bool CredentialManager::retrieveCredential(const QString& key,
                                                    QString& password)
 {
     PCREDENTIALW pCred = nullptr;
+    std::wstring keyW = key.toStdWString();
     
-    if (!CredReadW(key.toStdWString().c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
+    if (!CredReadW(keyW.c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
+        qWarning() << "CredentialManager: CredReadW failed for key:" << key
+                   << "error:" << GetLastError();
         return false;
     }
     
@@ -119,6 +131,8 @@ inline bool CredentialManager::retrieveCredential(const QString& key,
                             pCred->CredentialBlobSize);
         QByteArray decrypted = decrypt(encrypted);
         password = QString::fromUtf8(decrypted);
+        // Scrub decrypted bytes from memory
+        SecureZeroMemory(decrypted.data(), decrypted.size());
     }
     
     CredFree(pCred);
@@ -127,7 +141,13 @@ inline bool CredentialManager::retrieveCredential(const QString& key,
 
 inline bool CredentialManager::deleteCredential(const QString& key)
 {
-    return CredDeleteW(key.toStdWString().c_str(), CRED_TYPE_GENERIC, 0) == TRUE;
+    std::wstring keyW = key.toStdWString();
+    if (CredDeleteW(keyW.c_str(), CRED_TYPE_GENERIC, 0) != TRUE) {
+        qWarning() << "CredentialManager: CredDeleteW failed for key:" << key
+                   << "error:" << GetLastError();
+        return false;
+    }
+    return true;
 }
 
 inline bool CredentialManager::hasCredential(const QString& key)
@@ -149,6 +169,8 @@ inline QByteArray CredentialManager::encrypt(const QByteArray& data)
     // Use DPAPI with user scope
     if (!CryptProtectData(&input, L"GW2AIO", nullptr, nullptr, nullptr,
                           CRYPTPROTECT_UI_FORBIDDEN, &output)) {
+        qWarning() << "CredentialManager: CryptProtectData failed, error:"
+                   << GetLastError();
         return QByteArray();
     }
     
@@ -169,10 +191,14 @@ inline QByteArray CredentialManager::decrypt(const QByteArray& encryptedData)
     
     if (!CryptUnprotectData(&input, &description, nullptr, nullptr, nullptr,
                             CRYPTPROTECT_UI_FORBIDDEN, &output)) {
+        qWarning() << "CredentialManager: CryptUnprotectData failed, error:"
+                   << GetLastError();
         return QByteArray();
     }
     
     QByteArray result(reinterpret_cast<char*>(output.pbData), output.cbData);
+    // Scrub DPAPI output buffer before freeing
+    SecureZeroMemory(output.pbData, output.cbData);
     LocalFree(output.pbData);
     if (description) LocalFree(description);
     

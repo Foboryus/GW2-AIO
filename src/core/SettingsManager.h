@@ -36,7 +36,7 @@ public:
   void endGroup();
 
   // Import/Export
-  bool exportToFile(const QString &filePath) const;
+  bool exportToFile(const QString &filePath);
   bool importFromFile(const QString &filePath);
 
   // Export specific sections
