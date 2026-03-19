@@ -290,6 +290,8 @@ int main(int argc, char *argv[]) {
   d3dOverlay.setMarkerManager(markerController.manager());
   d3dOverlay.setMarkerSettings(dataService.markerSettings());
   d3dOverlay.setImageCache(markerController.imageCache());
+  d3dOverlay.setQtOverlayHwnd(
+      reinterpret_cast<HWND>(overlayWindow.winId()));
   d3dOverlay.startTracking();
 
   // Wire Details Tracker toggle: OverlayMenuWidget → OverlayWindow → D3D11

@@ -10,8 +10,9 @@
 #include <QPainter>
 
 #ifdef Q_OS_WIN
-// Static instance for routing WinEventHook callbacks
-OverlayWindow *OverlayWindow::s_instance = nullptr;
+// REVIEW BEFORE BETA: s_hookMap is accessed only from Qt main thread (WinEventHook
+// callbacks fire on the installing thread). Verify this holds with OverlayInstanceManager.
+QHash<HWINEVENTHOOK, OverlayWindow *> OverlayWindow::s_hookMap;
 #endif
 
 OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent)
@@ -57,7 +58,6 @@ OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent)
           &OverlayWindow::updateClickThrough);
 
 #ifdef Q_OS_WIN
-  s_instance = this;
 
   // Prevent overlay from stealing focus.
   // WS_EX_NOACTIVATE: mouse clicks never activate this window.
@@ -74,11 +74,6 @@ OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent)
 OverlayWindow::~OverlayWindow() {
   unregisterProcessExitWait();
   uninstallEventHook();
-#ifdef Q_OS_WIN
-  if (s_instance == this) {
-    s_instance = nullptr;
-  }
-#endif
 }
 
 void OverlayWindow::startTracking() {
@@ -294,6 +289,7 @@ void OverlayWindow::installEventHook() {
                       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
   if (m_eventHook) {
+    s_hookMap.insert(m_eventHook, this);
     qInfo() << "Overlay: WinEventHook installed for PID:" << m_gw2ProcessId
             << "Thread:" << m_gw2ThreadId;
   } else {
@@ -309,6 +305,7 @@ void OverlayWindow::installEventHook() {
       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
   if (m_foregroundHook) {
+    s_hookMap.insert(m_foregroundHook, this);
     qInfo() << "Overlay: foreground hook installed";
   }
 #endif
@@ -317,10 +314,12 @@ void OverlayWindow::installEventHook() {
 void OverlayWindow::uninstallEventHook() {
 #ifdef Q_OS_WIN
   if (m_eventHook) {
+    s_hookMap.remove(m_eventHook);
     UnhookWinEvent(m_eventHook);
     m_eventHook = nullptr;
   }
   if (m_foregroundHook) {
+    s_hookMap.remove(m_foregroundHook);
     UnhookWinEvent(m_foregroundHook);
     m_foregroundHook = nullptr;
   }
@@ -329,7 +328,7 @@ void OverlayWindow::uninstallEventHook() {
 }
 
 #ifdef Q_OS_WIN
-void CALLBACK OverlayWindow::winEventProc(HWINEVENTHOOK /*hWinEventHook*/,
+void CALLBACK OverlayWindow::winEventProc(HWINEVENTHOOK hWinEventHook,
                                           DWORD event, HWND hwnd, LONG idObject,
                                           LONG /*idChild*/,
                                           DWORD /*idEventThread*/,
@@ -338,30 +337,32 @@ void CALLBACK OverlayWindow::winEventProc(HWINEVENTHOOK /*hWinEventHook*/,
     return;
   }
 
-  if (!s_instance || !s_instance->m_gw2Hwnd) {
+  auto *self = s_hookMap.value(hWinEventHook, nullptr);
+  if (!self || !self->m_gw2Hwnd) {
     return;
   }
 
-  if (hwnd != static_cast<HWND>(s_instance->m_gw2Hwnd)) {
+  if (hwnd != static_cast<HWND>(self->m_gw2Hwnd)) {
     return;
   }
 
   if (event == EVENT_OBJECT_LOCATIONCHANGE) {
-    s_instance->updatePosition();
+    self->updatePosition();
   }
 }
 
-void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK /*hWinEventHook*/,
+void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK hWinEventHook,
                                             DWORD /*event*/, HWND hwnd,
                                             LONG /*idObject*/, LONG /*idChild*/,
                                             DWORD /*idEventThread*/,
                                             DWORD /*dwmsEventTime*/) {
-  if (!s_instance || !s_instance->m_gw2Hwnd) {
+  auto *self = s_hookMap.value(hWinEventHook, nullptr);
+  if (!self || !self->m_gw2Hwnd) {
     return;
   }
 
-  HWND gw2Hwnd = static_cast<HWND>(s_instance->m_gw2Hwnd);
-  HWND overlayHwnd = reinterpret_cast<HWND>(s_instance->winId());
+  HWND gw2Hwnd = static_cast<HWND>(self->m_gw2Hwnd);
+  HWND overlayHwnd = reinterpret_cast<HWND>(self->winId());
 
   if (hwnd == gw2Hwnd) {
     // GW2 gained focus — overlay goes to TOPMOST
@@ -372,7 +373,7 @@ void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK /*hWinEventHook*/,
     // callback returns. Queue a second SetWindowPos on the next event loop
     // iteration (after Windows finishes its focus transition).
     QMetaObject::invokeMethod(
-        s_instance,
+        self,
         [overlayHwnd]() {
           SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

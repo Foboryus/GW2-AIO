@@ -36,7 +36,6 @@
 #include "SpriteBatch.h"
 #include "TrailPipeline.h"
 
-#include "ui/OverlayWindow.h"
 
 // Link DirectComposition for per-pixel alpha compositing
 #pragma comment(lib, "dcomp.lib")
@@ -45,9 +44,15 @@
 // Static Members
 // ============================================================================
 
-D3D11OverlayWindow *D3D11OverlayWindow::s_instance = nullptr;
-bool D3D11OverlayWindow::s_windowClassRegistered = false;
-const wchar_t *D3D11OverlayWindow::kWindowClassName = L"GW2AIO_D3D11Overlay";
+// REVIEW BEFORE BETA: s_hookMap is accessed only from Qt main thread (WinEventHook
+// callbacks fire on the thread that installed them). Verify this assumption holds
+// when OverlayInstanceManager creates/destroys instances.
+QHash<HWINEVENTHOOK, D3D11OverlayWindow *> D3D11OverlayWindow::s_hookMap;
+
+// REVIEW BEFORE BETA: s_instanceCounter never resets — window class names grow
+// monotonically (GW2AIO_D3D11Overlay_0, _1, ...). Fine for normal use but review
+// if instances are created/destroyed frequently in a session.
+int D3D11OverlayWindow::s_instanceCounter = 0;
 
 // ============================================================================
 // Constructor / Destructor
@@ -55,7 +60,9 @@ const wchar_t *D3D11OverlayWindow::kWindowClassName = L"GW2AIO_D3D11Overlay";
 
 D3D11OverlayWindow::D3D11OverlayWindow(MumbleLink *mumble, QObject *parent)
     : QObject(parent), m_mumbleLink(mumble) {
-  s_instance = this;
+  // Generate unique window class name for this instance
+  m_windowClassName =
+      L"GW2AIO_D3D11Overlay_" + std::to_wstring(s_instanceCounter++);
 
   // Create debug coordinate overlay (diagnostic)
   m_debugOverlay = new DebugOverlayWidget(mumble);
@@ -79,10 +86,6 @@ D3D11OverlayWindow::D3D11OverlayWindow(MumbleLink *mumble, QObject *parent)
 
 D3D11OverlayWindow::~D3D11OverlayWindow() {
   stopTracking();
-
-  if (s_instance == this) {
-    s_instance = nullptr;
-  }
 }
 
 // ============================================================================
@@ -234,22 +237,23 @@ bool D3D11OverlayWindow::tryCreateOverlay(uint32_t pid) {
 bool D3D11OverlayWindow::createOverlayWindow() {
   HINSTANCE hInstance = GetModuleHandleW(nullptr);
 
-  // Register window class (once)
-  if (!s_windowClassRegistered) {
-    WNDCLASSEXW wc = {};
-    wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = D3D11OverlayWindow::windowProc;
-    wc.hInstance = hInstance;
-    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = nullptr; // No background brush (transparent)
-    wc.lpszClassName = kWindowClassName;
+  // Register unique window class for this instance
+  WNDCLASSEXW wc = {};
+  wc.cbSize = sizeof(WNDCLASSEXW);
+  wc.style = CS_HREDRAW | CS_VREDRAW;
+  wc.lpfnWndProc = D3D11OverlayWindow::windowProc;
+  wc.hInstance = hInstance;
+  wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+  wc.hbrBackground = nullptr; // No background brush (transparent)
+  wc.lpszClassName = m_windowClassName.c_str();
 
-    if (!RegisterClassExW(&wc)) {
-      qCritical() << "D3D11Overlay: RegisterClassEx failed:" << GetLastError();
+  if (!RegisterClassExW(&wc)) {
+    DWORD err = GetLastError();
+    // ERROR_CLASS_ALREADY_EXISTS (1410) is OK — reusing after prior instance
+    if (err != ERROR_CLASS_ALREADY_EXISTS) {
+      qCritical() << "D3D11Overlay: RegisterClassEx failed:" << err;
       return false;
     }
-    s_windowClassRegistered = true;
   }
 
   // Create popup window for DirectComposition
@@ -262,7 +266,8 @@ bool D3D11OverlayWindow::createOverlayWindow() {
   DWORD exStyle = WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP |
                   WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
 
-  m_hwnd = CreateWindowExW(exStyle, kWindowClassName, L"GW2 AIO Overlay",
+  m_hwnd = CreateWindowExW(exStyle, m_windowClassName.c_str(),
+                           L"GW2 AIO Overlay",
                            WS_POPUP, 0, 0, 100, 100, // Will be resized
                            nullptr, nullptr, hInstance, this);
 
@@ -595,58 +600,74 @@ void D3D11OverlayWindow::installEventHook() {
       EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,
       D3D11OverlayWindow::foregroundProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
+  // Register both hooks in the map for callback routing
+  if (m_eventHook) {
+    s_hookMap.insert(m_eventHook, this);
+  }
+  if (m_foregroundHook) {
+    s_hookMap.insert(m_foregroundHook, this);
+  }
+
   qInfo() << "D3D11Overlay: Event hooks installed";
 }
 
 void D3D11OverlayWindow::uninstallEventHook() {
   if (m_eventHook) {
+    s_hookMap.remove(m_eventHook);
     UnhookWinEvent(m_eventHook);
     m_eventHook = nullptr;
   }
   if (m_foregroundHook) {
+    s_hookMap.remove(m_foregroundHook);
     UnhookWinEvent(m_foregroundHook);
     m_foregroundHook = nullptr;
   }
 }
 
-void CALLBACK D3D11OverlayWindow::winEventProc(HWINEVENTHOOK /*hWinEventHook*/,
+void CALLBACK D3D11OverlayWindow::winEventProc(HWINEVENTHOOK hWinEventHook,
                                                DWORD event, HWND hwnd,
                                                LONG idObject, LONG /*idChild*/,
                                                DWORD /*idEventThread*/,
                                                DWORD /*dwmsEventTime*/) {
-  if (!s_instance || idObject != OBJID_WINDOW) {
+  if (idObject != OBJID_WINDOW) {
+    return;
+  }
+
+  auto *self = s_hookMap.value(hWinEventHook, nullptr);
+  if (!self) {
     return;
   }
 
   if (event == EVENT_OBJECT_LOCATIONCHANGE &&
-      hwnd == reinterpret_cast<HWND>(s_instance->m_gw2Hwnd)) {
-    s_instance->updatePosition();
+      hwnd == reinterpret_cast<HWND>(self->m_gw2Hwnd)) {
+    self->updatePosition();
   }
 }
 
 void CALLBACK D3D11OverlayWindow::foregroundProc(
-    HWINEVENTHOOK /*hWinEventHook*/, DWORD /*event*/, HWND hwnd,
+    HWINEVENTHOOK hWinEventHook, DWORD /*event*/, HWND hwnd,
     LONG /*idObject*/, LONG /*idChild*/, DWORD /*idEventThread*/,
     DWORD /*dwmsEventTime*/) {
-  if (!s_instance || !s_instance->m_hwnd) {
+  auto *self = s_hookMap.value(hWinEventHook, nullptr);
+  if (!self || !self->m_hwnd) {
     return;
   }
 
-  bool isGW2 = (hwnd == reinterpret_cast<HWND>(s_instance->m_gw2Hwnd));
-  bool isOverlay = (hwnd == s_instance->m_hwnd);
+  bool isGW2 = (hwnd == reinterpret_cast<HWND>(self->m_gw2Hwnd));
+  bool isOverlay = (hwnd == self->m_hwnd);
 
   if (isGW2 || isOverlay) {
     // GW2 or overlay got focus — ensure rendering is active.
     // Z-order is managed per-frame in onRenderFrame() (TacO pattern).
-    s_instance->m_contentVisible = true;
+    self->m_contentVisible = true;
   } else {
-    if (s_instance->m_hideOnUnfocus) {
+    if (self->m_hideOnUnfocus) {
       // TacO mode: hide overlay when GW2 loses focus
-      ShowWindow(s_instance->m_hwnd, SW_HIDE);
-      s_instance->m_contentVisible = false;
+      ShowWindow(self->m_hwnd, SW_HIDE);
+      self->m_contentVisible = false;
     } else {
       // Blish mode: keep overlay visible
-      s_instance->m_contentVisible = true;
+      self->m_contentVisible = true;
     }
   }
 }
@@ -721,7 +742,7 @@ void D3D11OverlayWindow::onRenderFrame() {
   // This guarantees: GW2 → D3D11 (trails) → Qt (markers + dot)
   // regardless of focus state — no race condition.
   if (m_hwnd && m_gw2Hwnd) {
-    HWND qtHwnd = OverlayWindow::qtOverlayHwnd();
+    HWND qtHwnd = m_qtOverlayHwnd;
 
     if (qtHwnd) {
       // SetWindowPos(A, B) → A goes BELOW B in z-order.

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.22...4.2)
 project(GW2AIO VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -389,11 +389,13 @@ if(WIN32)
     # Copy ALL vcpkg runtime DLLs to lib/ (transitive deps windeployqt misses:
     # brotli, icu, harfbuzz, freetype, pcre2, zstd, double-conversion, etc.)
     file(GLOB VCPKG_RUNTIME_DLLS "${CMAKE_PREFIX_PATH}/bin/*.dll")
-    add_custom_command(TARGET GW2AIO_app POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${VCPKG_RUNTIME_DLLS}
-            $<TARGET_FILE_DIR:GW2AIO_app>
-    )
+    if(VCPKG_RUNTIME_DLLS)
+        add_custom_command(TARGET GW2AIO_app POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${VCPKG_RUNTIME_DLLS}
+                $<TARGET_FILE_DIR:GW2AIO_app>
+        )
+    endif()
 endif()
 
 # Build helper DLL for game load detection

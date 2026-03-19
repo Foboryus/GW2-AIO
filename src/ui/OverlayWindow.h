@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QWidget>
 
 #include "core/MumbleLink.h"
@@ -94,18 +95,10 @@ private:
                                       HWND hwnd, LONG idObject, LONG idChild,
                                       DWORD idEventThread, DWORD dwmsEventTime);
 
-  // Static instance pointer for routing WinEventHook callbacks
-  static OverlayWindow *s_instance;
-
-public:
-  /**
-   * @brief Get the Qt overlay HWND (for z-order coordination)
-   * @return HWND or nullptr if Qt overlay is not active
-   */
-  static HWND qtOverlayHwnd() {
-    return s_instance ? reinterpret_cast<HWND>(s_instance->winId())
-                      : nullptr;
-  }
+  // Static hook-to-instance map for WinEventHook routing
+  // Maps each HWINEVENTHOOK handle to its owning instance.
+  // Supports N overlay instances in the same process.
+  static QHash<HWINEVENTHOOK, OverlayWindow *> s_hookMap;
 
 private:
 

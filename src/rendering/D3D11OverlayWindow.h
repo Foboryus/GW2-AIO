@@ -34,6 +34,7 @@
 #include <dcomp.h>
 #include <wrl/client.h>
 
+#include <QHash>
 #include <QObject>
 #include <QSize>
 #include <QTimer>
@@ -114,6 +115,12 @@ public:
    */
   void toggleDebugOverlay(bool visible);
 
+  /**
+   * @brief Set the paired Qt overlay HWND for z-order coordination
+   * Each D3D11 overlay positions itself below its paired Qt overlay.
+   */
+  void setQtOverlayHwnd(HWND hwnd) { m_qtOverlayHwnd = hwnd; }
+
 signals:
   /**
    * @brief Emitted when GW2 window is found/lost
@@ -162,9 +169,16 @@ private:
   static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wParam,
                                      LPARAM lParam);
 
-  // --- Static instance for WinEventHook routing ---
-  static D3D11OverlayWindow *s_instance;
-  static const wchar_t *kWindowClassName;
+  // --- Static hook-to-instance map for WinEventHook routing ---
+  // Maps each HWINEVENTHOOK handle to its owning instance.
+  // Supports N overlay instances in the same process.
+  static QHash<HWINEVENTHOOK, D3D11OverlayWindow *> s_hookMap;
+
+  // Per-instance window class name (unique per instance)
+  std::wstring m_windowClassName;
+
+  // Qt overlay HWND for z-order coordination (set via setQtOverlayHwnd)
+  HWND m_qtOverlayHwnd = nullptr;
 
   // --- Core state ---
   MumbleLink *m_mumbleLink = nullptr;
@@ -224,6 +238,6 @@ private:
   // Uses QueryPerformanceCounter on Windows — zero allocation per call.
   QElapsedTimer m_frameTimer;
 
-  // Window class registration
-  static bool s_windowClassRegistered;
+  // Static counter for unique window class names
+  static int s_instanceCounter;
 };
