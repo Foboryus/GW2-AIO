@@ -113,6 +113,11 @@ struct AccountProfile {
   // GW2 API integration
   QString gw2ApiKey; // API key for achievement progress tracking
 
+  // Per-profile build verification
+  // When GW2 updates, each profile's Local.dat needs individual updating.
+  // This tracks which build this profile's dat was last verified against.
+  int lastVerifiedBuild = 0;
+
   QJsonObject toJson() const {
     QJsonObject obj;
     obj["schemaVersion"] = 2;
@@ -157,6 +162,9 @@ struct AccountProfile {
     if (!gw2ApiKey.isEmpty()) {
       obj["gw2ApiKey"] = gw2ApiKey;
     }
+
+    // Per-profile build verification
+    obj["lastVerifiedBuild"] = lastVerifiedBuild;
 
     return obj;
   }
@@ -245,6 +253,9 @@ struct AccountProfile {
 
     // GW2 API key
     p.gw2ApiKey = obj["gw2ApiKey"].toString();
+
+    // Per-profile build verification
+    p.lastVerifiedBuild = obj["lastVerifiedBuild"].toInt(0);
 
     return p;
   }

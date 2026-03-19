@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <pdh.h>
 #include <thread>
+#include <atomic>
 #include <string>
 #include <fstream>
 
@@ -30,7 +31,7 @@ public:
 
 HMODULE g_hModule = nullptr;
 DWORD g_dwPid = 0;
-bool g_bRunning = true;
+std::atomic<bool> g_bRunning{true};
 
 // Signal launcher with message (LOADED or EXITING)
 bool SignalLauncher(DWORD pid, const char* message, int maxRetries = 150, int retryDelayMs = 100) {

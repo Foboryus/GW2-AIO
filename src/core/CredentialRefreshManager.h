@@ -3,9 +3,9 @@
 /**
  * @brief Smart Credential Refresh Manager
  *
- * Detects stale .dat files and auto-refreshes them by launching
+ * Detects stale .dat files and refreshes them by launching
  * GW2 solo (no -shareArchive), waiting for LOADED signal, then
- * terminating. This keeps credentials fresh for multibox launches.
+ * terminating. Only triggered by explicit user launch (pre-flight check).
  *
  * See: features/local-dat-management.md
  *
@@ -47,10 +47,6 @@ public:
 
   bool isRefreshing() const { return m_refreshing; }
 
-  /// Whether auto-refresh after session is enabled (default: true)
-  bool autoRefreshEnabled() const { return m_autoRefreshEnabled; }
-  void setAutoRefreshEnabled(bool enabled) { m_autoRefreshEnabled = enabled; }
-
 signals:
   void refreshProgress(int current, int total, const QString &profileName);
   void refreshComplete(int refreshedCount);
@@ -75,7 +71,7 @@ private:
   int m_refreshedCount = 0;
   bool m_refreshing = false;
   bool m_cancelled = false;
-  bool m_autoRefreshEnabled = true;
+
 
   // Current refresh state
   qint64 m_currentPid = 0;
