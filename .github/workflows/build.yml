@@ -1,97 +1,137 @@
-name: Build GW2 AIO Manager
+name: Build & Sign GW2 AIO Manager
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   release:
     types: [ created ]
 
 env:
   QT_VERSION: '6.6.0'
 
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         submodules: recursive
-    
+
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
         version: ${{ env.QT_VERSION }}
         modules: 'qtnetworkauth'
         cache: true
-    
+
     - name: Configure CMake
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
-    
+
     - name: Build
       run: cmake --build build --config Release --parallel
-    
+
     - name: Run Tests
       run: |
         cd build/tests
         ctest -C Release --output-on-failure
       continue-on-error: true
-    
-    - name: Deploy Qt
-      run: |
-        windeployqt --release --no-translations build/Release/GW2AIO.exe
-    
+
+    # Package build output matching the launcher-stub layout:
+    #   GW2AIO.exe (stub) + lib/ (app, DLLs, plugins)
     - name: Create Portable Package
-      run: |
-        mkdir dist
-        xcopy /s /e build\Release dist\GW2AIO\
-        echo "Portable mode" > dist\GW2AIO\portable.txt
-        Compress-Archive -Path dist\GW2AIO -DestinationPath dist\GW2AIO_Portable.zip
       shell: pwsh
-    
-    - name: Upload Artifact
+      run: |
+        $dist = "dist/GW2AIO"
+        New-Item -ItemType Directory -Path $dist -Force
+
+        # Copy launcher stub
+        Copy-Item "build/Release/GW2AIO.exe" "$dist/"
+
+        # Copy lib/ directory (real app + all DLLs + plugins)
+        Copy-Item "build/Release/lib" "$dist/lib" -Recurse
+
+        # Create portable marker
+        "This file enables portable mode. Data is stored in the 'data' folder." | Out-File "$dist/portable.txt"
+
+        # Create the ZIP for signing
+        Compress-Archive -Path "$dist/*" -DestinationPath "dist/GW2AIO-Unsigned.zip" -Force
+
+    # Upload unsigned artifact (required by SignPath — must be a GitHub artifact)
+    - name: Upload Unsigned Artifact
+      id: upload-unsigned
       uses: actions/upload-artifact@v4
       with:
-        name: GW2AIO-Windows-x64
-        path: dist/GW2AIO_Portable.zip
-    
+        name: GW2AIO-Unsigned
+        path: dist/GW2AIO-Unsigned.zip
+
+    # Submit to SignPath for code signing
+    # Uses self-signed cert for testing; swap signing policy when OSS cert is approved
+    - name: Sign with SignPath
+      id: sign
+      if: github.event_name == 'release' || github.ref == 'refs/heads/master'
+      uses: signpath/github-action-submit-signing-request@v2
+      with:
+        api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+        organization-id: '${{ vars.SIGNPATH_ORGANIZATION_ID }}'
+        project-slug: 'GW2-AIO'
+        signing-policy-slug: 'test-signing'
+        github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
+        wait-for-completion: true
+        output-artifact-directory: 'dist/signed'
+
+    # Upload signed artifact
+    - name: Upload Signed Artifact
+      if: steps.sign.outcome == 'success'
+      uses: actions/upload-artifact@v4
+      with:
+        name: GW2AIO-Signed
+        path: dist/signed/GW2AIO-Unsigned.zip
+
+    # Attach to GitHub Release
     - name: Upload to Release
-      if: github.event_name == 'release'
+      if: github.event_name == 'release' && steps.sign.outcome == 'success'
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/GW2AIO_Portable.zip
+        files: dist/signed/GW2AIO-Unsigned.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Installer job (release only, after signing)
   build-installer:
     runs-on: windows-latest
     needs: build-windows
     if: github.event_name == 'release'
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    
-    - name: Download Build
+
+    - name: Download Signed Build
       uses: actions/download-artifact@v4
       with:
-        name: GW2AIO-Windows-x64
-    
+        name: GW2AIO-Signed
+
     - name: Install NSIS
       run: choco install nsis -y
-    
+
     - name: Extract Build
-      run: Expand-Archive GW2AIO_Portable.zip -DestinationPath build/Release
       shell: pwsh
-    
+      run: Expand-Archive GW2AIO-Unsigned.zip -DestinationPath build/Release
+
     - name: Build Installer
       run: |
         cd installer
         makensis installer.nsi
-    
+
     - name: Upload Installer
       uses: softprops/action-gh-release@v1
       with:
