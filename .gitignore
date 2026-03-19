@@ -50,3 +50,6 @@ compile_commands.json
 
 # Agent rules (local dev only)
 .agent/
+
+# Ninja build output
+build-ninja/
