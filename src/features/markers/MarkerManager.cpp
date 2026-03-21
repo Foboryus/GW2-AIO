@@ -82,7 +82,15 @@ void MarkerManager::loadPacksFromDirectory(const QString &path) {
   // Re-process trails with all packs — clear stale set in case onMapChanged
   // already ran with a partial pack list during async loading
   m_loadedTrailMapIds.clear();
-  ensureTrailsLoaded(m_currentMapId);
+  // Reload trails for all maps that have active ref-counts (multibox safety)
+  if (!m_trailMapRefCount.isEmpty()) {
+    for (auto it = m_trailMapRefCount.constBegin();
+         it != m_trailMapRefCount.constEnd(); ++it) {
+      ensureTrailsLoaded(it.key());
+    }
+  } else {
+    ensureTrailsLoaded(m_currentMapId);
+  }
   emit packsLoaded();
   emit markersChanged(); // Force pipelines to pick up rebuilt index
 }
@@ -168,7 +176,15 @@ void MarkerManager::loadPacksAsync(const QString &path) {
     // Re-process trails with all packs — clear stale set in case onMapChanged
     // already ran with a partial pack list during async loading
     m_loadedTrailMapIds.clear();
-    ensureTrailsLoaded(m_currentMapId);
+    // Reload trails for all maps that have active ref-counts (multibox safety)
+    if (!m_trailMapRefCount.isEmpty()) {
+      for (auto it = m_trailMapRefCount.constBegin();
+           it != m_trailMapRefCount.constEnd(); ++it) {
+        ensureTrailsLoaded(it.key());
+      }
+    } else {
+      ensureTrailsLoaded(m_currentMapId);
+    }
     m_asyncLoading = false;
     m_proximityTimer->start();
     m_dailyResetTimer->start();
@@ -478,6 +494,178 @@ bool MarkerManager::isCategoryVisible(const QString &packId,
   return true;
 }
 
+// ============================================================================
+// Per-instance query context overloads (Phase 7a)
+// ============================================================================
+
+bool MarkerManager::isCategoryVisible(
+    const QString &packId, const QString &categoryPath,
+    const MarkerQueryContext &qctx) const {
+  // Pack-level master switch from per-instance settings
+  if (qctx.settings && !qctx.settings->isPackEnabled(packId)) {
+    return false;
+  }
+
+  // Runtime cache is SKIPPED — per-instance uses settings directly.
+  // This ensures full independence between instances.
+  if (qctx.settings) {
+    return qctx.settings->isCategoryEnabled(packId, categoryPath);
+  }
+
+  return true;
+}
+
+QList<const Marker *>
+MarkerManager::getVisibleMarkers(RenderContext ctx,
+                                 const MarkerQueryContext &qctx) const {
+  QList<const Marker *> visible;
+
+  for (int p = 0; p < m_packs.size(); ++p) {
+    if (p >= m_mapIndex.size())
+      continue;
+
+    // Skip pack if disabled in per-instance settings
+    if (qctx.settings && !qctx.settings->isPackEnabled(m_packs[p].id)) {
+      continue;
+    }
+
+    const MapIndex &idx = m_mapIndex[p];
+    const MarkerPack &pack = m_packs[p];
+
+    // Filter by per-instance mapId
+    const QList<int> &indices = idx.markers.value(qctx.mapId);
+    for (int i : indices) {
+      const Marker &marker = pack.markers[i];
+
+      if (!marker.visible)
+        continue;
+
+      // Context-aware visibility filtering
+      switch (ctx) {
+      case RenderContext::InGame3D:
+        if (!marker.inGameVisible)
+          continue;
+        break;
+      case RenderContext::Minimap:
+        if (!marker.miniMapVisible)
+          continue;
+        break;
+      case RenderContext::BigMap:
+        if (!marker.bigMapVisible)
+          continue;
+        break;
+      }
+      if (!isCategoryVisible(pack.id, marker.type, qctx))
+        continue;
+
+      // passesFilters using per-instance MumbleLink
+      if (qctx.mumble && qctx.mumble->isConnected()) {
+        if (!passesFilters(marker.festival, marker.mountFilter,
+                           marker.profession, marker.race,
+                           marker.specialization, qctx.mumble))
+          continue;
+      }
+
+      // Height filter using per-instance settings + MumbleLink
+      {
+        bool hfEnabled = qctx.settings
+                             ? qctx.settings->heightFilterEnabled()
+                             : m_heightFilterEnabled;
+        float hfRange = qctx.settings ? qctx.settings->heightFilterRange()
+                                       : m_heightFilterRange;
+        if (hfEnabled && qctx.mumble && qctx.mumble->isConnected()) {
+          float dy = std::abs(marker.ypos - qctx.mumble->playerY());
+          if (dy > hfRange)
+            continue;
+        }
+      }
+
+      visible.append(&marker);
+    }
+  }
+
+  return visible;
+}
+
+QList<const Trail *>
+MarkerManager::getVisibleTrails(RenderContext ctx,
+                                const MarkerQueryContext &qctx) const {
+  QList<const Trail *> visible;
+
+  for (int p = 0; p < m_packs.size(); ++p) {
+    if (p >= m_mapIndex.size())
+      continue;
+
+    // Skip pack if disabled in per-instance settings
+    if (qctx.settings && !qctx.settings->isPackEnabled(m_packs[p].id)) {
+      continue;
+    }
+
+    const MapIndex &idx = m_mapIndex[p];
+    const MarkerPack &pack = m_packs[p];
+
+    // Filter by per-instance mapId
+    const QList<int> &mapTrails = idx.trails.value(qctx.mapId);
+    for (int i : mapTrails) {
+      const Trail &trail = pack.trails[i];
+      if (!trail.visible)
+        continue;
+
+      // Context-aware visibility filtering
+      switch (ctx) {
+      case RenderContext::InGame3D:
+        if (!trail.inGameVisible)
+          continue;
+        break;
+      case RenderContext::Minimap:
+        if (!trail.miniMapVisible)
+          continue;
+        break;
+      case RenderContext::BigMap:
+        if (!trail.bigMapVisible)
+          continue;
+        break;
+      }
+      if (!isCategoryVisible(pack.id, trail.type, qctx))
+        continue;
+
+      // passesFilters using per-instance MumbleLink
+      if (qctx.mumble && qctx.mumble->isConnected()) {
+        if (!passesFilters(trail.festival, trail.mountFilter,
+                           trail.profession, trail.race,
+                           trail.specialization, qctx.mumble))
+          continue;
+      }
+
+      // Height filter using per-instance settings + MumbleLink
+      {
+        bool hfEnabled = qctx.settings
+                             ? qctx.settings->heightFilterEnabled()
+                             : m_heightFilterEnabled;
+        float hfRange = qctx.settings ? qctx.settings->heightFilterRange()
+                                       : m_heightFilterRange;
+        if (hfEnabled && qctx.mumble && qctx.mumble->isConnected() &&
+            !trail.points.isEmpty()) {
+          float playerY = qctx.mumble->playerY();
+          bool anyInRange = false;
+          for (const QVector3D &pt : trail.points) {
+            if (std::abs(pt.y() - playerY) <= hfRange) {
+              anyInRange = true;
+              break;
+            }
+          }
+          if (!anyInRange)
+            continue;
+        }
+      }
+
+      visible.append(&trail);
+    }
+  }
+
+  return visible;
+}
+
 void MarkerManager::setActivationStore(ActivationStore *store) {
   m_activationStore = store;
 }
@@ -711,11 +899,11 @@ void MarkerManager::onMapChanged(uint32_t mapId) {
     }
   }
 
-  // Lazy trail loading: unload old map points, load new map points
+  // Lazy trail loading: ref-counted unload/load
   if (prevMapId != 0 && prevMapId != mapId) {
-    unloadTrailPoints(prevMapId);
+    releaseMap(prevMapId);
   }
-  ensureTrailsLoaded(mapId);
+  acquireMap(mapId);
 
   emit markersChanged();
 }
@@ -763,6 +951,32 @@ void MarkerManager::unloadTrailPoints(uint32_t mapId) {
   if (unloaded > 0) {
     qInfo() << "MarkerManager: Unloaded" << unloaded
             << "trail point sets for mapId" << mapId;
+  }
+}
+
+void MarkerManager::acquireMap(uint32_t mapId) {
+  if (mapId == 0)
+    return;
+  int &count = m_trailMapRefCount[mapId];
+  count++;
+  qInfo() << "MarkerManager: acquireMap" << mapId << "refCount:" << count;
+  ensureTrailsLoaded(mapId);
+}
+
+void MarkerManager::releaseMap(uint32_t mapId) {
+  if (mapId == 0)
+    return;
+  auto it = m_trailMapRefCount.find(mapId);
+  if (it == m_trailMapRefCount.end()) {
+    qWarning() << "MarkerManager: releaseMap called for untracked mapId:"
+               << mapId << "— ignoring (defensive guard)";
+    return;
+  }
+  (*it)--;
+  qInfo() << "MarkerManager: releaseMap" << mapId << "refCount:" << *it;
+  if (*it <= 0) {
+    m_trailMapRefCount.erase(it);
+    unloadTrailPoints(mapId);
   }
 }
 
@@ -941,7 +1155,15 @@ QString MarkerManager::activationKey(const Marker &marker) const {
 bool MarkerManager::passesFilters(uint8_t festival, uint32_t mountFilter,
                                   uint32_t profession, uint32_t race,
                                   uint32_t specialization) const {
-  if (!m_mumble || !m_mumble->isConnected()) {
+  return passesFilters(festival, mountFilter, profession, race,
+                       specialization, m_mumble);
+}
+
+bool MarkerManager::passesFilters(uint8_t festival, uint32_t mountFilter,
+                                  uint32_t profession, uint32_t race,
+                                  uint32_t specialization,
+                                  MumbleLink *mumble) const {
+  if (!mumble || !mumble->isConnected()) {
     // No MumbleLink data — show everything (can't filter without state)
     return true;
   }
@@ -949,7 +1171,7 @@ bool MarkerManager::passesFilters(uint8_t festival, uint32_t mountFilter,
   // Mount filter: TacO bitmask where bit N = allow mount index N
   // mountIndex 0 = not mounted
   if (mountFilter != 0) {
-    uint32_t mountBit = 1U << m_mumble->mountIndex();
+    uint32_t mountBit = 1U << mumble->mountIndex();
     if (!(mountFilter & mountBit)) {
       return false;
     }
@@ -958,7 +1180,7 @@ bool MarkerManager::passesFilters(uint8_t festival, uint32_t mountFilter,
   // Profession filter: bitmask where bit N = allow profession index N
   // GW2 profession indices: 1-9
   if (profession != 0) {
-    uint32_t profBit = 1U << m_mumble->profession();
+    uint32_t profBit = 1U << mumble->profession();
     if (!(profession & profBit)) {
       return false;
     }
@@ -967,7 +1189,7 @@ bool MarkerManager::passesFilters(uint8_t festival, uint32_t mountFilter,
   // Race filter: bitmask where bit N = allow race index N
   // GW2 race indices: 0-4
   if (race != 0) {
-    uint32_t raceBit = 1U << m_mumble->race();
+    uint32_t raceBit = 1U << mumble->race();
     if (!(race & raceBit)) {
       return false;
     }
@@ -977,8 +1199,8 @@ bool MarkerManager::passesFilters(uint8_t festival, uint32_t mountFilter,
   // Note: spec IDs can be large (e.g., 55 for Berserker).
   // TacO uses this as a bitmask, but spec IDs > 31 won't fit in uint32_t.
   // For practical purposes, check if the current spec matches any set bit.
-  if (specialization != 0 && m_mumble->specialization() < 32) {
-    uint32_t specBit = 1U << m_mumble->specialization();
+  if (specialization != 0 && mumble->specialization() < 32) {
+    uint32_t specBit = 1U << mumble->specialization();
     if (!(specialization & specBit)) {
       return false;
     }
