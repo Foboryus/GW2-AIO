@@ -56,6 +56,12 @@ public:
   void setMarkerController(MarkerController *controller);
   void setMarkerSettings(MarkerSettingsManager *settings);
 
+  /**
+   * @brief Set the per-instance MinimapRenderer for resize tracking
+   * Called by OverlayInstance after reparenting the renderer.
+   */
+  void setMinimapRenderer(MinimapRenderer *renderer);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
@@ -99,6 +105,13 @@ private:
   // Maps each HWINEVENTHOOK handle to its owning instance.
   // Supports N overlay instances in the same process.
   static QHash<HWINEVENTHOOK, OverlayWindow *> s_hookMap;
+
+  /**
+   * @brief Check if an HWND belongs to any tracked GW2 instance
+   * Used by foreground/z-order logic to stay TOPMOST when a sibling
+   * GW2 instance has focus (multibox friendly).
+   */
+  static bool isAnyTrackedGW2Window(HWND hwnd);
 
 private:
 

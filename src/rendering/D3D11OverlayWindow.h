@@ -55,6 +55,7 @@ class TrailPipeline;
 class SpriteBatch;
 class GlyphAtlas;
 class DebugOverlayWidget;
+struct MarkerQueryContext;
 
 class D3D11OverlayWindow : public QObject {
   Q_OBJECT
@@ -99,6 +100,9 @@ public:
   void setMarkerManager(MarkerManager *manager);
   void setMarkerSettings(MarkerSettingsManager *settings);
   void setImageCache(ImageCache *cache);
+
+  /// Per-instance query context (Phase 7a) — propagated to pipelines
+  void setQueryContext(const MarkerQueryContext *ctx);
 
   /**
    * @brief Get the overlay HWND
@@ -174,6 +178,13 @@ private:
   // Supports N overlay instances in the same process.
   static QHash<HWINEVENTHOOK, D3D11OverlayWindow *> s_hookMap;
 
+  /**
+   * @brief Check if an HWND belongs to any tracked GW2 instance
+   * Used by foreground/z-order logic to stay TOPMOST when a sibling
+   * GW2 instance has focus (multibox friendly).
+   */
+  static bool isAnyTrackedGW2Window(HWND hwnd);
+
   // Per-instance window class name (unique per instance)
   std::wstring m_windowClassName;
 
@@ -203,6 +214,9 @@ private:
   SpriteBatch *m_spriteBatch = nullptr;
   GlyphAtlas *m_glyphAtlas = nullptr;
   ImageCache *m_imageCache = nullptr;
+
+  // Per-instance query context (Phase 7a) — not owned, stored for deferred propagation
+  const MarkerQueryContext *m_queryCtx = nullptr;
 
   // Debug coordinate overlay (diagnostic)
   DebugOverlayWidget *m_debugOverlay = nullptr;

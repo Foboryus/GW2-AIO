@@ -147,6 +147,20 @@ void D3D11OverlayWindow::setImageCache(ImageCache *cache) {
   m_imageCache = cache;
 }
 
+void D3D11OverlayWindow::setQueryContext(const MarkerQueryContext *ctx) {
+  m_queryCtx = ctx; // Store for deferred pipeline creation
+  qInfo() << "[DEV] D3D11OverlayWindow: setQueryContext called, ctx:"
+          << (ctx ? "valid" : "null")
+          << "markerPipeline:" << (m_markerPipeline ? "exists" : "null")
+          << "trailPipeline:" << (m_trailPipeline ? "exists" : "null");
+  if (m_markerPipeline) {
+    m_markerPipeline->setQueryContext(ctx);
+  }
+  if (m_trailPipeline) {
+    m_trailPipeline->setQueryContext(ctx);
+  }
+}
+
 void D3D11OverlayWindow::toggleDebugOverlay(bool visible) {
   if (!m_debugOverlay) {
     return;
@@ -172,9 +186,9 @@ void D3D11OverlayWindow::onGameConnected(bool connected) {
   }
 
   if (connected) {
-    // PID may be 0 if MumbleLink context not yet populated, or if GW2
-    // writes to a custom segment. findGW2WindowByPid handles PID=0 by
-    // matching any ArenaNet game window (same approach as TacO/OverlayWindow).
+    // Per-instance MumbleLink: PID comes from this instance's shared memory.
+    // If PID=0, tryCreateOverlay will fail gracefully (findGW2WindowByPid
+    // won't find a window) and we retry on next connection/data tick.
     uint32_t pid = m_mumbleLink->processId();
     qInfo() << "D3D11Overlay: MumbleLink connected, PID:" << pid;
 
@@ -183,9 +197,7 @@ void D3D11OverlayWindow::onGameConnected(bool connected) {
     m_lastUiTick = 0;
     m_lastTickChangeMs = QDateTime::currentMSecsSinceEpoch();
 
-    // Try to create overlay now. If it fails (GW2 window not yet available),
-    // the next mapChanged or cameraChanged signal will trigger
-    // onMumbleDataUpdated which retries overlay creation.
+    // Try to create overlay now
     tryCreateOverlay(pid);
 
   } else {
@@ -330,6 +342,18 @@ bool D3D11OverlayWindow::createOverlayWindow() {
       qWarning() << "D3D11Overlay: TrailPipeline init failed";
       delete m_trailPipeline;
       m_trailPipeline = nullptr;
+    }
+
+    // Phase 7a: propagate stored query context to newly created pipelines
+    if (m_queryCtx) {
+      qInfo() << "[DEV] D3D11OverlayWindow: propagating stored query context"
+              << "to pipelines (mapId:" << m_queryCtx->mapId << ")";
+      if (m_markerPipeline) {
+        m_markerPipeline->setQueryContext(m_queryCtx);
+      }
+      if (m_trailPipeline) {
+        m_trailPipeline->setQueryContext(m_queryCtx);
+      }
     }
   } else {
     qWarning()
@@ -490,21 +514,22 @@ void D3D11OverlayWindow::updatePosition() {
     return;
   }
 
-  // TacO z-order approach: position overlay directly above the GW2 window
-  // in the z-order. This ensures the overlay appears on top of GW2 but
-  // BEHIND any other application windows (e.g., browser, PDF reader).
+  // Per-tick z-order maintenance: position overlay just above its GW2.
+  // TOPMOST promotion is handled exclusively by foregroundProc (event-driven).
+  // updatePosition must NOT promote to TOPMOST — GetForegroundWindow() can
+  // return stale values during focus transitions, re-promoting after demotion.
   HWND insertAfter = GetNextWindow(gw2, GW_HWNDPREV);
   if (insertAfter == m_hwnd) {
-    // Already positioned correctly — just update size/position
+    // Already just above our GW2 — just update size/position
     SetWindowPos(m_hwnd, nullptr, topLeft.x, topLeft.y, width, height,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOZORDER);
   } else if (insertAfter) {
-    // Position just above GW2 (behind the window above GW2)
+    // Not above our GW2 — move there
     SetWindowPos(m_hwnd, insertAfter, topLeft.x, topLeft.y, width, height,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
   } else {
-    // GW2 is already topmost — fallback to TOPMOST
-    SetWindowPos(m_hwnd, HWND_TOPMOST, topLeft.x, topLeft.y, width, height,
+    // GW2 is at top — place overlay at top (non-topmost)
+    SetWindowPos(m_hwnd, HWND_TOP, topLeft.x, topLeft.y, width, height,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
   }
 
@@ -624,6 +649,19 @@ void D3D11OverlayWindow::uninstallEventHook() {
   }
 }
 
+bool D3D11OverlayWindow::isAnyTrackedGW2Window(HWND hwnd) {
+  if (!hwnd) {
+    return false;
+  }
+  for (auto *instance : s_hookMap) {
+    if (instance && instance->m_gw2Hwnd &&
+        reinterpret_cast<HWND>(instance->m_gw2Hwnd) == hwnd) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void CALLBACK D3D11OverlayWindow::winEventProc(HWINEVENTHOOK hWinEventHook,
                                                DWORD event, HWND hwnd,
                                                LONG idObject, LONG /*idChild*/,
@@ -657,12 +695,11 @@ void CALLBACK D3D11OverlayWindow::foregroundProc(
   bool isOverlay = (hwnd == self->m_hwnd);
 
   if (isGW2 || isOverlay) {
-    // GW2 or overlay got focus — ensure rendering is active.
-    // Z-order is managed per-frame in onRenderFrame() (TacO pattern).
+    // This instance's GW2 or overlay got focus — ensure rendering is active.
     self->m_contentVisible = true;
   } else {
     if (self->m_hideOnUnfocus) {
-      // TacO mode: hide overlay when GW2 loses focus
+      // TacO mode: hide overlay when this instance's GW2 loses focus
       ShowWindow(self->m_hwnd, SW_HIDE);
       self->m_contentVisible = false;
     } else {
@@ -700,8 +737,10 @@ void D3D11OverlayWindow::onRenderFrame() {
     return;
   }
 
-  // No frame-rate guard needed — rendering is driven solely by
-  // MumbleLink::dataUpdated (~50Hz). Every frame uses fresh data.
+  // Per-tick z-order refresh: same as OverlayWindow::ensureZOrder.
+  // Without this, D3D11 z-order only updates on GW2 location change events
+  // (winEventProc), missing focus-change z-order transitions.
+  updatePosition();
 
   // TacO approach: track wall-clock time since uiTick last changed.
   // When GW2 is on a loading screen or character select, uiTick freezes.

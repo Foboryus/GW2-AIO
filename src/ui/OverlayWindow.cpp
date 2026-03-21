@@ -17,7 +17,7 @@ QHash<HWINEVENTHOOK, OverlayWindow *> OverlayWindow::s_hookMap;
 
 OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent)
     : QWidget(parent,
-              Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool),
+              Qt::FramelessWindowHint | Qt::Tool),
       m_mumbleLink(mumble) {
   // Enable transparency
   setAttribute(Qt::WA_TranslucentBackground);
@@ -103,19 +103,11 @@ void OverlayWindow::startTracking() {
     show();
     ensureZOrder();
     qInfo() << "Overlay tracking started (WinEventHook) PID:" << m_gw2ProcessId;
-  } else if (pid != 0 && findGW2WindowByPid(0)) {
-    // Stale PID from MumbleLink — fallback to finding any GW2 game window
-    qInfo() << "Overlay: stale PID" << pid
-            << "— found alternate GW2 window at PID:" << m_gw2ProcessId;
-    installEventHook();
-    registerProcessExitWait();
-    updatePosition();
-    show();
-    ensureZOrder();
-    qInfo() << "Overlay tracking started (WinEventHook) PID:" << m_gw2ProcessId;
   } else {
+    // PID not found — wait for next MumbleLink poll tick.
+    // DO NOT fall back to pid=0 (any ArenaNet window) — wrong for multibox.
     qWarning() << "Overlay: cannot start tracking — GW2 HWND not found"
-               << "(PID:" << pid << ")";
+               << "(PID:" << pid << ") — will retry on next MumbleLink update";
     m_isTracking = false;
   }
 #endif
@@ -327,6 +319,19 @@ void OverlayWindow::uninstallEventHook() {
 #endif
 }
 
+bool OverlayWindow::isAnyTrackedGW2Window(HWND hwnd) {
+  if (!hwnd) {
+    return false;
+  }
+  for (auto *instance : s_hookMap) {
+    if (instance && instance->m_gw2Hwnd &&
+        static_cast<HWND>(instance->m_gw2Hwnd) == hwnd) {
+      return true;
+    }
+  }
+  return false;
+}
+
 #ifdef Q_OS_WIN
 void CALLBACK OverlayWindow::winEventProc(HWINEVENTHOOK hWinEventHook,
                                           DWORD event, HWND hwnd, LONG idObject,
@@ -380,13 +385,21 @@ void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK hWinEventHook,
         },
         Qt::QueuedConnection);
   } else {
-    // GW2 lost focus — place overlay ABOVE GW2 but BELOW the focused app.
-    // Blish HUD pattern: get the window just above GW2 in z-order,
-    // then insert the overlay just below it.
+    // Another window gained focus — clear TOPMOST and place overlay just
+    // above this instance's GW2 (below the focused window).
     HWND nextHandle = GetWindow(gw2Hwnd, GW_HWNDPREV);
-    if (nextHandle != nullptr && nextHandle != overlayHwnd) {
+    if (nextHandle == overlayHwnd) {
+      // Already just above our GW2 — just clear TOPMOST flag
+      ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    } else if (nextHandle) {
+      // Not above our GW2 — move there (implicitly clears TOPMOST)
       SetWindowPos(overlayHwnd, nextHandle, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    } else {
+      // GW2 at top of z-order — just clear TOPMOST
+      ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
   }
 }
@@ -492,15 +505,13 @@ void OverlayWindow::setMarkerController(MarkerController *controller) {
     m_menuWidget->setMarkerController(controller);
   }
 
-  // Reparent MinimapRenderer as child of this overlay window
-  if (controller && controller->minimapRenderer()) {
-    m_minimapRenderer = controller->minimapRenderer();
-    m_minimapRenderer->setParent(this);
-    m_minimapRenderer->setGeometry(0, 0, width(), height());
-    m_minimapRenderer->lower(); // Draw below menu widget
-    qInfo() << "OverlayWindow: MinimapRenderer reparented as child widget"
-            << "size:" << width() << "x" << height();
-  }
+  // NOTE: MinimapRenderer reparenting removed — per-instance MinimapRenderer
+  // is now created and reparented by OverlayInstance::start().
+  // The shared MarkerController::minimapRenderer() is no longer used here.
+}
+
+void OverlayWindow::setMinimapRenderer(MinimapRenderer *renderer) {
+  m_minimapRenderer = renderer;
 }
 
 void OverlayWindow::setMarkerSettings(MarkerSettingsManager *settings) {
@@ -561,6 +572,13 @@ void OverlayWindow::updateHudVisibility() {
     if (m_menuWidget) {
       m_menuWidget->setShouldBeVisible(shouldShow);
     }
+    // Propagate stall state to MinimapRenderer (loading/char select → hide).
+    // Use !tickStalled (not shouldShow) because MinimapRenderer handles
+    // both minimap AND big map rendering — hiding when map is open would
+    // kill big map markers.
+    if (m_minimapRenderer) {
+      m_minimapRenderer->setShouldBeVisible(!tickStalled);
+    }
   }
 
   // Combat hide: only affects the panel, diamond stays visible
@@ -589,22 +607,20 @@ void OverlayWindow::ensureZOrder() {
 
   HWND overlayHwnd = reinterpret_cast<HWND>(winId());
   HWND gw2Hwnd = static_cast<HWND>(m_gw2Hwnd);
-  HWND foreground = ::GetForegroundWindow();
 
-  if (foreground == gw2Hwnd || foreground == overlayHwnd) {
-    // GW2 (or overlay) has focus — overlay goes TOPMOST
-    HWND wnd = ::GetNextWindow(gw2Hwnd, GW_HWNDPREV);
-    if (wnd != overlayHwnd) {
-      ::SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
-  } else {
-    // GW2 lost focus — place overlay just above GW2 (below focused app)
-    HWND wnd = ::GetNextWindow(gw2Hwnd, GW_HWNDPREV);
-    if (wnd && wnd != overlayHwnd) {
-      ::SetWindowPos(overlayHwnd, wnd, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
+  // Per-tick z-order maintenance: ensure overlay stays just above its GW2.
+  // TOPMOST promotion is handled exclusively by foregroundProc (event-driven,
+  // receives the correct foreground HWND). ensureZOrder must NOT promote to
+  // TOPMOST — GetForegroundWindow() can return stale values during focus
+  // transitions, causing overlay to re-promote after foregroundProc demoted it.
+  HWND wnd = ::GetNextWindow(gw2Hwnd, GW_HWNDPREV);
+  if (wnd == overlayHwnd) {
+    // Already just above our GW2 — nothing to do
+    return;
+  } else if (wnd) {
+    // Not above our GW2 — move there
+    ::SetWindowPos(overlayHwnd, wnd, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
   }
 #endif
 }
