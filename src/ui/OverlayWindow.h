@@ -11,7 +11,7 @@
 // clang-format on
 #endif
 
-class MarkerController;
+class MarkerManager;
 class MarkerSettingsManager;
 class MinimapRenderer;
 class OverlayMenuWidget;
@@ -27,7 +27,8 @@ class OverlayWindow : public QWidget {
   Q_OBJECT
 
 public:
-  explicit OverlayWindow(MumbleLink *mumble, QWidget *parent = nullptr);
+  explicit OverlayWindow(MumbleLink *mumble, QWidget *parent = nullptr,
+                         bool headless = false);
   ~OverlayWindow();
 
   /**
@@ -45,6 +46,13 @@ public:
    */
   void setClickThrough(bool enabled);
 
+  /**
+   * @brief Set the guaranteed GW2 PID for HWND targeting.
+   * Must be called before startTracking(). Uses the command-line PID
+   * instead of MumbleLink processId() which may contain stale data.
+   */
+  void setTargetPid(uint32_t pid) { m_targetPid = pid; }
+
 signals:
   void editExclusionZonesRequested();
   void detailsTrackerToggled(bool visible);
@@ -53,7 +61,7 @@ public:
   /**
    * @brief Wire marker data sources for the overlay menu
    */
-  void setMarkerController(MarkerController *controller);
+  void setMarkerManager(MarkerManager *manager);
   void setMarkerSettings(MarkerSettingsManager *settings);
 
   /**
@@ -173,4 +181,11 @@ private:
 
   // Click-through state (WS_EX_TRANSPARENT toggle tracking)
   bool m_isClickThrough = true; // Start transparent — game gets all clicks
+  bool m_headless = false;       // No menu/zone editor (child minimap mode)
+  uint32_t m_targetPid = 0;      // Guaranteed GW2 PID from command-line
+
+  // Focus state: true when this overlay's GW2 is the foreground window.
+  // When unfocused, overlay hides content and shows paused icon.
+  bool m_gameFocused = true;
+  void setGameFocused(bool focused);
 };

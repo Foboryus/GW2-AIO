@@ -22,13 +22,11 @@
 #include "core/GW2Detector.h"
 #include "core/LaunchManager.h"
 #include "core/Logger.h"
-#include "core/MumbleLink.h"
 #include "core/SettingsManager.h"
 #include "core/ThemeManager.h"
 
 // UI
 #include "ui/MainWindow.h"
-#include "ui/OverlayWindow.h"
 #include "ui/SetupWizard.h"
 #include "ui/SplashScreen.h"
 #include "ui/StyledTooltip.h"
@@ -37,12 +35,13 @@
 // Features
 #include "features/dps/DPSController.h"
 #include "features/markers/MarkerController.h"
-#include "features/markers/MarkerSettingsManager.h"
 #include "features/modules/ModuleController.h"
 #include "features/radial/RadialController.h"
 
-// D3D11 Overlay Rendering Engine
-#include "rendering/D3D11OverlayWindow.h"
+// Multibox overlay management
+#include "core/OverlayInstanceManager.h"
+#include "core/ChildProcessManager.h"
+#include "core/StorageBackend.h"
 
 int main(int argc, char *argv[]) {
   // Enable high DPI scaling - must be before QApplication creation
@@ -220,25 +219,19 @@ int main(int argc, char *argv[]) {
     qInfo() << "Found GW2 at:" << gw2Path;
   }
 
-  // Initialize Mumble Link (trigger-based: starts when GW2 confirmed running)
-  splash.setStatus("Initializing Mumble Link...");
+  // Feature controllers will receive their MumbleLink dynamically from the focused OverlayInstance.
+  splash.setStatus("Loading feature controllers...");
   splash.setProgress(40);
 
-  MumbleLink mumbleLink;
-
-  // Initialize feature controllers
-  splash.setStatus("Loading radial menus...");
-  splash.setProgress(50);
-
-  RadialController radialController(&mumbleLink);
+  RadialController radialController(nullptr);
   if (dataService.setting("radial/enabled", true).toBool() && !opts.noRadial) {
     radialController.start();
   }
 
   splash.setStatus("Loading DPS tracker...");
-  splash.setProgress(60);
+  splash.setProgress(50);
 
-  DPSController dpsController(&mumbleLink);
+  DPSController dpsController(nullptr);
   // DPS meter is not implemented yet — disabled unconditionally
   // TODO: Re-enable when DPS feature is ready
   // if (dataService.setting("dps/enabled", false).toBool() && !opts.noDPS) {
@@ -247,9 +240,9 @@ int main(int argc, char *argv[]) {
   // }
 
   splash.setStatus("Loading marker system...");
-  splash.setProgress(70);
+  splash.setProgress(60);
 
-  MarkerController markerController(&mumbleLink);
+  MarkerController markerController;
   markerController.setActivationStore(dataService.activationStore());
   markerController.setCacheDir(AppConfig::instance().markerPacksCacheDir());
   markerController.setMarkerSettings(dataService.markerSettings());
@@ -269,39 +262,14 @@ int main(int argc, char *argv[]) {
     markerController.start();
   }
 
-  // Initialize overlay window (in-game HUD)
-  // Uses shared MumbleLink — trigger-based show/hide via connectionChanged
-  OverlayWindow overlayWindow(&mumbleLink);
-  overlayWindow.setMarkerController(&markerController);
-  overlayWindow.setMarkerSettings(dataService.markerSettings());
-
-  // Wire MumbleLink connection to MinimapRenderer lifecycle:
-  // Show minimap markers when GW2 connects, hide when disconnects.
-  QObject::connect(&mumbleLink, &MumbleLink::connectionChanged,
-                   &markerController, &MarkerController::setVisible);
-
-  // OverlayWindow internally connects to MumbleLink::connectionChanged
-  // for trigger-based show/hide (startTracking/stopTracking via
-  // onGameConnected)
-
-  // D3D11 overlay window (native Win32 + Direct3D 11 rendering)
-  // Renders markers and trails in-game via GPU-accelerated D3D11 pipeline
-  D3D11OverlayWindow d3dOverlay(&mumbleLink);
-  d3dOverlay.setMarkerManager(markerController.manager());
-  d3dOverlay.setMarkerSettings(dataService.markerSettings());
-  d3dOverlay.setImageCache(markerController.imageCache());
-  d3dOverlay.setQtOverlayHwnd(
-      reinterpret_cast<HWND>(overlayWindow.winId()));
-  d3dOverlay.startTracking();
-
-  // Wire Details Tracker toggle: OverlayMenuWidget → OverlayWindow → D3D11
-  QObject::connect(&overlayWindow, &OverlayWindow::detailsTrackerToggled,
-                   &d3dOverlay, &D3D11OverlayWindow::toggleDebugOverlay);
+  // Singleton OverlayWindow/D3D11OverlayWindow removed — replaced by
+  // per-instance OverlayInstance objects managed by OverlayInstanceManager.
+  // See Phase 4 in docs/Overlay Multibox/implementation_plan.md
 
   splash.setStatus("Loading Blish modules...");
   splash.setProgress(80);
 
-  ModuleController moduleController(&mumbleLink);
+  ModuleController moduleController(nullptr);
   if (dataService.setting("modules/enabled", true).toBool() &&
       !opts.noModules) {
     if (moduleController.start()) {
@@ -321,28 +289,31 @@ int main(int argc, char *argv[]) {
   MainWindow mainWindow(&dataService, &markerController);
   mainWindow.setGW2Path(gw2Path);
 
-  // Trigger-based: start MumbleLink when GW2 window is confirmed
-  // (profileWindowConfirmed fires after GW2WindowWatcher detects the window)
-  QObject::connect(mainWindow.launchManager(),
-                   &LaunchManager::profileWindowConfirmed, &mumbleLink,
-                   [&mumbleLink, &dataService,
-                    lm = mainWindow.launchManager()](const QString &profileId) {
-                     // Set correct link name for multibox isolation
-                     QString linkName = lm->mumbleLinkNameForProfile(profileId);
-                     if (linkName.isEmpty()) {
-                       linkName = QStringLiteral("MumbleLink");
-                     }
-                     mumbleLink.setLinkName(linkName);
-                     // Start polling if not already running
-                     if (!mumbleLink.isRunning()) {
-      mumbleLink.start(10);
-                     }
-                     // Load per-profile marker settings (exclusion zones,
-                     // display prefs)
-                     dataService.markerSettings()->loadForProfile(profileId);
-                     qInfo() << "MumbleLink started for profile — segment:"
-                             << linkName;
-                   });
+  // Create overlay instance manager — self-contained, wires to LaunchManager
+  // internally via profileWindowConfirmed (create) and profileExited (destroy).
+  // Main.cpp does NOT need to connect overlay signals — the manager handles it.
+  OverlayInstanceManager overlayManager(
+      mainWindow.launchManager(), &markerController,
+      dataService.storageBackend()->markerStateDir());
+
+  // Create child process manager — spawns feature children (GW2AIO-3d-<Profile>.exe)
+  // when GW2 window is confirmed, terminates them when GW2 exits.
+  // Self-contained wiring: connects to LaunchManager signals internally.
+  ChildProcessManager childProcessManager(
+      mainWindow.launchManager(), dataService.profileManager());
+  childProcessManager.setOverlayInstanceManager(&overlayManager);
+
+  // Reconnect: if GW2 is already running (AIO restarted), spawn children now
+  childProcessManager.spawnForRunningProfiles();
+
+  // Wire dynamic MumbleLink switching: non-overlay controllers switch their
+  // data source instantly when a different GW2 instance gains focus.
+  QObject::connect(&overlayManager, &OverlayInstanceManager::focusedMumbleLinkChanged,
+                   &radialController, &RadialController::setMumbleLink);
+  QObject::connect(&overlayManager, &OverlayInstanceManager::focusedMumbleLinkChanged,
+                   &dpsController, &DPSController::setMumbleLink);
+  QObject::connect(&overlayManager, &OverlayInstanceManager::focusedMumbleLinkChanged,
+                   &moduleController, &ModuleController::setMumbleLink);
 
   splash.setStatus("Ready!");
   splash.setProgress(100);
@@ -366,25 +337,23 @@ int main(int argc, char *argv[]) {
   splash.finish(&mainWindow);
 
   // If GW2 is already running (AIO restarted), start MumbleLink + overlay
-  // for the first running profile. This enables overlay persistence across
-  // AIO restarts — the user sees the overlay re-appear automatically.
+  // for ALL running profiles. This enables overlay persistence across
+  // AIO restarts — the user sees overlays re-appear automatically.
   auto running = dataService.runningProfiles();
   if (!running.isEmpty()) {
-    auto it = running.begin();
-    QString profileId = it.key();
-    // Read persisted mumble link name (saved alongside PID in running_profiles.json)
-    QString linkName = dataService.profileManager()->mumbleLinkNameForRunningProfile(profileId);
-    if (linkName.isEmpty()) {
-      linkName = QStringLiteral("MumbleLink");
+    // Create overlay instances for ALL running profiles
+    for (auto it2 = running.begin(); it2 != running.end(); ++it2) {
+      QString profileId = it2.key();
+      // Phase 7: read persistent mumble name from profile data
+      AccountProfile *prof = dataService.profileManager()->profile(profileId);
+      QString linkName = prof ? prof->mumbleLinkName : QString();
+      if (linkName.isEmpty()) {
+        linkName = QStringLiteral("MumbleLink");
+      }
+      overlayManager.createOverlay(profileId, linkName);
+      qInfo() << "AIO restart: created overlay for running profile:"
+              << profileId << "segment:" << linkName;
     }
-    mumbleLink.setLinkName(linkName);
-    if (!mumbleLink.isRunning()) {
-      mumbleLink.start(10);
-    }
-    // Load per-profile marker settings (exclusion zones, display prefs)
-    dataService.markerSettings()->loadForProfile(profileId);
-    qInfo() << "MumbleLink started for already-running GW2 — profile:"
-            << profileId << "segment:" << linkName;
   }
 
   qInfo() << "GW2 AIO Manager started";
@@ -417,8 +386,7 @@ int main(int argc, char *argv[]) {
   markerController.stop();
   dpsController.stop();
   radialController.stop();
-  d3dOverlay.stopTracking();
-  mumbleLink.stop();
+  overlayManager.destroyAll();
 
   // Clear crash flag on clean exit
   CrashHandler::instance().clearCrashFlag();

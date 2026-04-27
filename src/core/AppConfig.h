@@ -76,6 +76,28 @@ public:
   }
 
   /**
+   * @brief Get profile data root directory
+   *
+   * SYNC: Must match LocalStorageBackend::profileDataDir().
+   * Child processes use AppConfig (not StorageBackend/DataService)
+   * because they are separate executables without DataService access.
+   * If LocalStorageBackend changes this path, update here too.
+   */
+  QString profileDataDir() const {
+    return QDir(m_dataDir).filePath("ProfileData");
+  }
+
+  /**
+   * @brief Get marker state directory (per-profile marker settings)
+   *
+   * SYNC: Must match LocalStorageBackend::markerStateDir().
+   * See profileDataDir() comment for rationale.
+   */
+  QString markerStateDir() const {
+    return QDir(profileDataDir()).filePath("marker_state");
+  }
+
+  /**
    * @brief Get settings file path
    */
   QString settingsPath() const {
@@ -181,4 +203,6 @@ inline void AppConfig::ensureDirectories() {
   QDir().mkpath(markerPacksCacheDir());
   QDir().mkpath(blishModulesDir());
   QDir().mkpath(radialConfigDir());
+  QDir().mkpath(profileDataDir());
+  QDir().mkpath(markerStateDir());
 }

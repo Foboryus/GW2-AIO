@@ -417,7 +417,9 @@ void TrailPipeline::preloadTextures() {
     return;
   }
 
-  auto trails = m_markerManager->getVisibleTrails();
+  auto trails = m_queryCtx
+                    ? m_markerManager->getVisibleTrails(RenderContext::InGame3D, *m_queryCtx)
+                    : m_markerManager->getVisibleTrails();
   if (trails.isEmpty()) {
     return;
   }
@@ -458,12 +460,20 @@ void TrailPipeline::render() {
   }
 
   // Get visible trails for current map (pre-filtered by MarkerManager)
-  auto trails = m_markerManager->getVisibleTrails();
+  auto trails = m_queryCtx
+                    ? m_markerManager->getVisibleTrails(RenderContext::InGame3D, *m_queryCtx)
+                    : m_markerManager->getVisibleTrails();
 
 
 
   if (trails.isEmpty()) {
     return;
+  }
+
+  // [DEVLOG] throttled: trail rendering stats (1/sec)
+  if (m_frameCount % 60 == 0) {
+    qInfo() << "[DEVLOG] TrailPipeline: rendering" << trails.size() << "trails"
+            << "opacity:" << m_opacity << "mapOpen:" << m_mumble->isMapOpen();
   }
 
   auto *ctx = m_context->context();
@@ -615,26 +625,38 @@ QRectF TrailPipeline::computeMinimapRect() const {
 
   float screenW = static_cast<float>(m_context->width());
   float screenH = static_cast<float>(m_context->height());
-  float cw = static_cast<float>(compass.compassWidth);
-  float ch = static_cast<float>(compass.compassHeight);
+
+  // --- GW2 window-too-small scaling (TacO: GetWindowTooSmallScale) ---
+  // Matches MinimapRenderer::computeMinimapRect — GW2 scales UI internally
+  // when client area is below ~1024x768, but MumbleLink dims don't change.
+  constexpr float kMinWindowWidth = 1024.0f;
+  constexpr float kMinWindowHeight = 768.0f;
+  float wtsW = (screenW < kMinWindowWidth) ? screenW / kMinWindowWidth : 1.0f;
+  float wtsH = (screenH < kMinWindowHeight) ? screenH / kMinWindowHeight : 1.0f;
+  float windowTooSmallScale = qMin(wtsW, wtsH);
+
+  float cw = static_cast<float>(compass.compassWidth) * windowTooSmallScale;
+  float ch = static_cast<float>(compass.compassHeight) * windowTooSmallScale;
 
   float x, y;
   if (m_mumble->isMinimapTopRight()) {
     x = screenW - cw;
-    y = 1.0f;
+    y = 1.0f * windowTooSmallScale;
   } else {
     // Default: bottom-right with UI-size-dependent delta
     int uiSize = m_mumble->uiSize();
-    int delta = 37; // Normal
+    float delta = 37.0f; // Normal
     if (uiSize == 0)
-      delta = 33; // Small
+      delta = 33.0f; // Small
     else if (uiSize == 2)
-      delta = 41; // Large
+      delta = 41.0f; // Large
     else if (uiSize == 3)
-      delta = 45; // Larger
+      delta = 45.0f; // Larger
+
+    delta *= windowTooSmallScale;
 
     x = screenW - cw;
-    y = screenH - ch - static_cast<float>(delta);
+    y = screenH - ch - delta;
   }
 
   return QRectF(static_cast<double>(x), static_cast<double>(y),
@@ -857,7 +879,9 @@ void TrailPipeline::renderMinimap() {
   // inGameVisibility=0 but miniMapVisibility/mapVisibility=1 still render
   RenderContext trailCtx =
       bigMap ? RenderContext::BigMap : RenderContext::Minimap;
-  auto trails = m_markerManager->getVisibleTrails(trailCtx);
+  auto trails = m_queryCtx
+                    ? m_markerManager->getVisibleTrails(trailCtx, *m_queryCtx)
+                    : m_markerManager->getVisibleTrails(trailCtx);
   if (trails.isEmpty()) {
     return;
   }
@@ -866,6 +890,21 @@ void TrailPipeline::renderMinimap() {
   // Step 1: buildTransformationMatrix gives world→pixel coords (Qt col-vec)
   QMatrix4x4 worldToPixel = compass.buildTransformationMatrix(
       renderRect, m_mumble->playerPosition(), bigMap);
+
+  // [DEBUG] Diagnostic: log compass data every ~200 frames to trace drift
+  {
+    static int diagFrame = 0;
+    if (++diagFrame % 200 == 0) {
+      auto pp = m_mumble->playerPosition();
+      qInfo() << "[DIAG] renderMinimap:"
+              << "bigMap:" << bigMap
+              << "compassCenter:" << compass.mapCenterX << compass.mapCenterY
+              << "compassPlayer:" << compass.playerX << compass.playerY
+              << "mumblePos:" << pp.x() << pp.y() << pp.z()
+              << "mapScale:" << compass.mapScale
+              << "compassSize:" << compass.compassWidth << compass.compassHeight;
+    }
+  }
 
   // Step 2: Pixel→NDC using viewport-based approach
   // The D3D11 viewport is set to renderRect, so NDC [-1,1] maps directly

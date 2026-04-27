@@ -52,6 +52,12 @@ void MumbleLink::stop() {
   closeMumbleLink();
 }
 
+void MumbleLink::setUpdateInterval(int ms) {
+  if (m_readTimer->isActive()) {
+    m_readTimer->start(ms);
+  }
+}
+
 void MumbleLink::setLinkName(const QString &name) {
   if (name == m_linkName) {
     return;
@@ -185,13 +191,8 @@ void MumbleLink::readMumbleLink() {
     return;
   }
 
-  // Connected
-  if (!m_connected) {
-    m_connected = true;
-    emit connectionChanged(true);
-  }
-
   // --- Player position (fAvatarPosition) ---
+  // Read position BEFORE connection decision (needed for two-part validation)
   QVector3D newPlayerPos(snapshot.fAvatarPosition[0],
                          snapshot.fAvatarPosition[1],
                          snapshot.fAvatarPosition[2]);
@@ -235,25 +236,53 @@ void MumbleLink::readMumbleLink() {
     const MumbleContext *ctx =
         reinterpret_cast<const MumbleContext *>(snapshot.context);
 
-    // Map change detection
-    if (ctx->mapId != m_mapId) {
-      m_mapId = ctx->mapId;
-      emit mapChanged(m_mapId);
-    }
-
     m_mapType = ctx->mapType;
     m_mapInstance = ctx->instance;
     m_buildId = ctx->buildId;
     m_processId = ctx->processId;
     m_mountIndex = ctx->mountIndex;
 
-    // Character select / loading: mapId becomes 0 — hide overlay
-    if (m_mapId == 0 && m_connected) {
-      qInfo() << "MumbleLink: mapId=0 (character select/loading) — marking "
-                 "disconnected";
-      m_connected = false;
-      emit connectionChanged(false);
+    // --- Two-part validation for overlay activation ---
+    // AIO overlay renders ONLY when both conditions are met:
+    //   1) Valid map: mapId > 0 AND mapType != 1 (not char select)
+    //   2) Valid position: player coordinates are non-zero
+    bool validMap = (ctx->mapId > 0 && ctx->mapType != 1);
+    bool validPos = !newPlayerPos.isNull();
+    bool shouldBeConnected = validMap && validPos;
+
+    if (!shouldBeConnected) {
+      // Suppress mapChanged signals during invalid states (char select, loading)
+      // to prevent the mapId 65↔19 thrashing that causes thousands of log lines
+      m_mapId = ctx->mapId; // Track silently without emitting
+
+      if (m_connected) {
+        if (ctx->mapType == 1) {
+          qInfo() << "[DEVLOG] MumbleLink: character select detected (mapType=1)"
+                     " — pausing overlay";
+        } else if (ctx->mapId == 0) {
+          qInfo() << "MumbleLink: mapId=0 (loading) — pausing overlay";
+        } else if (newPlayerPos.isNull()) {
+          qInfo() << "[DEVLOG] MumbleLink: position (0,0,0) — pausing overlay";
+        }
+        m_connected = false;
+        emit connectionChanged(false);
+      }
+      emit dataUpdated();
       return;
+    }
+
+    // Valid state — emit mapChanged if map actually changed
+    if (ctx->mapId != m_mapId) {
+      m_mapId = ctx->mapId;
+      emit mapChanged(m_mapId);
+    }
+
+    // Mark connected if transitioning from disconnected
+    if (!m_connected) {
+      m_connected = true;
+      qInfo() << "[DEVLOG] MumbleLink: valid map + position — overlay active"
+              << "mapId:" << m_mapId << "mapType:" << m_mapType;
+      emit connectionChanged(true);
     }
 
     // UI state flags
@@ -270,6 +299,8 @@ void MumbleLink::readMumbleLink() {
       uiScale = 1.224f;
 
     CompassData &target = isMapOpen() ? m_bigMap : m_miniMap;
+    // TacO pattern: compass dims include uiScale multiplication.
+    // The real small-window fix is GetWindowTooSmallScale in computeMinimapRect.
     target.compassWidth = static_cast<int>(ctx->compassWidth * uiScale);
     target.compassHeight = static_cast<int>(ctx->compassHeight * uiScale);
     target.compassRotation = ctx->compassRotation;
@@ -278,6 +309,20 @@ void MumbleLink::readMumbleLink() {
     target.mapCenterX = ctx->mapCenterX;
     target.mapCenterY = ctx->mapCenterY;
     target.mapScale = ctx->mapScale;
+    target.uiScale = uiScale;
+
+    // [DEVLOG] compass data change-detection (log only when dimensions change)
+    static int s_lastLoggedW = 0, s_lastLoggedH = 0;
+    if (target.compassWidth != s_lastLoggedW ||
+        target.compassHeight != s_lastLoggedH) {
+      s_lastLoggedW = target.compassWidth;
+      s_lastLoggedH = target.compassHeight;
+      qInfo() << "[DEVLOG] MumbleLink: compass changed —"
+              << "raw:" << ctx->compassWidth << "x" << ctx->compassHeight
+              << "scaled:" << target.compassWidth << "x" << target.compassHeight
+              << "uiScale:" << uiScale << "mapScale:" << target.mapScale
+              << "mapOpen:" << isMapOpen() << "uiSize:" << m_uiSize;
+    }
   }
 
   // Emit signals
@@ -377,8 +422,10 @@ QMatrix4x4 CompassData::buildTransformationMatrix(const QRectF &miniRect,
   result.translate(static_cast<float>(miniRect.center().x()),
                    static_cast<float>(miniRect.center().y()), 0.0f);
 
-  // --- Step 7: Scale by 1/mapScale (TacO also multiplied by uiScale here,
-  //     but AIO applies uiScale when reading compassWidth/Height) ---
+  // --- Step 7: Scale by 1/mapScale ---
+  // Note: uiScale is already applied to compassWidth/Height.
+  // Small-window compensation is handled by windowTooSmallScale in
+  // computeMinimapRect(), NOT here.
   if (mapScale > 0.0f) {
     float msf = 1.0f / mapScale;
     result.scale(msf, msf, 1.0f);

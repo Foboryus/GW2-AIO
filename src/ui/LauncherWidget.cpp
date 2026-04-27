@@ -2,6 +2,7 @@
 
 #include <QDebug>
 #include <QDir>
+#include <QTimer>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QSet>
@@ -1923,10 +1924,10 @@ void LauncherWidget::onCheckForUpdates() {
                        nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE, nullptr,
                        workDirW.c_str(), &si, &pi)) {
       CloseHandle(pi.hThread);
-      CloseHandle(pi.hProcess);
+      // Keep pi.hProcess alive — needed for exit monitoring
       patched++;
 
-      // Styled patching dialog
+      // Styled patching dialog with process monitoring
       auto *d = UIHelpers::createStyledDialog(this, 400);
       auto *ol = new QVBoxLayout(d);
       ol->setContentsMargins(0, 0, 0, 0);
@@ -1937,21 +1938,41 @@ void LauncherWidget::onCheckForUpdates() {
       auto *ly = new QVBoxLayout(bg);
       ly->setContentsMargins(20, 20, 20, 20);
       auto *lb = new QLabel(
-          QString("Launched GW2 for patching.\nPath: %1\n\nWait for patching "
-                  "to complete, then close the game and click OK.")
+          QString("GW2 launched for patching.\nPath: %1\n\n"
+                  "Waiting for GW2 to finish...")
               .arg(effectivePath));
       UIHelpers::applyPopupLabelRole(lb);
       lb->setAlignment(Qt::AlignCenter);
       lb->setWordWrap(true);
       ly->addWidget(lb);
-      auto *ok = new QPushButton("OK");
+      auto *ok = new QPushButton("Waiting for GW2...");
       ok->setMinimumHeight(36);
+      ok->setEnabled(false);
       UIHelpers::applyPrimaryStyle(ok);
       connect(ok, &QPushButton::clicked, d, &QDialog::accept);
       ly->addWidget(ok);
+
+      // Poll process exit every 500ms (non-blocking)
+      HANDLE hProcess = pi.hProcess;
+      auto *pollTimer = new QTimer(d);
+      connect(pollTimer, &QTimer::timeout, d,
+              [ok, lb, hProcess, effectivePath]() {
+                DWORD result = WaitForSingleObject(hProcess, 0);
+                if (result == WAIT_OBJECT_0) {
+                  ok->setText("OK");
+                  ok->setEnabled(true);
+                  lb->setText(
+                      QString("Patching complete.\nPath: %1\n\n"
+                              "Click OK to continue.")
+                          .arg(effectivePath));
+                }
+              });
+      pollTimer->start(500);
+
       UIHelpers::centerDialog(d);
       d->exec();
       d->deleteLater();
+      CloseHandle(hProcess);
     } else {
       qWarning() << "Failed to launch for patching:" << GetLastError();
     }
@@ -3001,10 +3022,17 @@ bool LauncherWidget::runPerProfileBuildUpdate(AccountProfile &profile) {
 
   UIHelpers::centerDialog(d2);
 
-  // Launch with -autologin ONLY — no -shareArchive so Local.dat can be written
+  // Launch with -autologin. If GW2 is already running, we MUST add
+  // -shareArchive (exclusive Gw2.dat lock) and close the mutex first.
+  QStringList phase2Args = {"-autologin"};
+  if (m_launchManager->isGW2Running()) {
+    phase2Args << "-shareArchive";
+    m_launchManager->closeMutexForMultiBox();
+    qInfo() << "Per-profile update: GW2 running — added -shareArchive";
+  }
   QProcess *refreshProc = new QProcess(d2);
   refreshProc->setProgram(exePath);
-  refreshProc->setArguments({"-autologin"});
+  refreshProc->setArguments(phase2Args);
   refreshProc->setWorkingDirectory(effectivePath);
   refreshProc->start();
 
@@ -3206,10 +3234,17 @@ bool LauncherWidget::runBatchBuildUpdate(QList<AccountProfile> &profiles) {
 
     UIHelpers::centerDialog(d);
 
-    // Launch with -autologin ONLY — no -shareArchive
+    // Launch with -autologin. If GW2 is already running, we MUST add
+    // -shareArchive (exclusive Gw2.dat lock) and close the mutex first.
+    QStringList batchArgs = {"-autologin"};
+    if (m_launchManager->isGW2Running()) {
+      batchArgs << "-shareArchive";
+      m_launchManager->closeMutexForMultiBox();
+      qInfo() << "Batch update: GW2 running — added -shareArchive";
+    }
     QProcess *refreshProc = new QProcess(d);
     refreshProc->setProgram(exePath);
-    refreshProc->setArguments({"-autologin"});
+    refreshProc->setArguments(batchArgs);
     refreshProc->setWorkingDirectory(effectivePath);
     refreshProc->start();
 

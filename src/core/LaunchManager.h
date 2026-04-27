@@ -158,6 +158,12 @@ public:
     return m_profileMumbleNames.value(profileId);
   }
 
+  /**
+   * @brief Set the window title of a GW2 process to include profile name
+   * Public so ChildProcessManager can rename windows on reconnect.
+   */
+  void setWindowTitle(qint64 pid, const QString &profileName);
+
 signals:
   void gw2PathChanged();
   void multiBoxEnabledChanged();
@@ -165,6 +171,7 @@ signals:
   void profileLaunched(const QString &profileId,
                        qint64 pid); // For running state tracking
   void gw2Exited(qint64 pid, int exitCode);
+  void profileExited(const QString &profileId); // Profile's GW2 process ended
   void gw2Closed(int exitCode); // For ShellExecuteEx processes
   void
   patchRequired(); // Emitted when GW2 crash log indicates "needs to be patched"
@@ -216,11 +223,6 @@ private slots:
    * timers)
    */
   void onGW2WindowDetected(qint64 pid, const AccountProfile &profile);
-
-  /**
-   * @brief Set the window title of a GW2 process to include profile name
-   */
-  void setWindowTitle(qint64 pid, const QString &profileName);
 
 private:
   QString m_gw2Path;

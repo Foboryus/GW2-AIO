@@ -90,6 +90,13 @@ public:
   void setHideOnUnfocus(bool hide) { m_hideOnUnfocus = hide; }
 
   /**
+   * @brief Set the guaranteed GW2 PID for HWND targeting.
+   * Must be called before startTracking(). Uses the command-line PID
+   * instead of MumbleLink processId() which may contain stale data.
+   */
+  void setTargetPid(uint32_t pid) { m_targetPid = pid; }
+
+  /**
    * @brief Get the D3D11 context for pipeline setup
    */
   D3D11Context *d3dContext() { return &m_d3dContext; }
@@ -125,6 +132,12 @@ public:
    */
   void setQtOverlayHwnd(HWND hwnd) { m_qtOverlayHwnd = hwnd; }
 
+  /**
+   * @brief Focus-aware throttling: pause/resume D3D11 rendering
+   * Set by OverlayInstance when GW2 focus changes.
+   */
+  void setRenderingEnabled(bool enabled);
+
 signals:
   /**
    * @brief Emitted when GW2 window is found/lost
@@ -135,6 +148,11 @@ signals:
    * @brief Emitted when overlay menu opens/closes (for click-through toggle)
    */
   void menuToggled(bool open);
+
+  /**
+   * @brief Emitted when this instance's GW2 gains/loses foreground focus
+   */
+  void focusChanged(bool focused);
 
 private slots:
   void onGameConnected(bool connected);
@@ -203,6 +221,9 @@ private:
   bool m_clickThrough = true;
   bool m_contentVisible = true;
   bool m_hideOnUnfocus = false; // false = Blish mode (always visible)
+  uint32_t m_targetPid = 0;     // Guaranteed GW2 PID from command-line
+  bool m_windowSearchLogged = false; // Log-once guard for tryCreateOverlay warning
+  bool m_renderingEnabled = true;    // Focus-aware throttle — false skips rendering
 
   // Data-driven rendering only (TacO/Blish pattern):
   // Renders solely on MumbleLink::dataUpdated signal (~50Hz).

@@ -212,7 +212,7 @@ void PlatformLaunchDialog::enableContinueButton() {
 
   // Update message
   m_messageLabel->setText(QString("<b>%1 is Ready</b><br><br>"
-                                  "Click Continue to launch the game.")
+                                  "Once %1 is ready, click Continue to launch the game.")
                               .arg(getPlatformName()));
 }
 

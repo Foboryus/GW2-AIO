@@ -28,7 +28,7 @@
 #include <QString>
 #include <QWidget>
 
-class MarkerController;
+class MarkerManager;
 class MarkerSettingsManager;
 struct MarkerCategory;
 
@@ -58,12 +58,15 @@ public:
   /**
    * @brief Wire data sources (call before use)
    */
-  void setMarkerController(MarkerController *controller);
+  void setMarkerManager(MarkerManager *manager);
   void setMarkerSettings(MarkerSettingsManager *settings);
 
   // Fade visibility (called by OverlayWindow based on game state)
   void setShouldBeVisible(bool visible);
   void setCombatHidden(bool hidden);
+
+  // Focus state: when GW2 window is not foreground, show paused icon
+  void setGameFocused(bool focused);
 
   // Accessor for settings (used by OverlayWindow for hideInCombat check)
   MarkerSettingsManager *markerSettings() const { return m_markerSettings; }
@@ -137,7 +140,7 @@ private:
   QString findPackIdForItem(int flatIndex) const;
 
   // --- Data ---
-  MarkerController *m_markerController = nullptr;
+  MarkerManager *m_markerManager = nullptr;
   MarkerSettingsManager *m_markerSettings = nullptr;
 
   // --- State ---
@@ -146,6 +149,8 @@ private:
   int m_hoverIndex = -1;          // Flattened tree index under cursor
   int m_scrollOffset = 0;
   int m_maxScroll = 0;
+  int m_settingsScrollOffset = 0;   // Settings tab scroll offset
+  int m_settingsMaxScroll = 0;      // Settings tab max scroll
 
   // --- Tab state ---
   enum class Tab { Packs, Settings };
@@ -225,9 +230,12 @@ private:
   qreal m_opacity = 1.0;                      // Current opacity (0.0 – 1.0)
   bool m_shouldBeVisible = true;              // Target visibility state
   static constexpr qreal kFadeInStep = 0.03;  // ~600ms at 50Hz
-  static constexpr qreal kFadeOutStep = 0.05; // ~400ms at 50Hz
+  static constexpr qreal kFadeOutStep = 1.0;  // Instant hide on loading/char-select
 
   // --- Combat fade (panel only, diamond stays visible) ---
   qreal m_panelCombatOpacity = 1.0;
   bool m_combatHidden = false;
+
+  // --- Focus state (multibox: unfocused shows paused icon) ---
+  bool m_gameFocused = true;
 };

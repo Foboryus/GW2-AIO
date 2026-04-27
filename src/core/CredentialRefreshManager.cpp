@@ -66,9 +66,23 @@ void CredentialRefreshManager::refreshProfiles(
   m_refreshing = true;
   m_cancelled = false;
 
-  // Save and disable multibox (no -shareArchive during refresh)
+  // Save multibox state for restore in finishRefresh()
   m_prevMultiBoxState = m_launchManager->multiBoxEnabled();
-  m_launchManager->setMultiBoxEnabled(false);
+
+  // If GW2 is already running, we MUST keep multibox enabled so that
+  // -shareArchive is added. Without it, GW2 can't open Gw2.dat (the running
+  // instance holds an exclusive lock) and the refresh launch hangs forever.
+  if (m_launchManager->isGW2Running()) {
+    qInfo() << "CredentialRefresh: GW2 already running — keeping multibox"
+               " enabled for -shareArchive";
+    m_launchManager->setMultiBoxEnabled(true);
+    // Close mutex so the refresh instance can start
+    m_launchManager->closeMutexForMultiBox();
+  } else {
+    // No GW2 running — disable multibox for solo refresh
+    // (allows exclusive .dat access for fastest update)
+    m_launchManager->setMultiBoxEnabled(false);
+  }
 
   // Connect signals for refresh tracking
   connect(m_launchManager, &LaunchManager::profileLaunched, this,

@@ -68,6 +68,7 @@ struct CompassData {
   float mapCenterX = 0.0f;
   float mapCenterY = 0.0f;
   float mapScale = 0.0f;
+  float uiScale = 1.0f; // UI size scaling factor (TacO applies in matrix step 7)
 
   /**
    * @brief Build a transformation matrix for minimap/bigmap rendering
@@ -108,6 +109,7 @@ public:
 
   bool start(int updateIntervalMs = 50);
   void stop();
+  void setUpdateInterval(int ms);
 
   /**
    * @brief Switch to a different named MumbleLink segment
@@ -167,6 +169,9 @@ public:
   bool isPvp() const { return (m_uiState & 0x10) != 0; }
   bool textboxHasFocus() const { return (m_uiState & 0x20) != 0; }
   bool isInCombat() const { return (m_uiState & 0x40) != 0; }
+
+  // Map type detection (from MumbleContext.mapType)
+  bool isCharacterSelect() const { return m_mapType == 1; }
 
   // UI size (from identity JSON: 0=small, 1=normal, 2=large, 3=larger)
   int uiSize() const { return m_uiSize; }

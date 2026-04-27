@@ -2,7 +2,6 @@
 #include "ExclusionZoneEditor.h"
 #include "OverlayMenuWidget.h"
 #include "core/ThemeManager.h"
-#include "features/markers/MarkerController.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "features/markers/MinimapRenderer.h"
 #include <QDateTime>
@@ -15,33 +14,32 @@
 QHash<HWINEVENTHOOK, OverlayWindow *> OverlayWindow::s_hookMap;
 #endif
 
-OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent)
+OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent, bool headless)
     : QWidget(parent,
               Qt::FramelessWindowHint | Qt::Tool),
-      m_mumbleLink(mumble) {
+      m_mumbleLink(mumble), m_headless(headless) {
   // Enable transparency
   setAttribute(Qt::WA_TranslucentBackground);
   setAttribute(Qt::WA_ShowWithoutActivating);
 
-  // Create overlay menu widget (fills entire overlay)
-  m_menuWidget = new OverlayMenuWidget(this);
+  // Create overlay menu widget and zone editor (full mode only)
+  if (!m_headless) {
+    m_menuWidget = new OverlayMenuWidget(this);
 
-  // Create exclusion zone editor (hidden by default)
-  m_zoneEditor = new ExclusionZoneEditor(this);
-  m_zoneEditor->setMumbleLink(m_mumbleLink);
+    m_zoneEditor = new ExclusionZoneEditor(this);
+    m_zoneEditor->setMumbleLink(m_mumbleLink);
 
-  // Connect "Edit Custom Zones" button → open editor
-  connect(m_menuWidget, &OverlayMenuWidget::editExclusionZonesRequested, this,
-          [this]() {
-            if (m_zoneEditor) {
-              m_zoneEditor->setGeometry(0, 0, width(), height());
-              m_zoneEditor->beginEditing();
-            }
-          });
+    connect(m_menuWidget, &OverlayMenuWidget::editExclusionZonesRequested, this,
+            [this]() {
+              if (m_zoneEditor) {
+                m_zoneEditor->setGeometry(0, 0, width(), height());
+                m_zoneEditor->beginEditing();
+              }
+            });
 
-  // Forward Details Tracker toggle to main.cpp → D3D11OverlayWindow
-  connect(m_menuWidget, &OverlayMenuWidget::detailsTrackerToggled, this,
-          &OverlayWindow::detailsTrackerToggled);
+    connect(m_menuWidget, &OverlayMenuWidget::detailsTrackerToggled, this,
+            &OverlayWindow::detailsTrackerToggled);
+  }
 
   // WA_TranslucentBackground makes transparent pixels pass clicks to GW2.
   // No manual click-through toggling needed — painted areas (icon, panel)
@@ -84,17 +82,28 @@ void OverlayWindow::startTracking() {
   m_isTracking = true;
   m_hwndLost = false;
 
-  // Reset HUD visibility state for the new instance
-  m_contentVisible = true;
+  // Start hidden — only show after uiTick confirms player is in-game.
+  // Character select and loading screens have frozen uiTick, so the overlay
+  // stays invisible until the player actually loads into a map.
+  m_contentVisible = false;
   m_lastUiTick = 0;
-  m_lastTickChangeMs = QDateTime::currentMSecsSinceEpoch();
+  m_lastTickChangeMs = 0; // Epoch 0 → tickStalled immediately until uiTick changes
   if (m_menuWidget) {
-    m_menuWidget->setVisible(true);
+    m_menuWidget->setVisible(true);          // QWidget must exist for paint
+    m_menuWidget->setShouldBeVisible(false);  // Start with opacity 0
   }
 
 #ifdef Q_OS_WIN
-  // Get GW2 PID from MumbleLink context (may be stale after instance switch)
-  uint32_t pid = m_mumbleLink ? m_mumbleLink->processId() : 0;
+  // Use guaranteed command-line PID if set; fall back to MumbleLink PID.
+  // MumbleLink processId() can contain stale data from a previous session's
+  // shared memory, causing children to latch onto the WRONG GW2 window.
+  uint32_t pid = m_targetPid;
+  if (pid == 0) {
+    pid = m_mumbleLink ? m_mumbleLink->processId() : 0;
+    if (pid != 0) {
+      qInfo() << "Overlay: using MumbleLink PID (no targetPid set):" << pid;
+    }
+  }
 
   if (findGW2WindowByPid(pid)) {
     installEventHook();
@@ -102,13 +111,28 @@ void OverlayWindow::startTracking() {
     updatePosition();
     show();
     ensureZOrder();
-    qInfo() << "Overlay tracking started (WinEventHook) PID:" << m_gw2ProcessId;
+    // WinEventHook only fires on CHANGES — set initial focus state now.
+    // Visibility is controlled ONLY by updateHudVisibility() — do NOT set
+    // setShouldBeVisible(true) here. The overlay stays hidden until
+    // mapId > 0 and position is valid (player actually in-game).
+    HWND foreground = GetForegroundWindow();
+    HWND gw2Hwnd = static_cast<HWND>(m_gw2Hwnd);
+    if (foreground == gw2Hwnd) {
+      setGameFocused(true);
+    } else {
+      setGameFocused(false);
+    }
+
+    qInfo() << "Overlay tracking started (WinEventHook) PID:" << m_gw2ProcessId
+            << "(source:" << (m_targetPid ? "command-line" : "MumbleLink") << ")"
+            << "gw2Focused:" << (foreground == gw2Hwnd);
   } else {
     // PID not found — wait for next MumbleLink poll tick.
     // DO NOT fall back to pid=0 (any ArenaNet window) — wrong for multibox.
     qWarning() << "Overlay: cannot start tracking — GW2 HWND not found"
-               << "(PID:" << pid << ") — will retry on next MumbleLink update";
-    m_isTracking = false;
+               << "(PID:" << pid << ") — will retry on next MumbleLink tick";
+    // Keep m_isTracking=true so the deferred retry in updateHudVisibility
+    // can find the GW2 window on subsequent MumbleLink ticks.
   }
 #endif
 }
@@ -370,9 +394,11 @@ void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK hWinEventHook,
   HWND overlayHwnd = reinterpret_cast<HWND>(self->winId());
 
   if (hwnd == gw2Hwnd) {
-    // GW2 gained focus — overlay goes to TOPMOST
+    // GW2 gained focus — overlay goes to TOPMOST and shows content
+    self->setGameFocused(true);
     SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    qInfo() << "[DEVLOG] OverlayWindow: foreground TOPMOST — gw2 focused";
 
     // Deferred re-apply: Windows may shuffle TOPMOST z-order after this
     // callback returns. Queue a second SetWindowPos on the next event loop
@@ -385,25 +411,40 @@ void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK hWinEventHook,
         },
         Qt::QueuedConnection);
   } else {
-    // Another window gained focus — clear TOPMOST and place overlay just
-    // above this instance's GW2 (below the focused window).
-    HWND nextHandle = GetWindow(gw2Hwnd, GW_HWNDPREV);
-    if (nextHandle == overlayHwnd) {
-      // Already just above our GW2 — just clear TOPMOST flag
-      ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    } else if (nextHandle) {
-      // Not above our GW2 — move there (implicitly clears TOPMOST)
-      SetWindowPos(overlayHwnd, nextHandle, 0, 0, 0, 0,
+    // Another window gained focus — hide overlay content, show paused icon.
+    // Clear TOPMOST so overlay stays behind the focused window.
+    self->setGameFocused(false);
+    ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    } else {
-      // GW2 at top of z-order — just clear TOPMOST
-      ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
   }
 }
 #endif
+
+void OverlayWindow::setGameFocused(bool focused) {
+  if (m_gameFocused == focused) {
+    return;
+  }
+  m_gameFocused = focused;
+  qInfo() << "[DEVLOG] OverlayWindow: game focus changed to:" << focused;
+
+  if (m_menuWidget) {
+    // Close menu panel when losing focus (prevents interaction on wrong window)
+    if (!focused && m_menuWidget->isMenuOpen()) {
+      m_menuWidget->setMenuOpen(false);
+    }
+    m_menuWidget->setGameFocused(focused);
+  } else if (m_headless) {
+    // Headless mode (ChildMinimap): hide/show entire window on focus change
+    // to prevent minimap overlay from bleeding onto the focused GW2 window.
+    if (focused) {
+      show();
+    } else {
+      hide();
+    }
+  }
+
+  update();
+}
 
 void OverlayWindow::onGameConnected(bool connected) {
   if (connected) {
@@ -432,20 +473,28 @@ void OverlayWindow::updateClickThrough() {
 
   bool wantClickThrough = true; // Default: pass through to GW2
 
-  // ExclusionZoneEditor active → entire window must be clickable
-  if (m_zoneEditor && m_zoneEditor->isVisible()) {
-    wantClickThrough = false;
-  }
+  // When GW2 is not focused, force full click-through — paused icon is
+  // purely visual, no interaction. Prevents stealing clicks from the
+  // focused GW2 window in multibox setups.
+  if (!m_gameFocused) {
+    // Already forced — skip interactive area checks
+  } else {
+    // ExclusionZoneEditor active → entire window must be clickable
+    if (m_zoneEditor && m_zoneEditor->isVisible()) {
+      wantClickThrough = false;
+    }
 
-  // Diamond icon or open panel → clickable
-  if (m_menuWidget &&
-      m_menuWidget->isPointOverInteractiveArea(localCursor)) {
-    wantClickThrough = false;
+    // Diamond icon or open panel → clickable
+    if (m_menuWidget &&
+        m_menuWidget->isPointOverInteractiveArea(localCursor)) {
+      wantClickThrough = false;
+    }
   }
 
   // Only toggle if state changed (avoid SetWindowLong on every tick)
   if (wantClickThrough != m_isClickThrough) {
     m_isClickThrough = wantClickThrough;
+    qInfo() << "[DEVLOG] OverlayWindow: clickThrough changed to:" << m_isClickThrough;
     HWND hwnd = reinterpret_cast<HWND>(winId());
     LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
     if (m_isClickThrough) {
@@ -487,11 +536,9 @@ void OverlayWindow::onPositionChanged(float x, float y, float z) {
   }
 
   // Per-tick z-order refresh (TacO/Blish HUD pattern).
-  // The foregroundProc hook is reactive — it only fires on focus changes.
-  // But z-order can drift when other TOPMOST windows appear or Windows
-  // reshuffles the z-order. Per-tick refresh ensures the overlay stays
-  // visible above GW2 at all times.
-  if (m_isTracking && m_gw2Hwnd) {
+  // Only when GW2 is focused — unfocused overlays stay behind the focused
+  // window to prevent multibox tangling.
+  if (m_isTracking && m_gw2Hwnd && m_gameFocused) {
     ensureZOrder();
   }
 #endif
@@ -500,9 +547,9 @@ void OverlayWindow::onPositionChanged(float x, float y, float z) {
   updateHudVisibility();
 }
 
-void OverlayWindow::setMarkerController(MarkerController *controller) {
+void OverlayWindow::setMarkerManager(MarkerManager *manager) {
   if (m_menuWidget) {
-    m_menuWidget->setMarkerController(controller);
+    m_menuWidget->setMarkerManager(manager);
   }
 
   // NOTE: MinimapRenderer reparenting removed — per-instance MinimapRenderer
@@ -539,7 +586,39 @@ void OverlayWindow::resizeEvent(QResizeEvent *event) {
 }
 
 void OverlayWindow::updateHudVisibility() {
-  if (!m_mumbleLink || !m_mumbleLink->isConnected()) {
+  if (!m_mumbleLink) {
+    return;
+  }
+
+  // Deferred GW2 window finding: if startTracking() was called before GW2
+  // created its window (common in multibox — children spawn before game loads),
+  // retry on each MumbleLink tick until the window is found.
+  // This runs BEFORE the isConnected() check because GW2's window exists
+  // long before MumbleLink connects (player must load into a map first).
+  if (!m_gw2Hwnd && m_isTracking) {
+    uint32_t pid = m_targetPid ? m_targetPid
+                 : (m_mumbleLink->processId());
+    if (pid != 0 && findGW2WindowByPid(pid)) {
+      installEventHook();
+      registerProcessExitWait();
+      updatePosition();
+      show();
+      ensureZOrder();
+      // Set initial focus state — visibility is controlled ONLY by
+      // updateHudVisibility() below (map-based trigger).
+      HWND foreground = GetForegroundWindow();
+      HWND gw2Hwnd = static_cast<HWND>(m_gw2Hwnd);
+      if (foreground == gw2Hwnd) {
+        setGameFocused(true);
+      } else {
+        setGameFocused(false);
+      }
+
+      qInfo() << "Overlay: deferred tracking started — PID:" << m_gw2ProcessId;
+    }
+  }
+
+  if (!m_mumbleLink->isConnected()) {
     return;
   }
 
@@ -564,11 +643,23 @@ void OverlayWindow::updateHudVisibility() {
                       m_menuWidget->markerSettings()->showInBigMap();
   bool hideForMap = mapOpen && !showInBigMap;
 
-  // Menu visibility: loading, char-select, map open → hide menu
-  bool shouldShow = !tickStalled && !hideForMap;
+  // Map-based visibility: overlay only shows when player is in-game.
+  // Character select (mapId=0), loading screens (position zeroed, uiTick stalled) → hidden.
+  bool hasValidMap = m_mumbleLink->mapId() > 0;
+  bool hasValidPosition = (m_mumbleLink->playerX() != 0.0f ||
+                           m_mumbleLink->playerY() != 0.0f ||
+                           m_mumbleLink->playerZ() != 0.0f);
+  bool playerInGame = hasValidMap && hasValidPosition && !tickStalled;
+  bool shouldShow = playerInGame && !hideForMap;
 
   if (shouldShow != m_contentVisible) {
     m_contentVisible = shouldShow;
+    qInfo() << "[DEVLOG] OverlayWindow: HUD visibility changed to:" << shouldShow
+            << "mapId:" << m_mumbleLink->mapId()
+            << "validPos:" << hasValidPosition
+            << "tickStalled:" << tickStalled
+            << "mapOpen:" << mapOpen
+            << "hideForMap:" << hideForMap;
     if (m_menuWidget) {
       m_menuWidget->setShouldBeVisible(shouldShow);
     }
@@ -606,22 +697,13 @@ void OverlayWindow::ensureZOrder() {
   }
 
   HWND overlayHwnd = reinterpret_cast<HWND>(winId());
-  HWND gw2Hwnd = static_cast<HWND>(m_gw2Hwnd);
 
-  // Per-tick z-order maintenance: ensure overlay stays just above its GW2.
-  // TOPMOST promotion is handled exclusively by foregroundProc (event-driven,
-  // receives the correct foreground HWND). ensureZOrder must NOT promote to
-  // TOPMOST — GetForegroundWindow() can return stale values during focus
-  // transitions, causing overlay to re-promote after foregroundProc demoted it.
-  HWND wnd = ::GetNextWindow(gw2Hwnd, GW_HWNDPREV);
-  if (wnd == overlayHwnd) {
-    // Already just above our GW2 — nothing to do
-    return;
-  } else if (wnd) {
-    // Not above our GW2 — move there
-    ::SetWindowPos(overlayHwnd, wnd, 0, 0, 0, 0,
-                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-  }
+  // Per-tick TOPMOST maintenance: foregroundProc promotes to TOPMOST on focus
+  // change, but Windows can shuffle TOPMOST z-order when other TOPMOST windows
+  // appear. Refresh TOPMOST each tick to stay above siblings (D3D11 overlay,
+  // minimap renderer). This is only called when m_gameFocused is true.
+  ::SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 #endif
 }
 

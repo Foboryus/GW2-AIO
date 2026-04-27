@@ -161,6 +161,10 @@ void D3D11OverlayWindow::setQueryContext(const MarkerQueryContext *ctx) {
   }
 }
 
+void D3D11OverlayWindow::setRenderingEnabled(bool enabled) {
+  m_renderingEnabled = enabled;
+}
+
 void D3D11OverlayWindow::toggleDebugOverlay(bool visible) {
   if (!m_debugOverlay) {
     return;
@@ -186,11 +190,14 @@ void D3D11OverlayWindow::onGameConnected(bool connected) {
   }
 
   if (connected) {
-    // Per-instance MumbleLink: PID comes from this instance's shared memory.
-    // If PID=0, tryCreateOverlay will fail gracefully (findGW2WindowByPid
-    // won't find a window) and we retry on next connection/data tick.
-    uint32_t pid = m_mumbleLink->processId();
-    qInfo() << "D3D11Overlay: MumbleLink connected, PID:" << pid;
+    // Use guaranteed command-line PID if set; fall back to MumbleLink PID.
+    // MumbleLink processId() can contain stale data from a previous session.
+    uint32_t pid = m_targetPid;
+    if (pid == 0) {
+      pid = m_mumbleLink->processId();
+    }
+    qInfo() << "D3D11Overlay: MumbleLink connected, PID:" << pid
+            << "(source:" << (m_targetPid ? "command-line" : "MumbleLink") << ")";
 
     // Reset stall detection for the new instance
     m_contentVisible = true;
@@ -216,9 +223,13 @@ void D3D11OverlayWindow::onGameConnected(bool connected) {
 
 bool D3D11OverlayWindow::tryCreateOverlay(uint32_t pid) {
   if (!findGW2WindowByPid(pid)) {
-    qWarning() << "D3D11Overlay: Could not find GW2 window for PID:" << pid;
+    if (!m_windowSearchLogged) {
+      qWarning() << "D3D11Overlay: Could not find GW2 window for PID:" << pid;
+      m_windowSearchLogged = true;
+    }
     return false;
   }
+  m_windowSearchLogged = false; // Reset on success — future failures will log again
 
   if (!m_hwnd) {
     if (!createOverlayWindow()) {
@@ -489,8 +500,10 @@ void D3D11OverlayWindow::updatePosition() {
     qWarning() << "D3D11Overlay: GW2 window handle invalid — re-finding";
     m_gw2Hwnd = nullptr;
 
-    if (m_mumbleLink && m_mumbleLink->processId() > 0) {
-      if (!findGW2WindowByPid(m_mumbleLink->processId())) {
+    uint32_t refindPid = m_targetPid ? m_targetPid
+                       : (m_mumbleLink ? m_mumbleLink->processId() : 0);
+    if (refindPid > 0) {
+      if (!findGW2WindowByPid(refindPid)) {
         ShowWindow(m_hwnd, SW_HIDE);
         return;
       }
@@ -516,21 +529,27 @@ void D3D11OverlayWindow::updatePosition() {
 
   // Per-tick z-order maintenance: position overlay just above its GW2.
   // TOPMOST promotion is handled exclusively by foregroundProc (event-driven).
-  // updatePosition must NOT promote to TOPMOST — GetForegroundWindow() can
-  // return stale values during focus transitions, re-promoting after demotion.
-  HWND insertAfter = GetNextWindow(gw2, GW_HWNDPREV);
-  if (insertAfter == m_hwnd) {
-    // Already just above our GW2 — just update size/position
+  // When hidden (unfocused + hideOnUnfocus), skip z-order and don't re-show.
+  if (m_hideOnUnfocus && !m_contentVisible) {
+    // Only update size/position (for when GW2 is resized while unfocused),
+    // but do NOT show or change z-order.
     SetWindowPos(m_hwnd, nullptr, topLeft.x, topLeft.y, width, height,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOZORDER);
-  } else if (insertAfter) {
-    // Not above our GW2 — move there
-    SetWindowPos(m_hwnd, insertAfter, topLeft.x, topLeft.y, width, height,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                 SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
   } else {
-    // GW2 is at top — place overlay at top (non-topmost)
-    SetWindowPos(m_hwnd, HWND_TOP, topLeft.x, topLeft.y, width, height,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    HWND insertAfter = GetNextWindow(gw2, GW_HWNDPREV);
+    if (insertAfter == m_hwnd) {
+      // Already just above our GW2 — just update size/position
+      SetWindowPos(m_hwnd, nullptr, topLeft.x, topLeft.y, width, height,
+                   SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOZORDER);
+    } else if (insertAfter) {
+      // Not above our GW2 — move there
+      SetWindowPos(m_hwnd, insertAfter, topLeft.x, topLeft.y, width, height,
+                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    } else {
+      // GW2 is at top — place overlay at top (non-topmost)
+      SetWindowPos(m_hwnd, HWND_TOP, topLeft.x, topLeft.y, width, height,
+                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
   }
 
   // Resize D3D11 if needed
@@ -697,6 +716,15 @@ void CALLBACK D3D11OverlayWindow::foregroundProc(
   if (isGW2 || isOverlay) {
     // This instance's GW2 or overlay got focus — ensure rendering is active.
     self->m_contentVisible = true;
+    if (self->m_hideOnUnfocus) {
+      // Re-show window that was hidden when focus was lost
+      ShowWindow(self->m_hwnd, SW_SHOWNOACTIVATE);
+    }
+    qInfo() << "[DEVLOG] D3D11Overlay: focus GAINED — hwnd:" << hwnd
+            << "isGW2:" << isGW2 << "isOverlay:" << isOverlay;
+    QMetaObject::invokeMethod(self, [self]() {
+      emit self->focusChanged(true);
+    }, Qt::QueuedConnection);
   } else {
     if (self->m_hideOnUnfocus) {
       // TacO mode: hide overlay when this instance's GW2 loses focus
@@ -706,6 +734,12 @@ void CALLBACK D3D11OverlayWindow::foregroundProc(
       // Blish mode: keep overlay visible
       self->m_contentVisible = true;
     }
+    QMetaObject::invokeMethod(self, [self]() {
+      emit self->focusChanged(false);
+    }, Qt::QueuedConnection);
+    qInfo() << "[DEVLOG] D3D11Overlay: focus LOST — hwnd:" << hwnd
+            << "hideOnUnfocus:" << self->m_hideOnUnfocus
+            << "contentVisible:" << self->m_contentVisible;
   }
 }
 
@@ -721,7 +755,7 @@ void D3D11OverlayWindow::onMumbleDataUpdated() {
   // Deferred overlay creation: GW2 window wasn't found when connectionChanged
   // fired. MumbleLink data is now arriving, so GW2 window should exist.
   if (!m_gw2Hwnd && m_mumbleLink && m_mumbleLink->isConnected()) {
-    uint32_t pid = m_mumbleLink->processId();
+    uint32_t pid = m_targetPid ? m_targetPid : m_mumbleLink->processId();
     if (!tryCreateOverlay(pid)) {
       return; // Will retry on next MumbleLink signal
     }
@@ -729,6 +763,11 @@ void D3D11OverlayWindow::onMumbleDataUpdated() {
 
   // Render on new MumbleLink data: matches TacO's "poll then render" pattern.
   // This is the sole render trigger — no gap-filling timer.
+
+  // Focus-aware throttle: skip rendering when this instance is unfocused.
+  // MumbleLink still polls (at reduced rate) for state monitoring.
+  if (!m_renderingEnabled) return;
+
   onRenderFrame();
 }
 
@@ -789,19 +828,19 @@ void D3D11OverlayWindow::onRenderFrame() {
       ::SetWindowPos(m_hwnd, qtHwnd, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     } else {
-      // Qt overlay not active yet — fall back to independent z-order
+      // Multi-process mode: Qt overlay is a separate process, no HWND ref.
+      // Position just above GW2 (non-TOPMOST). The Qt overlay child handles
+      // its own TOPMOST, so D3D11 stays below it in z-order:
+      //   Qt overlay (TOPMOST) → D3D11 (above GW2) → GW2
       HWND gw2 = reinterpret_cast<HWND>(m_gw2Hwnd);
-      HWND foreground = ::GetForegroundWindow();
-
-      if (foreground == gw2 || foreground == m_hwnd) {
-        ::SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+      HWND wnd = ::GetNextWindow(gw2, GW_HWNDPREV);
+      if (wnd && wnd != m_hwnd) {
+        ::SetWindowPos(m_hwnd, wnd, 0, 0, 0, 0,
                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
       } else {
-        HWND wnd = ::GetNextWindow(gw2, GW_HWNDPREV);
-        if (wnd && wnd != m_hwnd) {
-          ::SetWindowPos(m_hwnd, wnd, 0, 0, 0, 0,
-                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        }
+        // GW2 at top of non-TOPMOST stack — place overlay at top (non-TOPMOST)
+        ::SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0,
+                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
       }
     }
   }

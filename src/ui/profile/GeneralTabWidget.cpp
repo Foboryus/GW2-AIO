@@ -13,6 +13,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include <QRegularExpressionValidator>
+
 #include "core/ThemeManager.h"
 #include "ui/ProfileEditor.h" // For AccountProfile, AccountProvider
 #include "ui/ToggleSwitch.h"  // For LabeledToggle
@@ -31,6 +33,12 @@ void GeneralTabWidget::setupUI() {
   auto *nameGroup = new QGroupBox("Profile Name");
   auto *nameLayout = new QVBoxLayout(nameGroup);
   m_nicknameEdit = new QLineEdit();
+  // Only allow Windows-safe characters: letters, digits, spaces, hyphens, underscores
+  m_nicknameEdit->setValidator(
+      new QRegularExpressionValidator(
+          QRegularExpression(QStringLiteral("[A-Za-z0-9 _-]{1,50}")),
+          m_nicknameEdit));
+  m_nicknameEdit->setMaxLength(50);
   m_nicknameEdit->setPlaceholderText("e.g., Main Account, Alt Account");
   connect(m_nicknameEdit, &QLineEdit::textChanged, this,
           &GeneralTabWidget::modified);
@@ -151,7 +159,7 @@ void GeneralTabWidget::setupUI() {
     partialHeader->addWidget(partialTitle);
     partialHeader->addStretch();
     layout->addLayout(partialHeader);
-    auto *partialList = new QLabel("  • Custom Mumble Link names");
+    auto *partialList = new QLabel("  • Custom launch arguments (limited by platform)");
     UIHelpers::applyHintRole(partialList);
     partialList->setStyleSheet(
         QString("padding: %1px 0 %2px %3px;")
@@ -232,7 +240,10 @@ void GeneralTabWidget::setupUI() {
 
     // Copy-to-clipboard row
     auto *copyLayout = new QHBoxLayout();
-    auto *argLabel = new QLabel("-shareArchive -windowed");
+    // Build launch options string with per-profile mumble name
+    QString launchArgs = QStringLiteral("-shareArchive -windowed -mumble %1")
+                             .arg(m_profile.mumbleLinkName);
+    auto *argLabel = new QLabel(launchArgs);
     UIHelpers::applySuccessColorRole(argLabel);
     argLabel->setStyleSheet(
         QString("font-size: %1px; font-weight: bold; padding: %2px; "
@@ -246,8 +257,8 @@ void GeneralTabWidget::setupUI() {
     copyBtn->setIcon(UIHelpers::themedIcon("copy"));
     copyBtn->setIconSize(QSize(14, 14));
     UIHelpers::applyActionStyle(copyBtn);
-    connect(copyBtn, &QPushButton::clicked, [copyBtn]() {
-      QGuiApplication::clipboard()->setText("-shareArchive -windowed");
+    connect(copyBtn, &QPushButton::clicked, [copyBtn, launchArgs]() {
+      QGuiApplication::clipboard()->setText(launchArgs);
       copyBtn->setText(" Copied!");
       copyBtn->setIcon(UIHelpers::themedIcon("check-green"));
     });

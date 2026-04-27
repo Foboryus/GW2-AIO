@@ -186,6 +186,7 @@ bool MarkerSettingsManager::saveNow() {
     m_displayDirty = false;
   }
 
+  emit saved();
   return allOk;
 }
 
@@ -776,7 +777,7 @@ void MarkerSettingsManager::displayFromJson(const QJsonObject &obj) {
   m_showDistance = obj["showDistance"].toBool(false);
   m_distanceFontSize = qBound(8, obj["distanceFontSize"].toInt(12), 24);
   m_markerScale = qBound(0.5, obj["markerScale"].toDouble(1.0), 3.0);
-  m_distanceLabelOffset = qBound(0, obj["distanceLabelOffset"].toInt(20), 50);
+  m_distanceLabelOffset = qBound(0, obj["distanceLabelOffset"].toInt(5), 50);
   m_hideInCombat = obj["hideInCombat"].toBool(false);
   m_showInBigMap = obj["showInBigMap"].toBool(true);
   m_heightFilterEnabled = obj["heightFilterEnabled"].toBool(true);
@@ -847,7 +848,7 @@ void MarkerSettingsManager::resetToDefaults() {
   m_showDistance = false;
   m_distanceFontSize = 12;
   m_markerScale = 1.0;
-  m_distanceLabelOffset = 20;
+  m_distanceLabelOffset = 5;
   m_hideInCombat = false;
   m_showInBigMap = true;
   m_heightFilterEnabled = true;

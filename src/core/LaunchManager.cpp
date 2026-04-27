@@ -306,6 +306,12 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
       // Start watching for GW2 window (event-based, SetWinEventHook)
       GW2WindowWatcher::instance()->watchForGW2(profile, existingPidSet);
     }
+    // Phase 7: store persistent mumble name for overlay lookup
+    if (!profile.mumbleLinkName.isEmpty()) {
+      m_profileMumbleNames[profile.id] = profile.mumbleLinkName;
+      qInfo() << "[DEV] LaunchManager: stored mumbleLinkName for Steam overlay:"
+              << profile.mumbleLinkName;
+    }
     return nullptr;
   }
 
@@ -366,6 +372,12 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
       emit launchError(
           "Failed to launch Epic Games. Is Epic Launcher installed?");
     }
+    // Phase 7: store persistent mumble name for overlay lookup
+    if (!profile.mumbleLinkName.isEmpty()) {
+      m_profileMumbleNames[profile.id] = profile.mumbleLinkName;
+      qInfo() << "[DEV] LaunchManager: stored mumbleLinkName for Epic overlay:"
+              << profile.mumbleLinkName;
+    }
     return nullptr;
   }
 
@@ -375,21 +387,14 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
   // Convert AccountProfile to LaunchProfile
   LaunchProfile lp = profile.toLaunchProfile();
 
-  // Add runtime mumble link for multi-boxing (only when not user-configured)
-  // IMPORTANT: Do NOT mutate profile.useCustomMumble or profile.mumbleLinkName
-  // — those get persisted. Apply directly to the local LaunchProfile instead.
-  if (!profile.useCustomMumble && m_runningProcesses.size() > 0 &&
-      !lp.arguments.contains("-mumble")) {
-    QString mumbleName = generateMumbleLinkName();
-    lp.arguments.append("-mumble");
-    lp.arguments.append(mumbleName);
-    m_profileMumbleNames[profile.id] = mumbleName;
-    qInfo() << "Runtime mumble link for multi-boxing:" << mumbleName;
-  } else if (profile.useCustomMumble && !profile.mumbleLinkName.isEmpty()) {
-    // Store user-configured mumble name for overlay lookup
+  // Phase 7: profile.toLaunchProfile() already adds -mumble from
+  // profile.mumbleLinkName (set at profile creation, persistent).
+  // Just store it for overlay lookup.
+  if (!profile.mumbleLinkName.isEmpty()) {
     m_profileMumbleNames[profile.id] = profile.mumbleLinkName;
+    qInfo() << "[DEV] LaunchManager: stored mumbleLinkName for overlay:"
+            << profile.mumbleLinkName << "profile:" << profile.id;
   }
-  // else: first instance uses default "MumbleLink" — no entry stored
 
   // Note: Steam/Epic accounts are handled via URL protocol above
   // This code path only runs for Standalone accounts
@@ -502,10 +507,9 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
               // Mark as successfully loaded (GPU active) and sync build ID
               QMetaObject::invokeMethod(
                   this,
-                  [this, pid, gw2Path, profileId = profile.id]() {
+                  [this, pid, gw2Path]() {
                     m_loadedPids.insert(pid);
                     emit profileLoaded(gw2Path); // Triggers build ID sync
-                    emit profileCharacterSelectReached(profileId);
                   },
                   Qt::QueuedConnection);
 
@@ -531,6 +535,15 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
                   this,
                   [this, pid, profile]() {
                     setWindowTitle(pid, profile.nickname);
+                  },
+                  Qt::QueuedConnection);
+
+              // Notify after window is positioned + renamed — children
+              // depend on final window geometry.
+              QMetaObject::invokeMethod(
+                  this,
+                  [this, profileId = profile.id]() {
+                    emit profileCharacterSelectReached(profileId);
                   },
                   Qt::QueuedConnection);
 
@@ -843,8 +856,13 @@ void LaunchManager::onProcessFinished(int exitCode,
 
     qInfo() << "GW2 process exited. PID:" << pid << "Exit code:" << exitCode;
 
-    // === Clean up stale mumble link name ===
+    // === Notify overlay manager that profile's GW2 process exited ===
     QString profileId = m_processToProfileId.take(process);
+    if (!profileId.isEmpty()) {
+      emit profileExited(profileId);
+    }
+
+    // === Clean up stale mumble link name ===
     if (!profileId.isEmpty() && m_profileMumbleNames.contains(profileId)) {
       qInfo() << "Cleaned up mumble link name for profile:" << profileId
               << "name:" << m_profileMumbleNames.value(profileId);
@@ -1188,18 +1206,9 @@ void LaunchManager::onGW2WindowDetected(qint64 pid,
               // Mark as successfully loaded (GPU active) and sync build ID
               QMetaObject::invokeMethod(
                   this,
-                  [this, pid, gw2Path, profileId = profile.id]() {
+                  [this, pid, gw2Path]() {
                     m_loadedPids.insert(pid);
                     emit profileLoaded(gw2Path); // Triggers build ID sync
-                    emit profileCharacterSelectReached(profileId);
-
-                    // NOTE: Do NOT call restoreDefault() here.
-                    // During Launch All, multiple apply() calls run
-                    // sequentially. Restoring on LOADED would break the next
-                    // profile's apply() because GW2 still holds a lock on the
-                    // restored Local.dat. Restore only happens in
-                    // onProcessFinished (all instances closed) and in the crash
-                    // safety net.
                   },
                   Qt::QueuedConnection);
 
@@ -1219,6 +1228,15 @@ void LaunchManager::onGW2WindowDetected(qint64 pid,
                   this,
                   [this, pid, profile]() {
                     setWindowTitle(pid, profile.nickname);
+                  },
+                  Qt::QueuedConnection);
+
+              // Notify after window is positioned + renamed — children
+              // depend on final window geometry.
+              QMetaObject::invokeMethod(
+                  this,
+                  [this, profileId = profile.id]() {
+                    emit profileCharacterSelectReached(profileId);
                   },
                   Qt::QueuedConnection);
             } else if (strcmp(buffer, "EXITING") == 0) {

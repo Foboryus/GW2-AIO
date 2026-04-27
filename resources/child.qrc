@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <!-- D3D11 HLSL shaders -->
+        <file alias="shaders/marker.hlsl">../src/rendering/shaders/marker.hlsl</file>
+        <file alias="shaders/trail.hlsl">../src/rendering/shaders/trail.hlsl</file>
+        <file alias="shaders/sprite.hlsl">../src/rendering/shaders/sprite.hlsl</file>
+        <!-- Minimal icons needed by overlay children -->
+        <file>icons/overlay-marker.svg</file>
+        <file>icons/player-indicator.svg</file>
+        <file>icons/app-icon.svg</file>
+    </qresource>
+</RCC>

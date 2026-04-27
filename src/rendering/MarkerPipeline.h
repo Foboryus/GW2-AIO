@@ -52,6 +52,7 @@ class SpriteBatch;
 class GlyphAtlas;
 
 struct Marker;
+struct MarkerQueryContext;
 
 class MarkerPipeline {
 public:
@@ -94,6 +95,9 @@ public:
   void setDistanceLabelOffset(float offset) { m_distanceLabelOffset = offset; }
   void setSpriteBatch(SpriteBatch *batch) { m_spriteBatch = batch; }
   void setGlyphAtlas(GlyphAtlas *atlas) { m_glyphAtlas = atlas; }
+
+  /// Per-instance query context (Phase 7a) — null = use shared state
+  void setQueryContext(const MarkerQueryContext *ctx) { m_queryCtx = ctx; }
 
   // Camera interpolation overrides (Optimization 3 — Blish HUD pattern)
   void setCameraOverride(const QVector3D &pos, const QVector3D &front) {
@@ -212,7 +216,7 @@ private:
   float m_maxRenderDistance = 200.0f;  // Default 200m (user-configurable)
   bool m_showDistance = false;         // Distance label below markers
   float m_markerScale = 1.0f;          // Global marker size multiplier
-  float m_distanceLabelOffset = 20.0f; // Distance label vertical offset (px)
+  float m_distanceLabelOffset = 5.0f; // Distance label vertical offset (px)
   float m_cachedFovScale = 1.0f;       // Cached for CPU-side label offset
   bool m_initialized = false;
 
@@ -226,4 +230,7 @@ private:
   QVector3D m_playerOverridePos;
   bool m_useCameraOverride = false;
   bool m_usePlayerOverride = false;
+
+  // Per-instance query context (Phase 7a) — not owned
+  const MarkerQueryContext *m_queryCtx = nullptr;
 };

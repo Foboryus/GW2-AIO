@@ -20,8 +20,10 @@
 MarkerManager::MarkerManager(MumbleLink *mumble, QObject *parent)
     : QObject(parent), m_mumble(mumble), m_parser(new TacoParser(this)),
       m_proximityTimer(new QTimer(this)), m_dailyResetTimer(new QTimer(this)) {
-  connect(m_mumble, &MumbleLink::mapChanged, this,
-          &MarkerManager::onMapChanged);
+  if (m_mumble) {
+    connect(m_mumble, &MumbleLink::mapChanged, this,
+            &MarkerManager::onMapChanged);
+  }
 
   // Proximity check every 500ms for autoTrigger markers
   m_proximityTimer->setInterval(500);

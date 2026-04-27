@@ -418,6 +418,12 @@ QString ProfileManager::addProfile(const QString &nickname) {
   p.nickname = nickname;
   p.arguments << "-maploadinfo";
 
+  // Phase 7: every profile gets a unique persistent mumble link name
+  p.mumbleLinkName = QStringLiteral("GW2Mumble_%1").arg(p.id.left(8));
+  p.useCustomMumble = true;
+  qInfo() << "[DEV] ProfileManager: new profile mumbleLinkName:"
+          << p.mumbleLinkName << "for:" << p.id;
+
   m_profiles.append(p);
   m_profileOrder.append(p.id);
 

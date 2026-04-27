@@ -200,12 +200,15 @@ struct AccountProfile {
       p.accountProvider = AccountProvider::Standalone;
     }
     p.autoLogin = obj["autoLogin"].toBool();
-    // Data migration: reset useCustomMumble/mumbleLinkName which were
-    // accidentally persisted by launchWithProfile() mutating the profile.
-    // There is no UI to set custom mumble, so all persisted values are
-    // from the bug. These are now runtime-only (set by LaunchManager).
-    p.useCustomMumble = false;
-    p.mumbleLinkName.clear();
+    // Phase 7: auto-generate persistent mumble link name if missing
+    p.mumbleLinkName = obj["mumbleLinkName"].toString();
+    if (p.mumbleLinkName.isEmpty()) {
+      // Use first 8 chars of profile UUID for a human-readable unique name
+      p.mumbleLinkName = QStringLiteral("GW2Mumble_%1").arg(p.id.left(8));
+      qInfo() << "[DEV] ProfileManager: auto-generated mumbleLinkName:"
+              << p.mumbleLinkName << "for profile:" << p.id;
+    }
+    p.useCustomMumble = true; // Always true now — every profile has a unique name
     p.useCustomWindow = obj["useCustomWindow"].toBool();
     p.windowX = obj["windowX"].toInt();
     p.windowY = obj["windowY"].toInt();

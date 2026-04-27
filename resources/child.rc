@@ -1,0 +1,5 @@
+// Windows Resource File for GW2 AIO Child Processes
+// Sets the application icon in Task Manager, taskbar, etc.
+// Uses the same icon as the main GW2 AIO Manager
+
+IDI_ICON1 ICON "G:/Alura/GW2/AIO/resources/icons/app-icon16x16.ico"

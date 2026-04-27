@@ -348,7 +348,9 @@ void MarkerPipeline::preloadTextures() {
     return;
   }
 
-  auto markers = m_markerManager->getVisibleMarkers();
+  auto markers = m_queryCtx
+                     ? m_markerManager->getVisibleMarkers(RenderContext::InGame3D, *m_queryCtx)
+                     : m_markerManager->getVisibleMarkers();
   if (markers.isEmpty()) {
     return;
   }
@@ -380,7 +382,7 @@ void MarkerPipeline::render() {
     lastDebugMapId = curMapId;
     int visCount =
         (m_markerManager ? m_markerManager->getVisibleMarkers().size() : -1);
-    qInfo() << "MarkerPipeline: mapId changed to" << curMapId
+    qInfo() << "[DEVLOG] MarkerPipeline: mapId changed to" << curMapId
             << "init:" << m_initialized << "show:" << m_showMarkers
             << "mapOpen:" << (m_mumble ? m_mumble->isMapOpen() : false)
             << "packs:"
@@ -403,7 +405,9 @@ void MarkerPipeline::render() {
   }
 
   // Get visible markers for current map (pre-filtered by MarkerManager)
-  auto markers = m_markerManager->getVisibleMarkers();
+  auto markers = m_queryCtx
+                     ? m_markerManager->getVisibleMarkers(RenderContext::InGame3D, *m_queryCtx)
+                     : m_markerManager->getVisibleMarkers();
   if (markers.isEmpty()) {
     return;
   }
@@ -633,6 +637,13 @@ void MarkerPipeline::render() {
 
         // Position at marker bottom edge + user-configurable gap
         float labelY = sy + projectedSize * 0.5f + m_distanceLabelOffset;
+        // [DEVLOG] throttled: log distance label positioning (1/sec)
+        if (m_frameCount % 60 == 0 && distanceLabels.isEmpty()) {
+          qInfo() << "[DEVLOG] MarkerPipeline: distanceLabel first marker"
+                  << "projectedSize:" << projectedSize
+                  << "offset:" << m_distanceLabelOffset
+                  << "labelY:" << labelY << "sy:" << sy;
+        }
 
         // Apply exclusion zone fade (mirrors HLSL computeExclusionAlpha)
         // Pass label half-dimensions so the zone check expands to cover

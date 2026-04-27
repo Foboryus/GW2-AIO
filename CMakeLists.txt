@@ -59,6 +59,9 @@ set(CORE_SOURCES
     src/core/CefManager.cpp
     src/core/CredentialRefreshManager.cpp
     src/core/DllInjector.cpp
+    src/core/OverlayInstance.cpp
+    src/core/OverlayInstanceManager.cpp
+    src/core/ChildProcessManager.cpp
 )
 
 set(CORE_HEADERS
@@ -99,6 +102,9 @@ set(CORE_HEADERS
     src/core/StorageBackend.h
     src/core/LocalStorageBackend.h
     src/core/AtomicFileWriter.h
+    src/core/OverlayInstance.h
+    src/core/OverlayInstanceManager.h
+    src/core/ChildProcessManager.h
     src/core/CredentialRefreshManager.h
     # QSS template sections (header-only, for IDE visibility)
     src/core/qss/01_Base.h
@@ -403,3 +409,6 @@ add_subdirectory(src/helper)
 
 # Build launcher stub (pure Win32, no Qt)
 add_subdirectory(src/launcher)
+
+# Build child process executables (multi-process overlay)
+add_subdirectory(src/child)

@@ -1,0 +1,460 @@
+#include "ChildProcess.h"
+#include "core/MumbleLink.h"
+
+#include <QCoreApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTimer>
+
+ChildProcess::ChildProcess(const QString &profileId,
+                           const QString &mumbleName,
+                           qint64 gw2Pid,
+                           const QString &pipeName,
+                           const QString &profileName,
+                           QObject *parent)
+    : QObject(parent)
+    , m_profileId(profileId)
+    , m_mumbleName(mumbleName)
+    , m_gw2Pid(gw2Pid)
+    , m_pipeName(pipeName)
+    , m_profileName(profileName)
+{
+}
+
+ChildProcess::~ChildProcess()
+{
+    stop();
+}
+
+bool ChildProcess::start()
+{
+    if (m_started) {
+        return true;
+    }
+
+    qInfo() << "ChildProcess: Starting for profile" << m_profileName
+            << "mumble:" << m_mumbleName
+            << "gw2Pid:" << m_gw2Pid;
+
+    // Create MumbleLink reader for the assigned segment
+    m_mumbleLink = new MumbleLink(m_mumbleName, this);
+
+    // Connect MumbleLink signals
+    // Use dataUpdated for continuous state monitoring (fires every tick)
+    connect(m_mumbleLink, &MumbleLink::dataUpdated,
+            this, &ChildProcess::onMumbleDataUpdated);
+    connect(m_mumbleLink, &MumbleLink::mapChanged,
+            this, &ChildProcess::onMapChanged);
+
+    // Start MumbleLink polling at focused rate
+    if (!m_mumbleLink->start(FOCUSED_POLL_MS)) {
+        qWarning() << "ChildProcess: Failed to start MumbleLink for segment"
+                   << m_mumbleName;
+        return false;
+    }
+
+    // Start monitoring the GW2 process — exit when it dies
+    startPidMonitor();
+
+    // Allow subclass to initialize (D3D11 windows, pipelines, etc.)
+    if (!onInitialize()) {
+        qWarning() << "ChildProcess: Subclass initialization failed";
+        stop();
+        return false;
+    }
+
+    // Connect to grandfather's named pipe for settings/commands
+    connectToPipe();
+
+    m_started = true;
+    qInfo() << "ChildProcess: Started successfully for" << m_profileName;
+    return true;
+}
+
+void ChildProcess::stop()
+{
+    if (!m_started) {
+        return;
+    }
+
+    qInfo() << "ChildProcess: Stopping for" << m_profileName;
+
+    m_started = false;
+
+    // Allow subclass cleanup first
+    onShutdown();
+
+    // Stop MumbleLink
+    if (m_mumbleLink) {
+        m_mumbleLink->stop();
+    }
+
+    // Stop PID monitor
+    stopPidMonitor();
+
+    // Close pipe
+    if (m_pipeHandle != INVALID_HANDLE_VALUE) {
+        CloseHandle(m_pipeHandle);
+        m_pipeHandle = INVALID_HANDLE_VALUE;
+    }
+
+    // Stop pipe timers
+    if (m_pipeReadTimer) {
+        m_pipeReadTimer->stop();
+    }
+    if (m_pipeReconnectTimer) {
+        m_pipeReconnectTimer->stop();
+    }
+
+    qInfo() << "ChildProcess: Stopped for" << m_profileName;
+}
+
+// --- Virtual defaults ---
+
+void ChildProcess::onFeatureToggle(const QString &key, bool enabled)
+{
+    Q_UNUSED(key);
+    Q_UNUSED(enabled);
+    // Default: no-op. Subclasses override if they handle toggles.
+}
+
+void ChildProcess::onShutdown()
+{
+    // Default: no-op. Subclasses override for cleanup.
+}
+
+// --- MumbleLink handlers ---
+
+void ChildProcess::onMumbleDataUpdated()
+{
+    if (!m_mumbleLink) {
+        return;
+    }
+
+    // Detect focus changes from MumbleLink's gameHasFocus flag
+    const bool gw2Focused = m_mumbleLink->gameHasFocus();
+    if (gw2Focused != m_focused) {
+        m_focused = gw2Focused;
+
+        if (m_focused) {
+            setFocusedPollRate();
+        } else {
+            setIdlePollRate();
+        }
+
+        onFocusChanged(m_focused);
+
+        qInfo() << "ChildProcess: Focus changed to"
+                << (m_focused ? "focused" : "unfocused")
+                << "for" << m_profileName;
+    }
+}
+
+void ChildProcess::onMapChanged(uint32_t mapId)
+{
+    qInfo() << "ChildProcess: Map changed to" << mapId
+            << "for" << m_profileName;
+
+    // Character selection check: mapType == 1 means character select
+    if (m_mumbleLink && m_mumbleLink->isCharacterSelect()) {
+        // In character selection — unload if we were in-game
+        if (m_inGame) {
+            qInfo() << "ChildProcess: Entered character select, unloading map data";
+            onMapLeft();
+            m_inGame = false;
+            m_currentMapId = 0;
+        }
+        return;
+    }
+
+    // Entering a real map (mapId > 0 and not character select)
+    if (mapId > 0) {
+        // If we were on a different map, notify leave first
+        if (m_inGame && m_currentMapId != mapId) {
+            onMapLeft();
+        }
+
+        m_currentMapId = mapId;
+        m_inGame = true;
+        onMapEntered(mapId);
+
+        // Notify grandfather via pipe that we entered a map
+        if (m_pipeHandle != INVALID_HANDLE_VALUE) {
+            QString msg = QString("MAP %1\n").arg(mapId);
+            QByteArray data = msg.toUtf8();
+            DWORD written = 0;
+            WriteFile(m_pipeHandle, data.constData(),
+                      static_cast<DWORD>(data.size()), &written, nullptr);
+        }
+    }
+}
+
+// --- GW2 PID monitoring ---
+
+void ChildProcess::startPidMonitor()
+{
+    if (m_gw2Pid <= 0) {
+        qWarning() << "ChildProcess: Invalid GW2 PID, cannot monitor";
+        return;
+    }
+
+    m_gw2ProcessHandle = OpenProcess(SYNCHRONIZE, FALSE,
+                                      static_cast<DWORD>(m_gw2Pid));
+    if (!m_gw2ProcessHandle) {
+        qWarning() << "ChildProcess: Failed to open GW2 process (PID:"
+                   << m_gw2Pid << ") error:" << GetLastError();
+        // GW2 may have already exited
+        QMetaObject::invokeMethod(this, [this]() {
+            emit exitRequested();
+        }, Qt::QueuedConnection);
+        return;
+    }
+
+    // Register async callback when GW2 exits
+    if (!RegisterWaitForSingleObject(
+            &m_waitHandle,
+            m_gw2ProcessHandle,
+            &ChildProcess::onGw2ProcessExited,
+            this,
+            INFINITE,
+            WT_EXECUTEONLYONCE)) {
+        qWarning() << "ChildProcess: RegisterWaitForSingleObject failed, error:"
+                   << GetLastError();
+        CloseHandle(m_gw2ProcessHandle);
+        m_gw2ProcessHandle = nullptr;
+    }
+}
+
+void ChildProcess::stopPidMonitor()
+{
+    if (m_waitHandle) {
+        UnregisterWait(m_waitHandle);
+        m_waitHandle = nullptr;
+    }
+
+    if (m_gw2ProcessHandle) {
+        CloseHandle(m_gw2ProcessHandle);
+        m_gw2ProcessHandle = nullptr;
+    }
+}
+
+void CALLBACK ChildProcess::onGw2ProcessExited(PVOID context, BOOLEAN timedOut)
+{
+    Q_UNUSED(timedOut);
+
+    auto *self = static_cast<ChildProcess *>(context);
+
+    qInfo() << "ChildProcess: GW2 process exited for" << self->m_profileName;
+
+    // Marshal to main thread safely
+    QMetaObject::invokeMethod(self, [self]() {
+        self->stop();
+        emit self->exitRequested();
+    }, Qt::QueuedConnection);
+}
+
+// --- Named pipe IPC ---
+
+void ChildProcess::connectToPipe()
+{
+    if (m_pipeName.isEmpty()) {
+        qInfo() << "ChildProcess: No pipe name specified, running without IPC";
+        return;
+    }
+
+    // Keep wstring alive (Win32 API rule)
+    std::wstring pipeNameW = m_pipeName.toStdWString();
+
+    m_pipeHandle = CreateFileW(
+        pipeNameW.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        0,
+        nullptr,
+        OPEN_EXISTING,
+        0,
+        nullptr);
+
+    if (m_pipeHandle == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        qWarning() << "ChildProcess: Failed to connect to pipe"
+                   << m_pipeName << "error:" << err;
+
+        // Retry connection periodically (grandfather may not have created pipe yet)
+        if (!m_pipeReconnectTimer) {
+            m_pipeReconnectTimer = new QTimer(this);
+            m_pipeReconnectTimer->setInterval(1000);
+            connect(m_pipeReconnectTimer, &QTimer::timeout,
+                    this, &ChildProcess::connectToPipe);
+        }
+        m_pipeReconnectTimer->start();
+        return;
+    }
+
+    // Connected — stop retry timer
+    if (m_pipeReconnectTimer) {
+        m_pipeReconnectTimer->stop();
+    }
+
+    qInfo() << "ChildProcess: Connected to pipe" << m_pipeName;
+
+    // Set pipe to message mode for reading
+    DWORD pipeMode = PIPE_READMODE_MESSAGE;
+    SetNamedPipeHandleState(m_pipeHandle, &pipeMode, nullptr, nullptr);
+
+    // Send READY to request initial settings
+    const char *readyMsg = "READY\n";
+    DWORD written = 0;
+    WriteFile(m_pipeHandle, readyMsg,
+              static_cast<DWORD>(strlen(readyMsg)), &written, nullptr);
+
+    // Start polling for incoming commands from grandfather
+    startPipeReader();
+}
+
+void ChildProcess::startPipeReader()
+{
+    if (m_pipeReadTimer) {
+        return; // Already running
+    }
+
+    m_pipeReadTimer = new QTimer(this);
+    m_pipeReadTimer->setInterval(100); // 10Hz — responsive settings sync
+    connect(m_pipeReadTimer, &QTimer::timeout, this, &ChildProcess::pollPipe);
+    m_pipeReadTimer->start();
+    qInfo() << "ChildProcess: Pipe reader started (100ms)";
+}
+
+void ChildProcess::pollPipe()
+{
+    if (m_pipeHandle == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    // Non-blocking check: is there data to read?
+    DWORD bytesAvailable = 0;
+    BOOL peekOk = PeekNamedPipe(
+        m_pipeHandle,
+        nullptr, 0, nullptr,
+        &bytesAvailable, nullptr);
+
+    if (!peekOk) {
+        // Pipe broken (grandfather exited?) — stop polling
+        DWORD err = GetLastError();
+        if (err == ERROR_BROKEN_PIPE || err == ERROR_PIPE_NOT_CONNECTED) {
+            qWarning() << "ChildProcess: Pipe broken — stopping reader";
+            m_pipeReadTimer->stop();
+            CloseHandle(m_pipeHandle);
+            m_pipeHandle = INVALID_HANDLE_VALUE;
+        }
+        return;
+    }
+
+    if (bytesAvailable == 0) {
+        return;
+    }
+
+    // Read the available data
+    QByteArray buffer(static_cast<int>(bytesAvailable), '\0');
+    DWORD bytesRead = 0;
+    BOOL readOk = ReadFile(
+        m_pipeHandle, buffer.data(),
+        bytesAvailable, &bytesRead, nullptr);
+
+    if (!readOk || bytesRead == 0) {
+        return;
+    }
+
+    buffer.resize(static_cast<int>(bytesRead));
+    QString data = QString::fromUtf8(buffer);
+
+    // Process each command (pipe message mode: one message per ReadFile)
+    processCommand(data);
+}
+
+bool ChildProcess::sendToGrandfather(const QByteArray &message)
+{
+    if (m_pipeHandle == INVALID_HANDLE_VALUE) {
+        qWarning() << "ChildProcess: Cannot send to grandfather — pipe not connected";
+        return false;
+    }
+
+    DWORD written = 0;
+    BOOL ok = WriteFile(m_pipeHandle, message.constData(),
+                        static_cast<DWORD>(message.size()), &written, nullptr);
+
+    if (!ok) {
+        DWORD err = GetLastError();
+        qWarning() << "ChildProcess: WriteFile to grandfather failed, error:" << err;
+        return false;
+    }
+
+    return true;
+}
+
+void ChildProcess::processCommand(const QString &command)
+{
+    if (command.startsWith("SETTINGS\n")) {
+        // Parse JSON payload after the command keyword
+        QString jsonStr = command.mid(9); // Skip "SETTINGS\n"
+        QJsonParseError error;
+        QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8(), &error);
+        if (error.error == QJsonParseError::NoError && doc.isObject()) {
+            onSettingsReceived(doc.object());
+        } else {
+            qWarning() << "ChildProcess: Failed to parse SETTINGS JSON:"
+                       << error.errorString();
+        }
+    } else if (command.startsWith("THEME\n")) {
+        QString jsonStr = command.mid(6); // Skip "THEME\n"
+        QJsonParseError error;
+        QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8(), &error);
+        if (error.error == QJsonParseError::NoError && doc.isObject()) {
+            // Theme updates go through settings
+            QJsonObject settings;
+            settings["theme"] = doc.object();
+            onSettingsReceived(settings);
+        }
+    } else if (command.startsWith("FOCUS ")) {
+        bool focused = command.mid(6).trimmed() == "1";
+        m_focused = focused;
+        if (m_focused) {
+            setFocusedPollRate();
+        } else {
+            setIdlePollRate();
+        }
+        onFocusChanged(m_focused);
+    } else if (command.startsWith("TOGGLE ")) {
+        // Format: "TOGGLE key 1" or "TOGGLE key 0"
+        QStringList parts = command.mid(7).split(' ');
+        if (parts.size() >= 2) {
+            QString key = parts[0];
+            bool enabled = parts[1].trimmed() == "1";
+            onFeatureToggle(key, enabled);
+        }
+    } else if (command.trimmed() == "RELOAD_PACKS") {
+        qInfo() << "ChildProcess: Received RELOAD_PACKS — reloading pack data";
+        onReloadPacks();
+    } else if (command.trimmed() == "STOP") {
+        qInfo() << "ChildProcess: Received STOP command";
+        stop();
+        emit exitRequested();
+    } else {
+        qWarning() << "ChildProcess: Unknown command:" << command.left(50);
+    }
+}
+
+// --- Poll rate management ---
+
+void ChildProcess::setFocusedPollRate()
+{
+    if (m_mumbleLink && m_mumbleLink->isRunning()) {
+        m_mumbleLink->setUpdateInterval(FOCUSED_POLL_MS);
+    }
+}
+
+void ChildProcess::setIdlePollRate()
+{
+    if (m_mumbleLink && m_mumbleLink->isRunning()) {
+        m_mumbleLink->setUpdateInterval(IDLE_POLL_MS);
+    }
+}

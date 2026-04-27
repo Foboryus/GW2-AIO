@@ -13,7 +13,6 @@
 #include "OverlayMenuWidget.h"
 
 #include "features/markers/ImageCache.h"
-#include "features/markers/MarkerController.h"
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerModels.h"
 #include "features/markers/MarkerSettingsManager.h"
@@ -44,14 +43,14 @@ OverlayMenuWidget::OverlayMenuWidget(QWidget *parent) : QWidget(parent) {
 // Public API
 // ============================================================================
 
-void OverlayMenuWidget::setMarkerController(MarkerController *controller) {
-  m_markerController = controller;
+void OverlayMenuWidget::setMarkerManager(MarkerManager *manager) {
+  m_markerManager = manager;
   rebuildTree();
 
   // Rebuild tree when packs are reloaded (e.g., after download or manual
   // reload)
-  if (m_markerController && m_markerController->manager()) {
-    connect(m_markerController->manager(), &MarkerManager::packsLoaded, this,
+  if (m_markerManager) {
+    connect(m_markerManager, &MarkerManager::packsLoaded, this,
             [this]() {
               rebuildTree();
               update();
@@ -78,6 +77,8 @@ void OverlayMenuWidget::setShouldBeVisible(bool visible) {
     return;
   }
   m_shouldBeVisible = visible;
+  qInfo() << "[DEVLOG] OverlayMenuWidget: visibility changed to:" << visible
+          << "iconRect:" << m_iconRect;
   update(); // Trigger fade animation
 }
 
@@ -87,6 +88,14 @@ void OverlayMenuWidget::setCombatHidden(bool hidden) {
   }
   m_combatHidden = hidden;
   update(); // Trigger panel fade
+}
+
+void OverlayMenuWidget::setGameFocused(bool focused) {
+  if (m_gameFocused == focused) {
+    return;
+  }
+  m_gameFocused = focused;
+  update(); // Trigger icon swap
 }
 
 void OverlayMenuWidget::setMenuOpen(bool open) {
@@ -123,11 +132,11 @@ void OverlayMenuWidget::rebuildTree() {
   m_treeRoots.clear();
   m_flatItems.clear();
 
-  if (!m_markerController || !m_markerController->manager()) {
+  if (!m_markerManager) {
     return;
   }
 
-  const auto &packs = m_markerController->manager()->packs();
+  const auto &packs = m_markerManager->packs();
   for (const MarkerPack &pack : packs) {
     // Build set of category paths that have markers/trails.
     // Include all ancestor prefixes so parent categories get hasContent=true
@@ -206,9 +215,14 @@ void OverlayMenuWidget::paintEvent(QPaintEvent *event) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
-  // Diamond icon always draws at main opacity
+  // Diamond/paused icon always draws at main opacity
   painter.setOpacity(m_opacity);
   drawCornerIcon(painter);
+
+  // When game not focused, only draw the paused icon — no panel, no interaction
+  if (!m_gameFocused) {
+    return;
+  }
 
   // Panel draws at main × combat opacity (combat hides panel only)
   if (m_isMenuOpen && m_panelCombatOpacity > 0.0) {
@@ -227,6 +241,25 @@ void OverlayMenuWidget::drawCornerIcon(QPainter &painter) {
   // Position: after GW2's vanilla icon row
   m_iconRect = QRectF(kIconX, kIconY, kIconSize, kIconSize);
 
+  if (!m_gameFocused) {
+    // --- PAUSED STATE: bright red pause icon ---
+    painter.setBrush(QColor(40, 10, 10, 200));
+    painter.setPen(QPen(QColor("#FF3333"), 1.5));
+    painter.drawRoundedRect(m_iconRect, 4, 4);
+
+    // Two vertical bars (pause symbol)
+    QRectF inner = m_iconRect.adjusted(8, 6, -8, -6);
+    qreal barW = inner.width() * 0.3;
+    QRectF leftBar(inner.left(), inner.top(), barW, inner.height());
+    QRectF rightBar(inner.right() - barW, inner.top(), barW, inner.height());
+    painter.setBrush(QColor("#FF3333"));
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(leftBar, 1.5, 1.5);
+    painter.drawRoundedRect(rightBar, 1.5, 1.5);
+    return;
+  }
+
+  // --- NORMAL STATE: gold diamond icon ---
   // Background
   bool isHovered = m_iconRect.contains(mapFromGlobal(QCursor::pos()));
   painter.setBrush(QColor(isHovered ? tok.iconHoverBg : tok.iconBg));
@@ -411,6 +444,9 @@ void OverlayMenuWidget::drawSettingsPage(QPainter &painter,
   const auto &tok = overlayTokens();
   painter.save();
   painter.setClipRect(contentArea);
+
+  // Apply settings scroll offset
+  painter.translate(0, -m_settingsScrollOffset);
 
   qreal y = contentArea.top() + 12;
   qreal labelX = contentArea.left() + 12;
@@ -905,6 +941,11 @@ void OverlayMenuWidget::drawSettingsPage(QPainter &painter,
                    m_detailsTrackerVisible ? "Hide Details Tracker"
                                            : "Show Details Tracker");
 
+  // Compute max scroll based on total content height vs visible area
+  qreal totalContentHeight = y - contentArea.top() + 12; // 12 = bottom padding
+  qreal visibleHeight = contentArea.height();
+  m_settingsMaxScroll = qMax(0, static_cast<int>(totalContentHeight - visibleHeight));
+
   painter.restore();
 }
 
@@ -1082,8 +1123,11 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
     }
 
     // Settings page slider interactions
+    // Hit-test rects are in scrolled (translated) coordinates,
+    // so offset the mouse Y by the settings scroll offset.
     if (m_activeTab == Tab::Settings) {
-      if (m_overlaySliderRect.contains(pos)) {
+      QPointF scrolledPos(pos.x(), pos.y() + m_settingsScrollOffset);
+      if (m_overlaySliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 0;
         qreal value = qBound(0.0,
@@ -1096,7 +1140,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         update();
         return;
       }
-      if (m_minimapSliderRect.contains(pos)) {
+      if (m_minimapSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 1;
         qreal value = qBound(0.0,
@@ -1112,7 +1156,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Rendering layer toggles
       if (m_mainRenderToggleRect.isValid() &&
-          m_mainRenderToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_mainRenderToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setRenderingEnabled(
               !m_markerSettings->renderingEnabled());
@@ -1121,7 +1165,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         return;
       }
       if (m_3dRenderToggleRect.isValid() &&
-          m_3dRenderToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_3dRenderToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setRender3dEnabled(
               !m_markerSettings->render3dEnabled());
@@ -1130,7 +1174,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         return;
       }
       if (m_minimapRenderToggleRect.isValid() &&
-          m_minimapRenderToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_minimapRenderToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setRenderMinimapEnabled(
               !m_markerSettings->renderMinimapEnabled());
@@ -1139,7 +1183,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         return;
       }
       if (m_bigMapRenderToggleRect.isValid() &&
-          m_bigMapRenderToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_bigMapRenderToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setRenderBigMapEnabled(
               !m_markerSettings->renderBigMapEnabled());
@@ -1150,7 +1194,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Show Distance toggle
       if (m_distanceToggleRect.isValid() &&
-          m_distanceToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_distanceToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setShowDistance(!m_markerSettings->showDistance());
         }
@@ -1160,7 +1204,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Hide in Combat toggle
       if (m_combatToggleRect.isValid() &&
-          m_combatToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_combatToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setHideInCombat(!m_markerSettings->hideInCombat());
         }
@@ -1170,7 +1214,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Show in Big Map toggle (sub-toggle of Hide in Combat)
       if (m_showInBigMapToggleRect.isValid() &&
-          m_showInBigMapToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_showInBigMapToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setShowInBigMap(
               !m_markerSettings->showInBigMap());
@@ -1181,7 +1225,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Exclusion zone toggles
       if (m_exclusionToggleRect.isValid() &&
-          m_exclusionToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_exclusionToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setExclusionEnabled(
               !m_markerSettings->exclusionEnabled());
@@ -1190,7 +1234,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         return;
       }
       if (m_minimapToggleRect.isValid() &&
-          m_minimapToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_minimapToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setMinimapZoneEnabled(
               !m_markerSettings->minimapZoneEnabled());
@@ -1199,7 +1243,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         return;
       }
       if (m_skillBarToggleRect.isValid() &&
-          m_skillBarToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_skillBarToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setSkillBarZoneEnabled(
               !m_markerSettings->skillBarZoneEnabled());
@@ -1208,7 +1252,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         return;
       }
       if (m_chatToggleRect.isValid() &&
-          m_chatToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_chatToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setChatZoneEnabled(
               !m_markerSettings->chatZoneEnabled());
@@ -1219,7 +1263,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Fade edge slider
       if (m_fadeEdgeSliderRect.isValid() &&
-          m_fadeEdgeSliderRect.contains(pos)) {
+          m_fadeEdgeSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 2;
         qreal value = qBound(0.0,
@@ -1236,7 +1280,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Font size slider (only when distance is enabled)
       if (m_distFontSliderRect.isValid() &&
-          m_distFontSliderRect.contains(pos)) {
+          m_distFontSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 3;
         qreal value = qBound(0.0,
@@ -1253,7 +1297,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Label Offset slider (only when distance is enabled)
       if (m_distLabelOffsetSliderRect.isValid() &&
-          m_distLabelOffsetSliderRect.contains(pos)) {
+          m_distLabelOffsetSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 5;
         qreal value = qBound(0.0,
@@ -1270,7 +1314,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Marker Scale slider
       if (m_markerScaleSliderRect.isValid() &&
-          m_markerScaleSliderRect.contains(pos)) {
+          m_markerScaleSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 4;
         qreal value = qBound(0.0,
@@ -1286,7 +1330,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Render Distance slider
       if (m_renderDistSliderRect.isValid() &&
-          m_renderDistSliderRect.contains(pos)) {
+          m_renderDistSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 6;
         qreal value = qBound(0.0,
@@ -1302,7 +1346,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Height Filter toggle
       if (m_heightFilterToggleRect.isValid() &&
-          m_heightFilterToggleRect.adjusted(-8, -4, 8, 4).contains(pos)) {
+          m_heightFilterToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
         if (m_markerSettings) {
           m_markerSettings->setHeightFilterEnabled(
               !m_markerSettings->heightFilterEnabled());
@@ -1313,7 +1357,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Height Range slider
       if (m_heightRangeSliderRect.isValid() &&
-          m_heightRangeSliderRect.contains(pos)) {
+          m_heightRangeSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 7;
         qreal value = qBound(0.0,
@@ -1330,7 +1374,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Trail Width slider
       if (m_trailWidthSliderRect.isValid() &&
-          m_trailWidthSliderRect.contains(pos)) {
+          m_trailWidthSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 8;
         qreal value = qBound(0.0,
@@ -1347,7 +1391,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Minimap Marker Size slider
       if (m_minimapMarkerScaleSliderRect.isValid() &&
-          m_minimapMarkerScaleSliderRect.contains(pos)) {
+          m_minimapMarkerScaleSliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 9;
         qreal value = qBound(0.0,
@@ -1363,7 +1407,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Minimap Marker Opacity slider
       if (m_minimapMarkerOpacitySliderRect.isValid() &&
-          m_minimapMarkerOpacitySliderRect.contains(pos)) {
+          m_minimapMarkerOpacitySliderRect.contains(scrolledPos)) {
         m_isDraggingSlider = true;
         m_dragSliderIndex = 10;
         qreal value =
@@ -1380,7 +1424,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Edit Custom Zones button
       if (m_editZonesButtonRect.isValid() &&
-          m_editZonesButtonRect.contains(pos)) {
+          m_editZonesButtonRect.contains(scrolledPos)) {
         emit editExclusionZonesRequested();
         update();
         return;
@@ -1388,7 +1432,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
 
       // Details Tracker button
       if (m_detailsTrackerButtonRect.isValid() &&
-          m_detailsTrackerButtonRect.contains(pos)) {
+          m_detailsTrackerButtonRect.contains(scrolledPos)) {
         m_detailsTrackerVisible = !m_detailsTrackerVisible;
         emit detailsTrackerToggled(m_detailsTrackerVisible);
         update();
@@ -1435,7 +1479,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         m_suppressRebuild = false;
 
         // Propagate to runtime visibility
-        if (m_markerController && m_markerController->manager()) {
+        if (m_markerManager) {
           if (item->isPack) {
             // Pack toggle: update all descendant categories.
             // When re-enabling (item->isEnabled == true), read each
@@ -1458,7 +1502,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
                         item->id, child.id);
                   }
                   // Update runtime cache
-                  m_markerController->manager()->updateCategoryVisibility(
+                  m_markerManager->updateCategoryVisibility(
                       child.id, catEnabled);
                   // Update tree item visual to match persisted state
                   child.isEnabled = catEnabled;
@@ -1475,7 +1519,7 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
                     << (item->isEnabled ? "ENABLED" : "DISABLED")
                     << "— categories ON:" << onCount << "OFF:" << offCount;
           } else {
-            m_markerController->manager()->updateCategoryVisibility(
+            m_markerManager->updateCategoryVisibility(
                 item->id, item->isEnabled);
             qInfo() << "OverlayMenu: Category" << item->id
                     << (item->isEnabled ? "ON" : "OFF");
@@ -1508,9 +1552,9 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         m_suppressRebuild = false;
 
         // Propagate to runtime visibility
-        if (m_markerController && m_markerController->manager() &&
+        if (m_markerManager &&
             !item->isPack) {
-          m_markerController->manager()->updateCategoryVisibility(
+          m_markerManager->updateCategoryVisibility(
               item->id, item->isEnabled);
         }
       }
@@ -1633,7 +1677,13 @@ void OverlayMenuWidget::wheelEvent(QWheelEvent *event) {
   }
 
   int delta = event->angleDelta().y();
-  m_scrollOffset = qBound(0, m_scrollOffset - delta / 4, m_maxScroll);
+
+  if (m_activeTab == Tab::Settings) {
+    m_settingsScrollOffset =
+        qBound(0, m_settingsScrollOffset - delta / 4, m_settingsMaxScroll);
+  } else {
+    m_scrollOffset = qBound(0, m_scrollOffset - delta / 4, m_maxScroll);
+  }
   update();
   event->accept();
 }

@@ -43,6 +43,7 @@ class MarkerSettingsManager;
 class ImageCache;
 
 struct Trail;
+struct MarkerQueryContext;
 
 class TrailPipeline {
 public:
@@ -66,6 +67,9 @@ public:
   void setMaxRenderDistance(float dist) { m_maxRenderDistance = dist; }
   void setMinimapTrailWidth(float multiplier) { m_minimapTrailWidth = multiplier; }
   void setMinimapOpacity(float opacity) { m_minimapOpacity = opacity; }
+
+  /// Per-instance query context (Phase 7a) — null = use shared state
+  void setQueryContext(const MarkerQueryContext *ctx) { m_queryCtx = ctx; }
 
   // Camera interpolation overrides (Optimization 3 — Blish HUD pattern)
   // When set, render() uses these instead of raw MumbleLink camera data.
@@ -190,4 +194,7 @@ private:
   QVector3D m_playerOverridePos;
   bool m_useCameraOverride = false;
   bool m_usePlayerOverride = false;
+
+  // Per-instance query context (Phase 7a) — not owned
+  const MarkerQueryContext *m_queryCtx = nullptr;
 };
