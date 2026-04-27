@@ -795,7 +795,22 @@ bool ChildProcessManager::spawnChild(const QString &profileId,
     QString pipeName = QString("\\\\.\\pipe\\GW2AIO-%1-%2")
                            .arg(featureKey, profileId.right(8));
 
-    // 3. Create pipe server
+    // 3. Defensive cleanup: if a stale pipe exists from a previous session
+    //    (e.g., force-kill, crash, or the profileExited bug), connect to
+    //    drain the instance so CreateNamedPipeW can succeed.
+    {
+        std::wstring stalePipeW = pipeName.toStdWString();
+        HANDLE hStale = CreateFileW(
+            stalePipeW.c_str(),
+            GENERIC_READ | GENERIC_WRITE,
+            0, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (hStale != INVALID_HANDLE_VALUE) {
+            qInfo() << "ChildProcessManager: cleaned up stale pipe:" << pipeName;
+            CloseHandle(hStale);
+        }
+    }
+
+    // 4. Create pipe server
     std::wstring pipeNameW = pipeName.toStdWString();
     HANDLE hPipe = CreateNamedPipeW(
         pipeNameW.c_str(),
@@ -804,19 +819,20 @@ bool ChildProcessManager::spawnChild(const QString &profileId,
         1, 4096, 4096, 0, nullptr);
 
     if (hPipe == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
         qWarning() << "ChildProcessManager: pipe creation failed for"
-                   << pipeName;
+                   << pipeName << "error:" << err;
         // Continue without pipe — child will retry
     }
 
-    // 4. Build command line
+    // 5. Build command line
     QString cmdLine = QString("\"%1\" --profile %2 --mumble %3 --pid %4 --pipe %5 --profile-name \"%6\"")
         .arg(exePath, profileId, mumbleName,
              QString::number(gw2Pid), pipeName, profileName);
 
     qInfo() << "ChildProcessManager: cmd:" << cmdLine;
 
-    // 5. Create process (suspended so we can assign to Job Object first)
+    // 6. Create process (suspended so we can assign to Job Object first)
     STARTUPINFOW si = {};
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi = {};
@@ -849,7 +865,7 @@ bool ChildProcessManager::spawnChild(const QString &profileId,
         return false;
     }
 
-    // 6. Assign to Job Object (before resuming)
+    // 7. Assign to Job Object (before resuming)
     if (m_jobObject) {
         if (!AssignProcessToJobObject(m_jobObject, pi.hProcess)) {
             qWarning() << "ChildProcessManager: AssignProcessToJobObject failed,"
@@ -857,11 +873,11 @@ bool ChildProcessManager::spawnChild(const QString &profileId,
         }
     }
 
-    // 7. Resume the child process
+    // 8. Resume the child process
     ResumeThread(pi.hThread);
     CloseHandle(pi.hThread); // Thread handle not needed
 
-    // 8. Store child info
+    // 9. Store child info
     ChildProcessInfo info;
     info.profileId = profileId;
     info.profileName = profileName;

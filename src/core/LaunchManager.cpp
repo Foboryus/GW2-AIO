@@ -1366,6 +1366,11 @@ void LaunchManager::startProcessMonitor(HANDLE hProcess, qint64 pid,
           // modal dialog
           emit gw2Exited(pid, wasLoaded ? 0 : -1);
 
+          // Notify child process manager to terminate children for this
+          // profile. Must fire BEFORE profileCrashDuringLaunch (which may
+          // show a modal dialog and block the event loop).
+          emit profileExited(profile.id);
+
           if (!wasLoaded) {
             // Process died before GPU signal - crash during launch
             qWarning() << "Pre-injection crash detected for PID:" << pid;
