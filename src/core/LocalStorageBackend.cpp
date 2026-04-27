@@ -80,6 +80,10 @@ QString LocalStorageBackend::markerStateDir() const {
   return QDir(profileDataDir()).filePath("marker_state");
 }
 
+QString LocalStorageBackend::apiCacheDir() const {
+  return QDir(m_dataDir).filePath("api_cache");
+}
+
 void LocalStorageBackend::ensureDirectories() {
   QDir().mkpath(m_dataDir);
   QDir().mkpath(profilesDir());
@@ -94,4 +98,5 @@ void LocalStorageBackend::ensureDirectories() {
   QDir().mkpath(radialConfigDir());
   QDir().mkpath(profileDataDir());
   QDir().mkpath(markerStateDir());
+  QDir().mkpath(apiCacheDir());
 }

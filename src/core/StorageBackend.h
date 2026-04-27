@@ -37,6 +37,7 @@ public:
   virtual QString radialConfigDir() const = 0;
   virtual QString profileDataDir() const = 0;
   virtual QString markerStateDir() const = 0;
+  virtual QString apiCacheDir() const = 0;
 
   // --- Lifecycle ---
   virtual void ensureDirectories() = 0;

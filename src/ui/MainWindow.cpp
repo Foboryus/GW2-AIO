@@ -62,7 +62,7 @@ MainWindow::MainWindow(DataService *dataService,
       m_launchManager(new LaunchManager(this)),
       m_updateChecker(new UpdateChecker(this)),
       m_blishManager(new BlishModuleManager(this)),
-      m_apiClient(new GW2APIClient(this)), m_trayIcon(nullptr) {
+      m_trayIcon(nullptr) {
 
   // Inject DataService's LocalDatManager into LaunchManager
   m_launchManager->setLocalDatManager(m_dataService->localDatManager());
@@ -332,7 +332,7 @@ MainWindow::MainWindow(DataService *dataService,
 
   // === UpdateManager Setup ===
   m_updateManager = m_dataService->updateManager();
-  m_updateManager->setApiClient(m_apiClient);
+  m_updateManager->setApiClient(m_dataService->apiClient());
   m_updateManager->setLaunchManager(m_launchManager);
 
   // Connect UpdateManager signals for UI dialogs

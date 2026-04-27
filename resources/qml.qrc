@@ -27,6 +27,9 @@
         <file>icons/chevron-down.svg</file>
         <file>icons/chevron-right.svg</file>
         <file>icons/eye.svg</file>
+        <file>icons/eye-off.svg</file>
+        <file>icons/user.svg</file>
+        <file>icons/link.svg</file>
         <file>icons/check-square.svg</file>
         <file>icons/layers.svg</file>
         <!-- Grid status icons (colored) -->

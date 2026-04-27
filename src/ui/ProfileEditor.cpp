@@ -40,6 +40,8 @@ ProfileEditor::ProfileEditor(AccountProfile *profile,
           &ProfileEditor::markDirty);
   connect(m_loginTab, &LoginTabWidget::modified, this,
           &ProfileEditor::markDirty);
+  connect(m_accountTab, &AccountTabWidget::modified, this,
+          &ProfileEditor::markDirty);
   connect(m_networkTab, &NetworkTabWidget::modified, this,
           &ProfileEditor::markDirty);
   connect(m_graphicsTab, &GraphicsTabWidget::modified, this,
@@ -84,6 +86,7 @@ void ProfileEditor::setupUI() {
   // Row 1: General, Login, Network, Arguments, Window
   m_generalTab = new GeneralTabWidget(m_profile, this);
   m_loginTab = new LoginTabWidget(m_profile, m_dataService, this);
+  m_accountTab = new AccountTabWidget(m_profile, m_dataService, this);
   m_networkTab = new NetworkTabWidget(m_profile, m_serverManager, this);
   m_argumentsTab = new ArgumentsTabWidget(m_profile, m_standardArgs, this);
   m_windowTab = new WindowTabWidget(m_profile, this);
@@ -96,18 +99,19 @@ void ProfileEditor::setupUI() {
   // Add to stack in order
   m_stack->addWidget(m_generalTab);   // 0
   m_stack->addWidget(m_loginTab);     // 1
-  m_stack->addWidget(m_networkTab);   // 2
-  m_stack->addWidget(m_argumentsTab); // 3
-  m_stack->addWidget(m_windowTab);    // 4
-  m_stack->addWidget(m_graphicsTab);  // 5
-  m_stack->addWidget(m_addonsTab);    // 6
-  m_stack->addWidget(m_hotkeysTab);   // 7
+  m_stack->addWidget(m_accountTab);   // 2
+  m_stack->addWidget(m_networkTab);   // 3
+  m_stack->addWidget(m_argumentsTab); // 4
+  m_stack->addWidget(m_windowTab);    // 5
+  m_stack->addWidget(m_graphicsTab);  // 6
+  m_stack->addWidget(m_addonsTab);    // 7
+  m_stack->addWidget(m_hotkeysTab);   // 8
 
   // Markers tab (conditional)
   if (m_markerController && m_dataService) {
     m_markersTab = new MarkersTabWidget(
         m_profile, m_dataService->markerSettings(), m_markerController, this);
-    m_stack->addWidget(m_markersTab); // 8
+    m_stack->addWidget(m_markersTab); // 9
   }
 
   // ===== 2-Row Tab Bar =====
@@ -117,6 +121,7 @@ void ProfileEditor::setupUI() {
   };
   QList<TabDef> row1 = {{"home", "General"},
                         {"lock", "Login"},
+                        {"user", "Account"},
                         {"globe", "Network"},
                         {"terminal", "Arguments"},
                         {"layout", "Window"}};
@@ -147,7 +152,7 @@ void ProfileEditor::setupUI() {
   };
 
   mainLayout->addLayout(createTabRow(row1, 0));
-  mainLayout->addLayout(createTabRow(row2, 5));
+  mainLayout->addLayout(createTabRow(row2, 6));
 
   // Lazy-load heavy tabs on first click
   // (onTabChanged handles this via m_stack->widget(index))
@@ -209,6 +214,9 @@ void ProfileEditor::loadProfile() {
   // Login - delegate to tab widget
   m_loginTab->load();
 
+  // Account - delegate to tab widget
+  m_accountTab->load();
+
   // GFX settings — lazy loaded on first tab click (see onTabChanged)
 
   // DLLs - delegate to tab widget
@@ -265,6 +273,9 @@ void ProfileEditor::saveProfile() {
 
   // Login - delegate to tab widget
   m_loginTab->save();
+
+  // Account - delegate to tab widget (no-op, read-only)
+  m_accountTab->save();
 
   // GFX - delegate to tab widget
   m_graphicsTab->save();

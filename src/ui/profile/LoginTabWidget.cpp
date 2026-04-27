@@ -1,6 +1,7 @@
 #include "LoginTabWidget.h"
 
 #include <QDebug>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -8,11 +9,13 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QVBoxLayout>
 
+#include "core/APIKeyManager.h"
 #include "core/DataService.h"
 #include "core/LocalDatManager.h"
 #include "ui/ProfileEditor.h" // For AccountProfile
@@ -21,7 +24,8 @@
 
 LoginTabWidget::LoginTabWidget(AccountProfile &profile,
                                DataService *dataService, QWidget *parent)
-    : QWidget(parent), m_profile(profile), m_dataService(dataService) {
+    : QWidget(parent), m_profile(profile), m_dataService(dataService),
+      m_apiKeyManager(dataService ? dataService->apiKeyManager() : nullptr) {
   setupUI();
 }
 
@@ -229,6 +233,135 @@ void LoginTabWidget::setupUI() {
           });
 
   layout->addWidget(pathGroup);
+
+  // ===== GW2 Account API Section =====
+  auto *apiGroup = new QGroupBox("GW2 Account API");
+  auto *apiLayout = new QVBoxLayout(apiGroup);
+
+  auto *apiHint = new QLabel(
+      "Enter your API key from account.arena.net. "
+      "AIO only reads data — it cannot modify your account.");
+  apiHint->setWordWrap(true);
+  UIHelpers::applyHintRole(apiHint);
+  apiLayout->addWidget(apiHint);
+
+  // Key input row
+  auto *keyInputLayout = new QHBoxLayout();
+
+  m_apiKeyInput = new QLineEdit();
+  m_apiKeyInput->setPlaceholderText("XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX...");
+  m_apiKeyInput->setEchoMode(QLineEdit::Password);
+  m_apiKeyInput->setMinimumHeight(32);
+  keyInputLayout->addWidget(m_apiKeyInput, 1);
+
+  // Show/hide toggle
+  m_apiKeyShowBtn = new QPushButton(UIHelpers::themedIcon("eye"), "");
+  m_apiKeyShowBtn->setFixedSize(32, 32);
+  m_apiKeyShowBtn->setToolTip("Show/hide API key");
+  m_apiKeyShowBtn->setCheckable(true);
+  UIHelpers::applyNeutralStyle(m_apiKeyShowBtn);
+  connect(m_apiKeyShowBtn, &QPushButton::toggled, [this](bool checked) {
+    m_apiKeyInput->setEchoMode(checked ? QLineEdit::Normal
+                                       : QLineEdit::Password);
+    UIHelpers::setThemedIcon(m_apiKeyShowBtn, checked ? "eye-off" : "eye");
+  });
+  keyInputLayout->addWidget(m_apiKeyShowBtn);
+  apiLayout->addLayout(keyInputLayout);
+
+  // Status label
+  m_apiKeyStatus = new QLabel("No API key configured");
+  UIHelpers::applyStatusRole(m_apiKeyStatus);
+  apiLayout->addWidget(m_apiKeyStatus);
+
+  // Button row
+  auto *apiBtnLayout = new QHBoxLayout();
+
+  m_validateBtn = new QPushButton(UIHelpers::themedIcon("check-circle"),
+                                  "Validate");
+  UIHelpers::applyPrimaryStyle(m_validateBtn);
+  m_validateBtn->setToolTip("Test the API key and show permissions");
+  connect(m_validateBtn, &QPushButton::clicked, [this]() {
+    if (!m_apiKeyManager) return;
+    QString key = m_apiKeyInput->text().trimmed();
+    if (key.isEmpty()) {
+      UIHelpers::showInfoDialog(this, "Please enter an API key.");
+      return;
+    }
+    m_apiKeyStatus->setText("Validating...");
+    UIHelpers::applyStatusRole(m_apiKeyStatus);
+    m_validateBtn->setEnabled(false);
+    m_apiKeyManager->validateKey(m_profile.id, key);
+  });
+  apiBtnLayout->addWidget(m_validateBtn);
+
+  auto *generateBtn = new QPushButton(UIHelpers::themedIcon("link"),
+                                      "Generate Key");
+  UIHelpers::applyNeutralStyle(generateBtn);
+  generateBtn->setToolTip("Open ArenaNet API key creation page");
+  connect(generateBtn, &QPushButton::clicked, []() {
+    QDesktopServices::openUrl(
+        QUrl("https://account.arena.net/applications/create"));
+  });
+  apiBtnLayout->addWidget(generateBtn);
+
+  m_removeKeyBtn = new QPushButton(UIHelpers::themedIcon("trash"),
+                                   "Remove Key");
+  UIHelpers::applyCancelStyle(m_removeKeyBtn);
+  m_removeKeyBtn->setToolTip("Delete the stored API key");
+  m_removeKeyBtn->setVisible(false); // Only show if key exists
+  connect(m_removeKeyBtn, &QPushButton::clicked, [this]() {
+    if (!m_apiKeyManager) return;
+    m_apiKeyManager->removeKey(m_profile.id);
+    m_apiKeyInput->clear();
+    m_apiKeyStatus->setText("API key removed");
+    UIHelpers::applyStatusRole(m_apiKeyStatus);
+    m_removeKeyBtn->setVisible(false);
+    emit modified();
+  });
+  apiBtnLayout->addWidget(m_removeKeyBtn);
+  apiBtnLayout->addStretch();
+
+  apiLayout->addLayout(apiBtnLayout);
+  layout->addWidget(apiGroup);
+
+  // Connect validation signals
+  if (m_apiKeyManager) {
+    connect(m_apiKeyManager, &APIKeyManager::keyValidated, this,
+            [this](const QString &profileId,
+                   const APIKeyManager::TokenInfo &tokenInfo,
+                   const QString &accountName) {
+              if (profileId != m_profile.id) return;
+              m_validateBtn->setEnabled(true);
+
+              // Store the key on successful validation
+              QString key = m_apiKeyInput->text().trimmed();
+              m_apiKeyManager->storeKey(m_profile.id, key);
+
+              // Build status text
+              QString status = "✅ Valid";
+              if (!accountName.isEmpty()) {
+                status += " — " + accountName;
+              }
+              if (!tokenInfo.permissions.isEmpty()) {
+                status += "\nPermissions: " +
+                          tokenInfo.permissions.join(", ");
+              }
+              m_apiKeyStatus->setText(status);
+              UIHelpers::applySuccessColorRole(m_apiKeyStatus);
+              m_removeKeyBtn->setVisible(true);
+              m_profile.hasApiKey = true;
+              emit modified();
+            });
+
+    connect(m_apiKeyManager, &APIKeyManager::keyValidationFailed, this,
+            [this](const QString &profileId, const QString &error) {
+              if (profileId != m_profile.id) return;
+              m_validateBtn->setEnabled(true);
+              m_apiKeyStatus->setText("❌ Validation failed: " + error);
+              UIHelpers::applyErrorColorRole(m_apiKeyStatus);
+            });
+  }
+
   layout->addStretch();
 }
 
@@ -253,6 +386,15 @@ void LoginTabWidget::load() {
     m_customPathLabel->setStyleSheet(
         QString("padding: %1px;")
             .arg(ThemeManager::instance().activeTheme().layout.paddingSmall));
+  }
+
+  // API key status
+  if (m_apiKeyManager && m_apiKeyManager->hasKey(m_profile.id)) {
+    m_apiKeyInput->setPlaceholderText("●●●●●●●● (key stored securely)");
+    m_apiKeyStatus->setText("✅ API key is stored in Credential Manager");
+    UIHelpers::applySuccessColorRole(m_apiKeyStatus);
+    m_removeKeyBtn->setVisible(true);
+    m_profile.hasApiKey = true;
   }
 }
 

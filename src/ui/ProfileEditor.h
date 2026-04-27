@@ -39,6 +39,7 @@ class DataService;
 class MarkerController;
 #include "ui/ToggleSwitch.h"
 #include "ui/WindowGridSelector.h"
+#include "ui/profile/AccountTabWidget.h"
 #include "ui/profile/AddonsTabWidget.h"
 #include "ui/profile/ArgumentsTabWidget.h"
 #include "ui/profile/GeneralTabWidget.h"
@@ -124,6 +125,9 @@ private:
 
   // Login tab widget
   LoginTabWidget *m_loginTab = nullptr;
+
+  // Account tab widget
+  AccountTabWidget *m_accountTab = nullptr;
 
   // Graphics tab widget
   GraphicsTabWidget *m_graphicsTab = nullptr;

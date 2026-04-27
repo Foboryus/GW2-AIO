@@ -12,7 +12,7 @@
 #include <QVBoxLayout>
 #include <QWindow>
 
-#include "core/GW2APIClient.h"
+
 #include "core/LaunchManager.h"
 #include "core/UpdateChecker.h"
 
@@ -87,7 +87,6 @@ private:
   LaunchManager *m_launchManager;
   UpdateChecker *m_updateChecker;
   BlishModuleManager *m_blishManager;
-  GW2APIClient *m_apiClient;
   UpdateManager *m_updateManager = nullptr;
   MarkerController *m_markerController;
 

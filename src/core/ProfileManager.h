@@ -111,7 +111,10 @@ struct AccountProfile {
       0; // Time GW2 was in foreground (if tracking enabled)
 
   // GW2 API integration
-  QString gw2ApiKey; // API key for achievement progress tracking
+  // API key stored in Windows Credential Manager (via APIKeyManager)
+  // NOT persisted in JSON — use APIKeyManager::hasKey() to check
+  bool hasApiKey = false; // Populated at runtime by APIKeyManager
+  QStringList selectedBadges; // Max 3 badge type IDs for display
 
   // Per-profile build verification
   // When GW2 updates, each profile's Local.dat needs individual updating.
@@ -120,7 +123,7 @@ struct AccountProfile {
 
   QJsonObject toJson() const {
     QJsonObject obj;
-    obj["schemaVersion"] = 2;
+    obj["schemaVersion"] = 3;
     obj["id"] = id;
     obj["nickname"] = nickname;
     obj["icon"] = icon;
@@ -158,9 +161,9 @@ struct AccountProfile {
     obj["totalPlaytimeSeconds"] = totalPlaytimeSeconds;
     obj["activePlaytimeSeconds"] = activePlaytimeSeconds;
 
-    // GW2 API key
-    if (!gw2ApiKey.isEmpty()) {
-      obj["gw2ApiKey"] = gw2ApiKey;
+    // Badge selection
+    if (!selectedBadges.isEmpty()) {
+      obj["selectedBadges"] = QJsonArray::fromStringList(selectedBadges);
     }
 
     // Per-profile build verification
@@ -254,8 +257,15 @@ struct AccountProfile {
     p.activePlaytimeSeconds =
         obj["activePlaytimeSeconds"].toVariant().toLongLong();
 
-    // GW2 API key
-    p.gw2ApiKey = obj["gw2ApiKey"].toString();
+    // Badge selection
+    QJsonArray badgesArray = obj["selectedBadges"].toArray();
+    for (const auto &badge : badgesArray) {
+      p.selectedBadges.append(badge.toString());
+    }
+
+    // Backward compat: migrate gw2ApiKey if present (handled by APIKeyManager)
+    // The field is intentionally NOT read into a member — it's migrated to
+    // Credential Manager on first load via DataService
 
     // Per-profile build verification
     p.lastVerifiedBuild = obj["lastVerifiedBuild"].toInt(0);

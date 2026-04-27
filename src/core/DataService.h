@@ -29,6 +29,9 @@ class LocalDatManager;
 class GFXManager;
 class ActivationStore;
 class MarkerSettingsManager;
+class APIKeyManager;
+class APICache;
+class GW2APIClient;
 struct AccountProfile;
 
 class DataService : public QObject {
@@ -182,6 +185,15 @@ public:
   /// @brief Get the MarkerSettingsManager instance
   MarkerSettingsManager *markerSettings();
 
+  /// @brief Get the APIKeyManager instance
+  APIKeyManager *apiKeyManager();
+
+  /// @brief Get the APICache instance
+  APICache *apiCache();
+
+  /// @brief Get the GW2APIClient instance
+  GW2APIClient *apiClient();
+
   // =========================================================================
   // UPDATE MANAGER
   // =========================================================================
@@ -208,4 +220,7 @@ private:
   GFXManager *m_gfxManager;
   ActivationStore *m_activationStore;
   MarkerSettingsManager *m_markerSettings;
+  GW2APIClient *m_apiClient;
+  APIKeyManager *m_apiKeyManager;
+  APICache *m_apiCache;
 };

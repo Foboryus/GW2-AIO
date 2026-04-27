@@ -1,11 +1,13 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QQueue>
 #include <QString>
 #include <QTimer>
 
@@ -42,6 +44,12 @@ public:
   void fetchBuild(); // Check current GW2 build number
 
   /**
+   * @brief Validate an API key by fetching /v2/tokeninfo
+   * @param apiKey The key to validate (uses this key, not the stored one)
+   */
+  void fetchTokenInfo(const QString &apiKey);
+
+  /**
    * @brief Generic API request
    */
   void request(const QString &endpoint, bool authenticated = true);
@@ -70,6 +78,7 @@ public:
     int age = 0;
     QString guild;
     int deaths = 0;
+    QString created; // ISO 8601 datetime string
   };
   const QList<Character> &characters() const { return m_characters; }
 
@@ -85,6 +94,8 @@ signals:
   void charactersFetched(const QList<Character> &characters);
   void walletFetched(const QList<WalletCurrency> &wallet);
   void buildFetched(int buildId); // Emitted with current GW2 build number
+  void tokenInfoFetched(const QStringList &permissions,
+                        const QString &tokenName, const QString &apiKey);
   void requestComplete(const QString &endpoint, const QJsonDocument &data);
   void errorOccurred(const QString &endpoint, const QString &error);
 
@@ -96,6 +107,7 @@ private:
   void parseAccount(const QJsonObject &json);
   void parseCharacters(const QJsonArray &json);
   void parseWallet(const QJsonArray &json);
+  void parseTokenInfo(const QJsonObject &json, const QString &apiKey);
 
   QNetworkAccessManager *m_network;
   QString m_apiKey;
@@ -109,4 +121,26 @@ private:
   QMap<int, QString> m_currencyNames;
 
   int m_lastBuildId = 0; // Cache last fetched build
+
+  // --- Rate Limiter (Token Bucket) ---
+  // GW2 API limit: ~300 requests/minute, ~600 tokens/minute
+  // We use 300 tokens max, refill 5/sec for safety margin
+  static constexpr int BUCKET_MAX = 300;
+  static constexpr int REFILL_RATE = 5;       // tokens per second
+  static constexpr int REFILL_INTERVAL = 200; // ms between refill ticks
+
+  int m_tokens = BUCKET_MAX;
+  QElapsedTimer m_lastRefill;
+  QTimer *m_refillTimer = nullptr;
+
+  struct QueuedRequest {
+    QNetworkRequest request;
+    bool isTokenInfo = false;
+  };
+  QQueue<QueuedRequest> m_requestQueue;
+
+  bool tryConsumeToken();
+  void refillTokens();
+  void processQueue();
+  void enqueueOrSend(const QNetworkRequest &req);
 };

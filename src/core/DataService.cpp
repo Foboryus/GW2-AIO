@@ -11,8 +11,11 @@
  */
 
 #include "DataService.h"
+#include "APICache.h"
+#include "APIKeyManager.h"
 #include "DataIntegrityChecker.h"
 #include "GFXManager.h"
+#include "GW2APIClient.h"
 #include "LocalDatManager.h"
 #include "LocalStorageBackend.h"
 #include "ProfileManager.h"
@@ -20,6 +23,11 @@
 #include "UpdateManager.h"
 #include "features/markers/ActivationStore.h"
 #include "features/markers/MarkerSettingsManager.h"
+
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 DataService::DataService(QObject *parent)
     : QObject(parent), m_storageBackend(new LocalStorageBackend()),
@@ -37,7 +45,10 @@ DataService::DataService(QObject *parent)
       m_activationStore(
           new ActivationStore(m_storageBackend->markerStateDir(), this)),
       m_markerSettings(
-          new MarkerSettingsManager(m_storageBackend->markerStateDir(), this)) {
+          new MarkerSettingsManager(m_storageBackend->markerStateDir(), this)),
+      m_apiClient(new GW2APIClient(this)),
+      m_apiKeyManager(new APIKeyManager(m_apiClient, this)),
+      m_apiCache(new APICache(m_storageBackend->apiCacheDir())) {
 
   // Forward ProfileManager signals
   connect(m_profileManager, &ProfileManager::profilesChanged, this,
@@ -73,7 +84,36 @@ DataService::DataService(QObject *parent)
             ActivationStore::deleteProfileState(
                 m_storageBackend->markerStateDir(), id);
             m_markerSettings->deleteForProfile(id);
+            // Clean up API cache and credential when profile is deleted
+            m_apiCache->clearProfile(id);
+            m_apiKeyManager->removeKey(id);
           });
+
+  // Migrate plaintext API keys from old profile JSON to Credential Manager
+  for (const auto &profile : m_profileManager->profiles()) {
+    // Check if old JSON had a gw2ApiKey field by re-reading the file
+    // The field was removed from fromJson, so we read raw JSON
+    QString profilePath =
+        QDir(m_storageBackend->profilesDir()).filePath(profile.id + ".json");
+    QFile file(profilePath);
+    if (file.open(QIODevice::ReadOnly)) {
+      QJsonObject obj =
+          QJsonDocument::fromJson(file.readAll()).object();
+      file.close();
+      QString oldKey = obj["gw2ApiKey"].toString();
+      if (!oldKey.isEmpty()) {
+        m_apiKeyManager->migrateFromJson(profile.id, oldKey);
+        // Remove the old field from the JSON file
+        obj.remove("gw2ApiKey");
+        QFile writeFile(profilePath);
+        if (writeFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+          writeFile.write(QJsonDocument(obj).toJson());
+          qInfo() << "DataService: Removed plaintext gw2ApiKey from"
+                  << profile.id;
+        }
+      }
+    }
+  }
 }
 
 DataService::~DataService() { delete m_storageBackend; }
@@ -352,6 +392,12 @@ ActivationStore *DataService::activationStore() { return m_activationStore; }
 MarkerSettingsManager *DataService::markerSettings() {
   return m_markerSettings;
 }
+
+APIKeyManager *DataService::apiKeyManager() { return m_apiKeyManager; }
+
+APICache *DataService::apiCache() { return m_apiCache; }
+
+GW2APIClient *DataService::apiClient() { return m_apiClient; }
 
 // =========================================================================
 // UPDATE MANAGER

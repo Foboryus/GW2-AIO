@@ -33,6 +33,7 @@ public:
   QString radialConfigDir() const override;
   QString profileDataDir() const override;
   QString markerStateDir() const override;
+  QString apiCacheDir() const override;
   void ensureDirectories() override;
 
 private:

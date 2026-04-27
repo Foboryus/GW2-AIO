@@ -62,6 +62,8 @@ set(CORE_SOURCES
     src/core/OverlayInstance.cpp
     src/core/OverlayInstanceManager.cpp
     src/core/ChildProcessManager.cpp
+    src/core/APIKeyManager.cpp
+    src/core/APICache.cpp
 )
 
 set(CORE_HEADERS
@@ -106,6 +108,8 @@ set(CORE_HEADERS
     src/core/OverlayInstanceManager.h
     src/core/ChildProcessManager.h
     src/core/CredentialRefreshManager.h
+    src/core/APIKeyManager.h
+    src/core/APICache.h
     # QSS template sections (header-only, for IDE visibility)
     src/core/qss/01_Base.h
     src/core/qss/02_Navigation.h
@@ -143,6 +147,7 @@ set(UI_SOURCES
     src/ui/profile/WindowTabWidget.cpp
     src/ui/profile/GraphicsTabWidget.cpp
     src/ui/profile/LoginTabWidget.cpp
+    src/ui/profile/AccountTabWidget.cpp
     src/ui/profile/NetworkTabWidget.cpp
     src/ui/profile/GeneralTabWidget.cpp
     src/ui/profile/HotkeysTabWidget.cpp
@@ -175,6 +180,7 @@ set(UI_HEADERS
     src/ui/profile/MarkersTabWidget.h
     src/ui/profile/MarkerSettingsWidget.h
     src/ui/profile/MarkerPackCard.h
+    src/ui/profile/AccountTabWidget.h
 )
 
 set(MODEL_HEADERS

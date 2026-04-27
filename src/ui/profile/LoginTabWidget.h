@@ -3,9 +3,12 @@
 #include <QWidget>
 
 class QLabel;
+class QLineEdit;
+class QPushButton;
 class LabeledToggle;
 class AccountProfile;
 class DataService;
+class APIKeyManager;
 
 /**
  * @brief Login tab for ProfileEditor
@@ -46,6 +49,7 @@ private:
 
   AccountProfile &m_profile;
   DataService *m_dataService = nullptr;
+  APIKeyManager *m_apiKeyManager = nullptr;
 
   // Local.dat section
   QLabel *m_localDatLabel = nullptr;
@@ -54,4 +58,11 @@ private:
   // Custom GW2 path section
   LabeledToggle *m_customPathToggle = nullptr;
   QLabel *m_customPathLabel = nullptr;
+
+  // API key section
+  QLineEdit *m_apiKeyInput = nullptr;
+  QPushButton *m_apiKeyShowBtn = nullptr;
+  QLabel *m_apiKeyStatus = nullptr;
+  QPushButton *m_validateBtn = nullptr;
+  QPushButton *m_removeKeyBtn = nullptr;
 };
