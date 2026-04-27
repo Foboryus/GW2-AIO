@@ -1,5 +1,8 @@
 #include "MainWindow.h"
+#include "core/APIKeyManager.h"
 #include "core/AddonManager.h"
+#include "core/BadgeDataProvider.h"
+#include "core/BadgeRegistry.h"
 #include "core/BlishModuleManager.h"
 #include "core/DataService.h"
 #include "core/HotkeyManager.h"
@@ -117,6 +120,26 @@ MainWindow::MainWindow(DataService *dataService,
   if (!savedPath.isEmpty()) {
     setGW2Path(savedPath);
   }
+
+  // Deferred startup badge refresh (after UI is fully visible)
+  QTimer::singleShot(2000, this, [this]() {
+    auto *badgeProvider = m_dataService->badgeDataProvider();
+    auto *apiKeyMgr = m_dataService->apiKeyManager();
+    auto profiles = m_dataService->profiles();
+    for (const auto &p : profiles) {
+      if (!p.selectedBadges.isEmpty() && apiKeyMgr->hasKey(p.id)) {
+        badgeProvider->refreshProfile(p.id, apiKeyMgr->retrieveKey(p.id),
+                                      p.selectedBadges);
+      }
+    }
+    // Update launcher when badge data arrives
+    connect(badgeProvider, &BadgeDataProvider::badgeDataReady, this,
+            [this](const QString &) {
+              if (m_launcherWidget)
+                m_launcherWidget->refreshRunningStates();
+              updateTrayMenu();
+            });
+  });
 
   // === Crash Detection: Check if GW2 crashed due to needing patch ===
   if (m_launchManager->checkForPatchCrash()) {
@@ -831,6 +854,8 @@ void MainWindow::setupUI() {
   // Connect profile changes to update tray menu
   connect(m_launcherWidget->profileManager(), &ProfileManager::profilesChanged,
           this, &MainWindow::updateTrayMenu);
+  connect(m_launcherWidget->profileManager(), &ProfileManager::profileUpdated,
+          this, &MainWindow::updateTrayMenu);
 
   // Global hotkeys for per-profile Focus/Minimize
   m_profileHotkeyManager = new HotkeyManager(this);
@@ -1243,6 +1268,26 @@ void MainWindow::updateTrayMenu() {
             m_launcherWidget->launchOrFocusProfile(profileId);
           }
         });
+
+        // Badge subtitle (shows selected badge values under profile name)
+        if (!profile.selectedBadges.isEmpty()) {
+          auto *badgeProvider = m_dataService->badgeDataProvider();
+          QMap<QString, QString> vals =
+              badgeProvider->cachedValues(profile.id);
+          QStringList parts;
+          for (const QString &bid : profile.selectedBadges) {
+            BadgeDefinition def = BadgeRegistry::badge(bid);
+            if (!def.id.isEmpty()) {
+              parts << QString("%1: %2").arg(def.label,
+                                             vals.value(bid, "\u2014"));
+            }
+          }
+          if (!parts.isEmpty()) {
+            auto *badgeAction =
+                m_trayMenu->addAction("  " + parts.join(" | "));
+            badgeAction->setEnabled(false); // Non-clickable subtitle
+          }
+        }
       }
 
       m_trayMenu->addSeparator();
@@ -1256,6 +1301,23 @@ void MainWindow::updateTrayMenu() {
     show();
     raise();
     activateWindow();
+  });
+
+  m_trayMenu->addSeparator();
+
+  // Refresh Badges action
+  auto *refreshBadgesAction = m_trayMenu->addAction(
+      UIHelpers::themedIcon("refresh"), "Refresh Badges");
+  connect(refreshBadgesAction, &QAction::triggered, this, [this]() {
+    auto *badgeProvider = m_dataService->badgeDataProvider();
+    auto *apiKeyMgr = m_dataService->apiKeyManager();
+    auto profiles = m_dataService->profiles();
+    for (const auto &p : profiles) {
+      if (!p.selectedBadges.isEmpty() && apiKeyMgr->hasKey(p.id)) {
+        badgeProvider->refreshProfile(p.id, apiKeyMgr->retrieveKey(p.id),
+                                      p.selectedBadges);
+      }
+    }
   });
 
   m_trayMenu->addSeparator();

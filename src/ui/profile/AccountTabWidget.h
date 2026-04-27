@@ -11,15 +11,17 @@
  * - Inline implementations (use AccountTabWidget.cpp)
  */
 
+#include <QMap>
 #include <QWidget>
 
 class QLabel;
 class QTableWidget;
 class QPushButton;
-class AccountProfile;
+struct AccountProfile;
 class DataService;
 class APIKeyManager;
 class GW2APIClient;
+class QFlowLayout;
 
 class AccountTabWidget : public QWidget {
   Q_OBJECT
@@ -50,6 +52,9 @@ private:
                        int wvwRank, int fractalLevel, int dailyAp,
                        int monthlyAp, bool commander,
                        const QString &createdAt);
+  void setupBadgeSelection();
+  void updateBadgeCardStates();
+  void onBadgeToggled(const QString &badgeId, bool checked);
 
   AccountProfile &m_profile;
   DataService *m_dataService = nullptr;
@@ -71,4 +76,8 @@ private:
 
   // Placeholder for no-key state
   QWidget *m_noKeyPlaceholder = nullptr;
+
+  // Badge selection
+  QWidget *m_badgeGrid = nullptr;
+  QMap<QString, QPushButton *> m_badgeCards;
 };

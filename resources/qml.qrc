@@ -73,6 +73,7 @@
         <file>icons/terminal.svg</file>
         <file>icons/keyboard.svg</file>
         <file>icons/tool.svg</file>
+        <file>icons/target.svg</file>
         <!-- Status icons (colored) -->
         <file>icons/check-circle.svg</file>
         <file>icons/x-circle.svg</file>
@@ -98,6 +99,22 @@
         <!-- Platform icons -->
         <file>icons/steam.svg</file>
         <file>icons/epic.svg</file>
+        <!-- Badge icons (gold themed) -->
+        <file>icons/badge-shield.svg</file>
+        <file>icons/badge-star.svg</file>
+        <file>icons/badge-swords.svg</file>
+        <file>icons/badge-diamond.svg</file>
+        <file>icons/badge-flag.svg</file>
+        <file>icons/badge-mastery.svg</file>
+        <file>icons/badge-legendary.svg</file>
+        <file>icons/badge-mount.svg</file>
+        <file>icons/badge-palette.svg</file>
+        <file>icons/badge-trophy.svg</file>
+        <file>icons/badge-guild.svg</file>
+        <file>icons/badge-globe.svg</file>
+        <file>icons/badge-clock.svg</file>
+        <file>icons/badge-users.svg</file>
+        <file>icons/badge-crown.svg</file>
         <!-- Overlay icons -->
         <file>icons/overlay-marker.svg</file>
         <!-- App icon -->

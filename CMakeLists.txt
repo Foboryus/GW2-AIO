@@ -64,6 +64,10 @@ set(CORE_SOURCES
     src/core/ChildProcessManager.cpp
     src/core/APIKeyManager.cpp
     src/core/APICache.cpp
+    src/core/BadgeRegistry.cpp
+    src/core/BadgeDataProvider.cpp
+    src/core/RadialSettings.cpp
+    src/core/RadialSettingsManager.cpp
 )
 
 set(CORE_HEADERS
@@ -110,6 +114,10 @@ set(CORE_HEADERS
     src/core/CredentialRefreshManager.h
     src/core/APIKeyManager.h
     src/core/APICache.h
+    src/core/BadgeRegistry.h
+    src/core/BadgeDataProvider.h
+    src/core/RadialSettings.h
+    src/core/RadialSettingsManager.h
     # QSS template sections (header-only, for IDE visibility)
     src/core/qss/01_Base.h
     src/core/qss/02_Navigation.h
@@ -154,6 +162,7 @@ set(UI_SOURCES
     src/ui/profile/MarkersTabWidget.cpp
     src/ui/profile/MarkerSettingsWidget.cpp
     src/ui/profile/MarkerPackCard.cpp
+    src/ui/profile/RadialTabWidget.cpp
 )
 
 set(UI_HEADERS

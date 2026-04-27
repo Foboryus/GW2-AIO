@@ -9,6 +9,8 @@
 #include <algorithm>
 
 #include "UIHelpers.h"
+#include "core/BadgeDataProvider.h"
+#include "core/BadgeRegistry.h"
 #include "core/CredentialRefreshManager.h"
 #include "core/DataService.h"
 #include "core/ThemeManager.h"
@@ -521,7 +523,8 @@ void LauncherWidget::updateProfileList() {
   for (const auto &profile : profiles) {
     auto *item = new QListWidgetItem();
     item->setData(Qt::UserRole, profile.id);
-    item->setSizeHint(QSize(0, 40));
+    int rowHeight = profile.selectedBadges.isEmpty() ? 40 : 58;
+    item->setSizeHint(QSize(0, rowHeight));
     m_profileList->addItem(item);
 
     // Create row widget with toggle
@@ -548,7 +551,12 @@ void LauncherWidget::updateProfileList() {
     iconLabel->setFixedSize(24, 24);
     rowLayout->addWidget(iconLabel);
 
-    // Profile name
+    // Profile name + badges (vertical stack)
+    auto *nameCol = new QWidget();
+    auto *nameLayout = new QVBoxLayout(nameCol);
+    nameLayout->setContentsMargins(0, 0, 0, 0);
+    nameLayout->setSpacing(1);
+
     QString text = profile.nickname;
     if (profile.accountProvider == AccountProvider::Steam) {
       text += " (Steam)";
@@ -568,7 +576,35 @@ void LauncherWidget::updateProfileList() {
     } else {
       UIHelpers::applyLabelRole(label);
     }
-    rowLayout->addWidget(label, 1);
+    nameLayout->addWidget(label);
+
+    // Badge pills row (if profile has selected badges)
+    if (!profile.selectedBadges.isEmpty()) {
+      auto *badgeRow = new QWidget();
+      auto *badgeRowLayout = new QHBoxLayout(badgeRow);
+      badgeRowLayout->setContentsMargins(0, 0, 0, 0);
+      badgeRowLayout->setSpacing(4);
+
+      auto *badgeProvider = m_dataService->badgeDataProvider();
+      QMap<QString, QString> badgeValues =
+          badgeProvider->cachedValues(profile.id);
+
+      for (const QString &badgeId : profile.selectedBadges) {
+        BadgeDefinition def = BadgeRegistry::badge(badgeId);
+        if (def.id.isEmpty())
+          continue;
+
+        QString displayText = badgeValues.value(badgeId, "\u2014");
+        auto *pill = new QLabel(QString(" %1: %2 ").arg(def.label, displayText));
+        UIHelpers::applyProfileBadgePillRole(pill);
+        pill->setToolTip(def.label);
+        badgeRowLayout->addWidget(pill);
+      }
+      badgeRowLayout->addStretch();
+      nameLayout->addWidget(badgeRow);
+    }
+
+    rowLayout->addWidget(nameCol, 1);
 
     // Running badge (shown when profile is running)
     if (isRunning) {

@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QGroupBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -24,6 +25,8 @@
 #include <QVBoxLayout>
 
 #include "core/APIKeyManager.h"
+#include "core/BadgeDataProvider.h"
+#include "core/BadgeRegistry.h"
 #include "core/DataService.h"
 #include "core/GW2APIClient.h"
 #include "core/ProfileManager.h" // For AccountProfile
@@ -153,17 +156,9 @@ void AccountTabWidget::setupUI() {
 
   infoLayout->addWidget(charGroup);
 
-  // Badges placeholder
-  auto *badgeGroup = new QGroupBox("Profile Badges");
-  auto *badgeLayout = new QVBoxLayout(badgeGroup);
-  auto *badgePlaceholder =
-      new QLabel("Badge selection coming in Phase 2.\n"
-                 "You'll be able to choose up to 3 badges to display "
-                 "on your profile card and tray menu.");
-  badgePlaceholder->setWordWrap(true);
-  UIHelpers::applyHintRole(badgePlaceholder);
-  badgeLayout->addWidget(badgePlaceholder);
-  infoLayout->addWidget(badgeGroup);
+  // Badge selection group
+  setupBadgeSelection();
+  infoLayout->addWidget(m_badgeGrid);
 
   m_accountInfoContainer->setVisible(false);
   layout->addWidget(m_accountInfoContainer);
@@ -339,4 +334,123 @@ void AccountTabWidget::showAccountInfo(const QString &accountName,
   m_wvwLabel->setText(QString("WvW Rank: %1").arg(wvwRank));
   m_fractalLabel->setText(QString("Fractal Level: %1").arg(fractalLevel));
   m_commanderLabel->setText(commander ? "Commander: Yes" : "Commander: No");
+}
+
+void AccountTabWidget::setupBadgeSelection() {
+  m_badgeGrid = new QWidget();
+  auto *outerLayout = new QVBoxLayout(m_badgeGrid);
+  outerLayout->setContentsMargins(0, 0, 0, 0);
+
+  auto *group = new QGroupBox("Profile Badges (select up to 3)");
+  auto *groupLayout = new QVBoxLayout(group);
+
+  auto *hint = new QLabel(
+      "Choose up to 3 badges to display on your profile card and tray menu.");
+  hint->setWordWrap(true);
+  UIHelpers::applyHintRole(hint);
+  groupLayout->addWidget(hint);
+
+  // Grid of badge cards (3 columns)
+  auto *gridWidget = new QWidget();
+  auto *grid = new QGridLayout(gridWidget);
+  grid->setSpacing(6);
+
+  const auto badges = BadgeRegistry::allBadges();
+  int col = 0;
+  int row = 0;
+  const int columns = 3;
+
+  for (const auto &badge : badges) {
+    auto *card = new QPushButton();
+    card->setCheckable(true);
+    card->setChecked(m_profile.selectedBadges.contains(badge.id));
+    card->setIcon(UIHelpers::themedIcon(badge.iconName));
+    card->setIconSize(QSize(18, 18));
+    card->setText(badge.label);
+    card->setToolTip(badge.label);
+    card->setMinimumHeight(32);
+    card->setProperty("badgeId", badge.id);
+
+    // Use neutral style as base — checked state handled by updateBadgeCardStates
+    UIHelpers::applyNeutralStyle(card);
+
+    connect(card, &QPushButton::toggled, this,
+            [this, badgeId = badge.id](bool checked) {
+              onBadgeToggled(badgeId, checked);
+            });
+
+    m_badgeCards[badge.id] = card;
+    grid->addWidget(card, row, col);
+
+    ++col;
+    if (col >= columns) {
+      col = 0;
+      ++row;
+    }
+  }
+
+  groupLayout->addWidget(gridWidget);
+  outerLayout->addWidget(group);
+
+  updateBadgeCardStates();
+}
+
+void AccountTabWidget::updateBadgeCardStates() {
+  const auto &theme = ThemeManager::instance().activeTheme();
+  const auto &pb = theme.profileBadge;
+  int selectedCount = m_profile.selectedBadges.size();
+
+  for (auto it = m_badgeCards.begin(); it != m_badgeCards.end(); ++it) {
+    QPushButton *card = it.value();
+    bool isChecked = card->isChecked();
+
+    if (isChecked) {
+      // Selected state — gold/accent border + subtle bg
+      card->setStyleSheet(
+          QString("QPushButton { background: %1; border: 2px solid %2; "
+                  "border-radius: 6px; padding: 4px 8px; text-align: left; "
+                  "color: %3; font-weight: bold; }"
+                  "QPushButton:hover { background: %1; border-color: %2; }")
+              .arg(pb.selectedBg, pb.selectedBorder, pb.pillText));
+    } else {
+      // Unselected state — dim if max reached
+      bool atMax = selectedCount >= 3;
+      card->setEnabled(!atMax);
+      card->setStyleSheet(QString()); // Clear inline override
+      UIHelpers::applyNeutralStyle(card);
+    }
+  }
+}
+
+void AccountTabWidget::onBadgeToggled(const QString &badgeId, bool checked) {
+  if (checked) {
+    if (m_profile.selectedBadges.size() >= 3) {
+      // Already at max — uncheck the card without saving
+      if (m_badgeCards.contains(badgeId)) {
+        m_badgeCards[badgeId]->blockSignals(true);
+        m_badgeCards[badgeId]->setChecked(false);
+        m_badgeCards[badgeId]->blockSignals(false);
+      }
+      return;
+    }
+    m_profile.selectedBadges.append(badgeId);
+  } else {
+    m_profile.selectedBadges.removeAll(badgeId);
+  }
+
+  // Save to profile
+  if (m_dataService) {
+    m_dataService->updateProfile(m_profile);
+
+    // Refresh badge data for the updated selection
+    if (!m_profile.selectedBadges.isEmpty() && m_apiKeyManager &&
+        m_apiKeyManager->hasKey(m_profile.id)) {
+      m_dataService->badgeDataProvider()->refreshProfile(
+          m_profile.id, m_apiKeyManager->retrieveKey(m_profile.id),
+          m_profile.selectedBadges);
+    }
+  }
+
+  updateBadgeCardStates();
+  emit modified();
 }

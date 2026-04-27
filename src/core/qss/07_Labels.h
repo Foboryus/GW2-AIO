@@ -132,6 +132,20 @@ QLabel[role="infoBanner"] {
     font-size: 12px;
 }
 
+/* ================================================================
+   PROFILE BADGE PILL (API badge on launcher cards)
+   ================================================================ */
+
+QLabel[role="profileBadgePill"] {
+    background-color: {{profileBadge.pillBg}};
+    color: {{profileBadge.pillText}};
+    border: 1px solid {{profileBadge.pillBorder}};
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: {{layout.fontSize.badge}}px;
+    font-weight: bold;
+}
+
 )QSS");
 }
 

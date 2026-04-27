@@ -161,6 +161,12 @@ void ThemeManager::compileAndApply() {
   qss.replace("{{widget.packCard.border}}", w.packCardBorder);
   qss.replace("{{widget.packCard.hoverBorder}}", w.packCardHoverBorder);
 
+  // --- Profile badge pill tokens ---
+  const auto &pb = m_activeTheme.profileBadge;
+  qss.replace("{{profileBadge.pillBg}}", pb.pillBg);
+  qss.replace("{{profileBadge.pillBorder}}", pb.pillBorder);
+  qss.replace("{{profileBadge.pillText}}", pb.pillText);
+
   // --- Layout tokens ---
   const auto &l = m_activeTheme.layout;
   qss.replace("{{layout.borderRadius}}", QString::number(l.borderRadius));

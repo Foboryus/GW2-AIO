@@ -47,6 +47,7 @@ class MarkerController;
 #include "ui/profile/HotkeysTabWidget.h"
 #include "ui/profile/LoginTabWidget.h"
 #include "ui/profile/MarkersTabWidget.h"
+#include "ui/profile/RadialTabWidget.h"
 #include "ui/profile/NetworkTabWidget.h"
 #include "ui/profile/WindowTabWidget.h"
 
@@ -145,6 +146,9 @@ private:
   // Markers tab widget
   MarkersTabWidget *m_markersTab = nullptr;
   MarkerController *m_markerController = nullptr;
+
+  // Radial tab widget
+  RadialTabWidget *m_radialTab = nullptr;
 
   // Complete official GW2 arguments from wiki
   // Source: https://wiki.guildwars2.com/wiki/Command_line_arguments

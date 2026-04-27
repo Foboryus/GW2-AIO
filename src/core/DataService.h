@@ -32,6 +32,8 @@ class MarkerSettingsManager;
 class APIKeyManager;
 class APICache;
 class GW2APIClient;
+class RadialSettingsManager;
+class BadgeDataProvider;
 struct AccountProfile;
 
 class DataService : public QObject {
@@ -194,6 +196,12 @@ public:
   /// @brief Get the GW2APIClient instance
   GW2APIClient *apiClient();
 
+  /// @brief Get the RadialSettingsManager instance
+  RadialSettingsManager *radialSettings2();
+
+  /// @brief Get the BadgeDataProvider instance
+  BadgeDataProvider *badgeDataProvider();
+
   // =========================================================================
   // UPDATE MANAGER
   // =========================================================================
@@ -223,4 +231,6 @@ private:
   GW2APIClient *m_apiClient;
   APIKeyManager *m_apiKeyManager;
   APICache *m_apiCache;
+  BadgeDataProvider *m_badgeDataProvider;
+  RadialSettingsManager *m_radialSettings2;
 };

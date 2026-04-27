@@ -304,6 +304,32 @@ ThemeData::OverlayTokens::fromJson(const QJsonObject &obj,
 }
 
 // ============================================================================
+// ThemeData::ProfileBadgeTokens
+// ============================================================================
+
+QJsonObject ThemeData::ProfileBadgeTokens::toJson() const {
+  return {{"pillBg", pillBg},
+          {"pillBorder", pillBorder},
+          {"pillText", pillText},
+          {"pillIconColor", pillIconColor},
+          {"selectedBg", selectedBg},
+          {"selectedBorder", selectedBorder}};
+}
+
+ThemeData::ProfileBadgeTokens
+ThemeData::ProfileBadgeTokens::fromJson(const QJsonObject &obj,
+                                        const ProfileBadgeTokens &d) {
+  ProfileBadgeTokens p;
+  p.pillBg = validColor(obj, "pillBg", d.pillBg);
+  p.pillBorder = validColor(obj, "pillBorder", d.pillBorder);
+  p.pillText = validColor(obj, "pillText", d.pillText);
+  p.pillIconColor = validColor(obj, "pillIconColor", d.pillIconColor);
+  p.selectedBg = validColor(obj, "selectedBg", d.selectedBg);
+  p.selectedBorder = validColor(obj, "selectedBorder", d.selectedBorder);
+  return p;
+}
+
+// ============================================================================
 // ThemeData::Layout
 // ============================================================================
 
@@ -395,6 +421,7 @@ QJsonObject ThemeData::toJson() const {
   obj["buttons"] = buttons.toJson();
   obj["widgets"] = widgets.toJson();
   obj["overlay"] = overlay.toJson();
+  obj["profileBadge"] = profileBadge.toJson();
   obj["layout"] = layout.toJson();
   obj["animations"] = animations.toJson();
   return obj;
@@ -419,6 +446,8 @@ ThemeData ThemeData::fromJson(const QJsonObject &obj) {
       Widgets::fromJson(obj.value("widgets").toObject(), defaults.widgets);
   t.overlay = OverlayTokens::fromJson(obj.value("overlay").toObject(),
                                       defaults.overlay);
+  t.profileBadge = ProfileBadgeTokens::fromJson(
+      obj.value("profileBadge").toObject(), defaults.profileBadge);
   t.layout = Layout::fromJson(obj.value("layout").toObject(), defaults.layout);
   t.animations = Animations::fromJson(obj.value("animations").toObject(),
                                       defaults.animations);
@@ -615,6 +644,14 @@ ThemeData ThemeData::light() {
   t.overlay.iconHoverBg = "#E0E0E0CC";
   t.overlay.expanderColor = "#666666";
 
+  // Profile badge pills
+  t.profileBadge.pillBg = "transparent";
+  t.profileBadge.pillBorder = "#8B6914";
+  t.profileBadge.pillText = "#8B6914";
+  t.profileBadge.pillIconColor = "#8B6914";
+  t.profileBadge.selectedBg = "#E8DFC8";
+  t.profileBadge.selectedBorder = "#8B6914";
+
   return t;
 }
 
@@ -798,6 +835,14 @@ ThemeData ThemeData::navyBlue() {
   t.overlay.iconBg = "#0D1B2ACC";
   t.overlay.iconHoverBg = "#1B2838CC";
   t.overlay.expanderColor = "#667788";
+
+  // Profile badge pills
+  t.profileBadge.pillBg = "transparent";
+  t.profileBadge.pillBorder = "#5DADE2";
+  t.profileBadge.pillText = "#5DADE2";
+  t.profileBadge.pillIconColor = "#5DADE2";
+  t.profileBadge.selectedBg = "#1A3050";
+  t.profileBadge.selectedBorder = "#5DADE2";
 
   return t;
 }

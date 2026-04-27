@@ -13,6 +13,7 @@
 #include "DataService.h"
 #include "APICache.h"
 #include "APIKeyManager.h"
+#include "BadgeDataProvider.h"
 #include "DataIntegrityChecker.h"
 #include "GFXManager.h"
 #include "GW2APIClient.h"
@@ -23,6 +24,7 @@
 #include "UpdateManager.h"
 #include "features/markers/ActivationStore.h"
 #include "features/markers/MarkerSettingsManager.h"
+#include "RadialSettingsManager.h"
 
 #include <QDir>
 #include <QFile>
@@ -48,7 +50,11 @@ DataService::DataService(QObject *parent)
           new MarkerSettingsManager(m_storageBackend->markerStateDir(), this)),
       m_apiClient(new GW2APIClient(this)),
       m_apiKeyManager(new APIKeyManager(m_apiClient, this)),
-      m_apiCache(new APICache(m_storageBackend->apiCacheDir())) {
+      m_apiCache(new APICache(m_storageBackend->apiCacheDir())),
+      m_badgeDataProvider(
+          new BadgeDataProvider(m_apiCache, m_apiClient, this)),
+      m_radialSettings2(
+          new RadialSettingsManager(m_storageBackend->radialConfigDir(), this)) {
 
   // Forward ProfileManager signals
   connect(m_profileManager, &ProfileManager::profilesChanged, this,
@@ -398,6 +404,14 @@ APIKeyManager *DataService::apiKeyManager() { return m_apiKeyManager; }
 APICache *DataService::apiCache() { return m_apiCache; }
 
 GW2APIClient *DataService::apiClient() { return m_apiClient; }
+
+BadgeDataProvider *DataService::badgeDataProvider() {
+  return m_badgeDataProvider;
+}
+
+RadialSettingsManager *DataService::radialSettings2() {
+  return m_radialSettings2;
+}
 
 // =========================================================================
 // UPDATE MANAGER

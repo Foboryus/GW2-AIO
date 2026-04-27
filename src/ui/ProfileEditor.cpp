@@ -50,6 +50,8 @@ ProfileEditor::ProfileEditor(AccountProfile *profile,
           &ProfileEditor::markDirty);
   connect(m_hotkeysTab, &HotkeysTabWidget::modified, this,
           &ProfileEditor::markDirty);
+  connect(m_radialTab, &RadialTabWidget::modified, this,
+          &ProfileEditor::markDirty);
 }
 
 void ProfileEditor::setupUI() {
@@ -96,6 +98,9 @@ void ProfileEditor::setupUI() {
   m_addonsTab = new AddonsTabWidget(m_profile, this);
   m_hotkeysTab = new HotkeysTabWidget(m_profile, m_dataService, this);
 
+  // Radial tab
+  m_radialTab = new RadialTabWidget(m_profile, m_dataService, this);
+
   // Add to stack in order
   m_stack->addWidget(m_generalTab);   // 0
   m_stack->addWidget(m_loginTab);     // 1
@@ -106,12 +111,13 @@ void ProfileEditor::setupUI() {
   m_stack->addWidget(m_graphicsTab);  // 6
   m_stack->addWidget(m_addonsTab);    // 7
   m_stack->addWidget(m_hotkeysTab);   // 8
+  m_stack->addWidget(m_radialTab);    // 9
 
   // Markers tab (conditional)
   if (m_markerController && m_dataService) {
     m_markersTab = new MarkersTabWidget(
         m_profile, m_dataService->markerSettings(), m_markerController, this);
-    m_stack->addWidget(m_markersTab); // 9
+    m_stack->addWidget(m_markersTab); // 10
   }
 
   // ===== 2-Row Tab Bar =====
@@ -126,7 +132,8 @@ void ProfileEditor::setupUI() {
                         {"terminal", "Arguments"},
                         {"layout", "Window"}};
   QList<TabDef> row2 = {
-      {"monitor", "Graphics"}, {"tool", "Addons"}, {"keyboard", "Hotkeys"}};
+      {"monitor", "Graphics"}, {"tool", "Addons"}, {"keyboard", "Hotkeys"},
+      {"target", "Radial"}};
   if (m_markersTab) {
     row2.append(TabDef{"layers", "Markers"});
   }
@@ -232,6 +239,9 @@ void ProfileEditor::loadProfile() {
   if (m_markersTab) {
     m_markersTab->load();
   }
+
+  // Radial - delegate to tab widget
+  m_radialTab->load();
 }
 
 void ProfileEditor::saveProfile() {
@@ -288,6 +298,9 @@ void ProfileEditor::saveProfile() {
 
   // Hotkeys - delegate to tab widget
   m_hotkeysTab->save();
+
+  // Radial - delegate to tab widget
+  m_radialTab->save();
 }
 
 void ProfileEditor::onAccept() {

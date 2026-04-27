@@ -383,6 +383,9 @@ inline void applySuccessLabelRole(QLabel *lbl) {
 }
 inline void applyPopupLabelRole(QLabel *lbl) { applyRole(lbl, "popupLabel"); }
 inline void applyBadgeRole(QLabel *lbl) { applyRole(lbl, "badge"); }
+inline void applyProfileBadgePillRole(QLabel *lbl) {
+  applyRole(lbl, "profileBadgePill");
+}
 inline void applyInfoBannerRole(QLabel *lbl) { applyRole(lbl, "infoBanner"); }
 
 // ---- Color roles (apply to any widget) ----

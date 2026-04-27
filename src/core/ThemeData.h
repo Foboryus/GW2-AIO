@@ -244,6 +244,20 @@ struct ThemeData {
                                   const OverlayTokens &defaults);
   } overlay;
 
+  // ---- Profile Badge Tokens (API badge pills on launcher cards) ----
+  struct ProfileBadgeTokens {
+    QString pillBg = "transparent";     // Pill background
+    QString pillBorder = "#C09C5B";     // Gold border
+    QString pillText = "#C09C5B";       // Text color
+    QString pillIconColor = "#C09C5B";  // Icon tint
+    QString selectedBg = "#3A3020";     // Selection card bg (editor)
+    QString selectedBorder = "#C09C5B"; // Selection card border (editor)
+
+    QJsonObject toJson() const;
+    static ProfileBadgeTokens fromJson(const QJsonObject &obj,
+                                       const ProfileBadgeTokens &defaults);
+  } profileBadge;
+
   // ---- Layout Tokens ----
   struct Layout {
     int borderRadius = 6;
