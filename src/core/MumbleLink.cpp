@@ -435,8 +435,13 @@ QMatrix4x4 CompassData::buildTransformationMatrix(const QRectF &miniRect,
   // --- Step 6: MapCenter offset ---
   // TacO: offset = -((mapCenter - playerPos) * windowTooSmallScale).Rotated(rotation)
   // where playerPos comes from CompassData (continent coords), NOT charPosition
-  float offsetX = -(mapCenterX - playerX) * windowTooSmallScale;
-  float offsetY = -(mapCenterY - playerY) * windowTooSmallScale;
+  // NOTE: windowTooSmallScale is NOT applied here yet — needs investigation.
+  // Applying it directly breaks minimap rendering (player icon / border disappear).
+  // The rect already compensates for WTS in computeMinimapRect(), so applying
+  // it again here may double-scale. Needs careful TacO cross-reference.
+  Q_UNUSED(windowTooSmallScale);
+  float offsetX = -(mapCenterX - playerX);
+  float offsetY = -(mapCenterY - playerY);
 
   // Rotate the offset by compass rotation
   if (rotation != 0.0f) {
