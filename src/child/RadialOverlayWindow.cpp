@@ -563,10 +563,22 @@ void RadialOverlayWindow::onMumbleDataUpdated() {
     m_idleCallback();
   }
 
+  // Z-order enforcement: MUST run even when wheel is idle.
+  // Per Z-Order.md: "Z-order MUST be enforced on every tick/frame."
+  // Without this, after focus loss/regain the overlay window ends up
+  // behind GW2 — the wheel activates (logs confirm) but is invisible
+  // because DWM composites it behind the game window.
+  // Throttled to ~15Hz to avoid excessive DWM recomposition.
+  if (m_isTracking && m_d3dContext.isInitialized()) {
+    if (++m_positionTickCount % 4 == 0) {
+      updatePosition();
+    }
+  }
+
   // Skip entire render path when wheel is inactive.
   // RadialController sets m_wheelNeedsRendering=true on activation
   // and false on fade-out complete. Without this, onRenderFrame()
-  // runs at 62.5Hz doing updatePosition() even when the wheel is hidden.
+  // runs at 62.5Hz doing GPU work even when the wheel is hidden.
   if (!m_wheelNeedsRendering) {
     return;
   }
@@ -577,14 +589,6 @@ void RadialOverlayWindow::onMumbleDataUpdated() {
 void RadialOverlayWindow::onRenderFrame() {
   if (!m_isTracking || !m_d3dContext.isInitialized()) {
     return;
-  }
-
-  // Throttle updatePosition() to ~15Hz (every 4th tick at 62.5Hz).
-  // updatePosition() calls OverlayZOrder::findInsertAfter() -> EnumWindows()
-  // which iterates ALL visible windows — extremely expensive at 62.5Hz.
-  // WinEvent hook handles position tracking between throttled updates.
-  if (++m_positionTickCount % 4 == 0) {
-    updatePosition();
   }
 
   // NOTE: No stall detection for radial. Unlike the 3D/minimap overlays
