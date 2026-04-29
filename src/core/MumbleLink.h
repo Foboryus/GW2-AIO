@@ -74,23 +74,11 @@ struct CompassData {
    * @brief Build a transformation matrix for minimap/bigmap rendering
    * Converts world coordinates → pixel coordinates within the minimap rect.
    * @param miniRect The screen rectangle of the minimap
-   * @param charPosition Player world position (fAvatarPosition)
    * @param ignoreRotation true for big map (no rotation), false for minimap
-   * @param windowTooSmallScale GW2's internal UI downscale for small windows
-   *        (TacO: GetWindowTooSmallScale). Default 1.0 for fullscreen.
    */
   QMatrix4x4 buildTransformationMatrix(const QRectF &miniRect,
                                        const QVector3D &charPosition,
-                                       bool ignoreRotation,
-                                       float windowTooSmallScale = 1.0f) const;
-
-  /**
-   * @brief Compute GW2's internal UI downscale for small windows.
-   * TacO: GetWindowTooSmallScale — when client area < 1024×768,
-   * GW2 scales its UI rendering down. MumbleLink compass values
-   * report "logical" size, so we must apply the same factor.
-   */
-  static float computeWindowTooSmallScale(int screenW, int screenH);
+                                       bool ignoreRotation) const;
 };
 
 /**

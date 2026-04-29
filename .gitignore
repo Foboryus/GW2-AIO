@@ -36,8 +36,8 @@ dbgview.log
 
 # Internal dev folders (local only)
 .agent/
-docs/
-features/
+/docs/
+/features/
 
 # Release packages
 *.zip

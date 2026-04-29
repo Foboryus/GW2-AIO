@@ -222,8 +222,4 @@ private:
   static constexpr int FOCUSED_POLL_MS = 16;   // ~62.5Hz when focused (matches GW2 ~60Hz)
   static constexpr int IDLE_POLL_MS = 5000;    // 5s heartbeat when unfocused
   static constexpr qint64 FOCUS_LOSS_DEBOUNCE_MS = 500; // 500ms grace period
-
-  // Pipe timer constants — settings sync doesn't need 10Hz when unfocused
-  static constexpr int FOCUSED_PIPE_POLL_MS = 100;  // 10Hz — responsive settings sync
-  static constexpr int IDLE_PIPE_POLL_MS = 1000;    // 1Hz — settings can wait
 };

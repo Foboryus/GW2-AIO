@@ -397,8 +397,7 @@ void MumbleLink::parseIdentityJson(const QString &identityStr) {
 
 QMatrix4x4 CompassData::buildTransformationMatrix(const QRectF &miniRect,
                                                   const QVector3D &charPosition,
-                                                  bool ignoreRotation,
-                                                  float windowTooSmallScale) const {
+                                                  bool ignoreRotation) const {
   // Exact replication of TacO's CompassData::BuildTransformationMatrix
   // Converts world (Mumble) coordinates → pixel coordinates on the minimap
   //
@@ -433,13 +432,8 @@ QMatrix4x4 CompassData::buildTransformationMatrix(const QRectF &miniRect,
   }
 
   // --- Step 6: MapCenter offset ---
-  // TacO: offset = -((mapCenter - playerPos) * windowTooSmallScale).Rotated(rotation)
+  // TacO: offset = -((mapCenter - playerPos) * windowScale).Rotated(rotation)
   // where playerPos comes from CompassData (continent coords), NOT charPosition
-  // NOTE: windowTooSmallScale is NOT applied here yet — needs investigation.
-  // Applying it directly breaks minimap rendering (player icon / border disappear).
-  // The rect already compensates for WTS in computeMinimapRect(), so applying
-  // it again here may double-scale. Needs careful TacO cross-reference.
-  Q_UNUSED(windowTooSmallScale);
   float offsetX = -(mapCenterX - playerX);
   float offsetY = -(mapCenterY - playerY);
 
@@ -483,16 +477,4 @@ QMatrix4x4 CompassData::buildTransformationMatrix(const QRectF &miniRect,
   result = result * worldScale;
 
   return result;
-}
-
-float CompassData::computeWindowTooSmallScale(int screenW, int screenH) {
-  constexpr float kMinW = 1024.0f;
-  constexpr float kMinH = 768.0f;
-  float wtsW = (screenW < static_cast<int>(kMinW))
-                   ? static_cast<float>(screenW) / kMinW
-                   : 1.0f;
-  float wtsH = (screenH < static_cast<int>(kMinH))
-                   ? static_cast<float>(screenH) / kMinH
-                   : 1.0f;
-  return qMin(wtsW, wtsH);
 }

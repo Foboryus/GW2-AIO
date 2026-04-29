@@ -629,8 +629,11 @@ QRectF TrailPipeline::computeMinimapRect() const {
   // --- GW2 window-too-small scaling (TacO: GetWindowTooSmallScale) ---
   // Matches MinimapRenderer::computeMinimapRect — GW2 scales UI internally
   // when client area is below ~1024x768, but MumbleLink dims don't change.
-  float windowTooSmallScale = CompassData::computeWindowTooSmallScale(
-      static_cast<int>(screenW), static_cast<int>(screenH));
+  constexpr float kMinWindowWidth = 1024.0f;
+  constexpr float kMinWindowHeight = 768.0f;
+  float wtsW = (screenW < kMinWindowWidth) ? screenW / kMinWindowWidth : 1.0f;
+  float wtsH = (screenH < kMinWindowHeight) ? screenH / kMinWindowHeight : 1.0f;
+  float windowTooSmallScale = qMin(wtsW, wtsH);
 
   float cw = static_cast<float>(compass.compassWidth) * windowTooSmallScale;
   float ch = static_cast<float>(compass.compassHeight) * windowTooSmallScale;
@@ -885,10 +888,8 @@ void TrailPipeline::renderMinimap() {
 
   // --- Build world→NDC transformation matrix ---
   // Step 1: buildTransformationMatrix gives world→pixel coords (Qt col-vec)
-  float wts = CompassData::computeWindowTooSmallScale(
-      static_cast<int>(screenW), static_cast<int>(screenH));
   QMatrix4x4 worldToPixel = compass.buildTransformationMatrix(
-      renderRect, m_mumble->playerPosition(), bigMap, wts);
+      renderRect, m_mumble->playerPosition(), bigMap);
 
   // [DEBUG] Diagnostic: log compass data every ~200 frames to trace drift
   {
