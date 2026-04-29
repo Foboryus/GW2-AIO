@@ -564,17 +564,15 @@ void ChildProcess::setFocusedPollRate()
     if (m_mumbleLink && m_mumbleLink->isRunning()) {
         m_mumbleLink->setUpdateInterval(FOCUSED_POLL_MS);
     }
-    if (m_pipeReadTimer) {
-        m_pipeReadTimer->setInterval(FOCUSED_PIPE_POLL_MS);
-    }
+    // NOTE: m_pipeReadTimer intentionally kept at fixed 100ms (10Hz).
+    // Throttling pipe reads on focus loss caused permanent rendering loss
+    // after focus regain — pipe FOCUS commands interact with the child's
+    // own Layer 1/2 focus detection in a way that prevents recovery.
 }
 
 void ChildProcess::setIdlePollRate()
 {
     if (m_mumbleLink && m_mumbleLink->isRunning()) {
         m_mumbleLink->setUpdateInterval(IDLE_POLL_MS);
-    }
-    if (m_pipeReadTimer) {
-        m_pipeReadTimer->setInterval(IDLE_PIPE_POLL_MS);
     }
 }
