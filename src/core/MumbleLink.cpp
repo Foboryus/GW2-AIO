@@ -311,13 +311,13 @@ void MumbleLink::readMumbleLink() {
     target.mapScale = ctx->mapScale;
     target.uiScale = uiScale;
 
-    // [DEVLOG] compass data change-detection (log only when dimensions change)
-    static int s_lastLoggedW = 0, s_lastLoggedH = 0;
-    if (target.compassWidth != s_lastLoggedW ||
-        target.compassHeight != s_lastLoggedH) {
-      s_lastLoggedW = target.compassWidth;
-      s_lastLoggedH = target.compassHeight;
+    // [DEVLOG] compass data change-detection (per-instance member variables)
+    if (target.compassWidth != m_lastLoggedCompassW ||
+        target.compassHeight != m_lastLoggedCompassH) {
+      m_lastLoggedCompassW = target.compassWidth;
+      m_lastLoggedCompassH = target.compassHeight;
       qInfo() << "[DEVLOG] MumbleLink: compass changed —"
+              << "link:" << m_linkName
               << "raw:" << ctx->compassWidth << "x" << ctx->compassHeight
               << "scaled:" << target.compassWidth << "x" << target.compassHeight
               << "uiScale:" << uiScale << "mapScale:" << target.mapScale

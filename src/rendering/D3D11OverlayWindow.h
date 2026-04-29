@@ -133,6 +133,12 @@ public:
   void setQtOverlayHwnd(HWND hwnd) { m_qtOverlayHwnd = hwnd; }
 
   /**
+   * @brief Set the z-order layer for cross-process overlay stacking.
+   * Higher layers render above lower layers. See OverlayZOrder.h.
+   */
+  void setZOrderLayer(int layer) { m_zOrderLayer = layer; }
+
+  /**
    * @brief Focus-aware throttling: pause/resume D3D11 rendering
    * Set by OverlayInstance when GW2 focus changes.
    */
@@ -209,6 +215,9 @@ private:
   // Qt overlay HWND for z-order coordination (set via setQtOverlayHwnd)
   HWND m_qtOverlayHwnd = nullptr;
 
+  // Z-order layer for cross-process stacking (see OverlayZOrder.h)
+  int m_zOrderLayer = 100; // Default: kLayer3D
+
   // --- Core state ---
   MumbleLink *m_mumbleLink = nullptr;
   MarkerManager *m_markerManager = nullptr;
@@ -266,8 +275,19 @@ private:
   // HUD visibility (auto-hide on loading/char-select — TacO approach)
   uint32_t m_lastUiTick = 0;
   qint64 m_lastTickChangeMs = 0; // Elapsed ms when uiTick last changed
-  static constexpr qint64 kStallMs = 200; // Hide after 200ms stale (TacO: 333ms)
+  static constexpr qint64 kStallMs = 333; // TacO threshold: 333ms stale → hide
   bool m_needsClearFrame = false; // Push one clear frame on hide transition
+
+  // Throttle counter for per-frame updatePosition() (reduces SetWindowPos calls)
+  int m_positionTickCount = 0;
+
+  // Render throttle: skip render() every other tick to reduce Present() rate.
+  // Markers/trails are static geometry — 30fps is visually identical to 60fps.
+  int m_renderTickCount = 0;
+
+  // Z-order cache: skip SetWindowPos when insertion point hasn't changed.
+  // Redundant SetWindowPos calls trigger DWM recomposition → flicker.
+  HWND m_lastInsertAfterHwnd = nullptr;
 
   // High-resolution frame timer (for stall detection)
   // Uses QueryPerformanceCounter on Windows — zero allocation per call.

@@ -4,6 +4,24 @@
         <file alias="shaders/marker.hlsl">../src/rendering/shaders/marker.hlsl</file>
         <file alias="shaders/trail.hlsl">../src/rendering/shaders/trail.hlsl</file>
         <file alias="shaders/sprite.hlsl">../src/rendering/shaders/sprite.hlsl</file>
+        <!-- Radial menu HLSL shaders -->
+        <file alias="shaders/radial/radial_noise.hlsl">shaders/radial/radial_noise.hlsl</file>
+        <file alias="shaders/radial/radial_common.hlsli">shaders/radial/radial_common.hlsli</file>
+        <file alias="shaders/radial/radial_vs.hlsl">shaders/radial/radial_vs.hlsl</file>
+        <file alias="shaders/radial/radial_wheel_ps.hlsl">shaders/radial/radial_wheel_ps.hlsl</file>
+        <file alias="shaders/radial/radial_element_ps.hlsl">shaders/radial/radial_element_ps.hlsl</file>
+        <file alias="shaders/radial/radial_cursor_ps.hlsl">shaders/radial/radial_cursor_ps.hlsl</file>
+        <file alias="shaders/radial/radial_delay_ps.hlsl">shaders/radial/radial_delay_ps.hlsl</file>
+        <!-- AIO-styled radial SVG icons (gold #C09C57 stroke, transparent bg) -->
+        <file alias="radial/svg/mount_raptor.svg">radial/svg/mount_raptor.svg</file>
+        <file alias="radial/svg/mount_springer.svg">radial/svg/mount_springer.svg</file>
+        <file alias="radial/svg/mount_skimmer.svg">radial/svg/mount_skimmer.svg</file>
+        <file alias="radial/svg/mount_jackal.svg">radial/svg/mount_jackal.svg</file>
+        <file alias="radial/svg/mount_griffon.svg">radial/svg/mount_griffon.svg</file>
+        <file alias="radial/svg/mount_rollerbeetle.svg">radial/svg/mount_rollerbeetle.svg</file>
+        <file alias="radial/svg/mount_warclaw.svg">radial/svg/mount_warclaw.svg</file>
+        <file alias="radial/svg/mount_skyscale.svg">radial/svg/mount_skyscale.svg</file>
+        <file alias="radial/svg/mount_siegeturtle.svg">radial/svg/mount_siegeturtle.svg</file>
         <!-- Minimal icons needed by overlay children -->
         <file>icons/overlay-marker.svg</file>
         <file>icons/player-indicator.svg</file>

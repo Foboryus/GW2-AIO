@@ -26,6 +26,7 @@
 #include <QDebug>
 
 #include "core/MumbleLink.h"
+#include "core/OverlayZOrder.h"
 #include "features/markers/ImageCache.h"
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerSettingsManager.h"
@@ -162,6 +163,12 @@ void D3D11OverlayWindow::setQueryContext(const MarkerQueryContext *ctx) {
 }
 
 void D3D11OverlayWindow::setRenderingEnabled(bool enabled) {
+  if (m_renderingEnabled != enabled) {
+    qInfo() << "[DIAG] D3D11Overlay: RENDERING_CHANGED"
+            << "enabled:" << enabled
+            << "contentVisible:" << m_contentVisible
+            << "hwnd:" << m_hwnd;
+  }
   m_renderingEnabled = enabled;
 }
 
@@ -289,10 +296,11 @@ bool D3D11OverlayWindow::createOverlayWindow() {
   DWORD exStyle = WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP |
                   WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
 
-  m_hwnd = CreateWindowExW(exStyle, m_windowClassName.c_str(),
-                           L"GW2 AIO Overlay",
-                           WS_POPUP, 0, 0, 100, 100, // Will be resized
-                           nullptr, nullptr, hInstance, this);
+  m_hwnd = CreateWindowExW(
+      exStyle, m_windowClassName.c_str(),
+      OverlayZOrder::buildTitle(m_zOrderLayer, L"3D").c_str(),
+      WS_POPUP, 0, 0, 100, 100, // Will be resized
+      nullptr, nullptr, hInstance, this);
 
   if (!m_hwnd) {
     qCritical() << "D3D11Overlay: CreateWindowEx failed:" << GetLastError();
@@ -720,7 +728,7 @@ void CALLBACK D3D11OverlayWindow::foregroundProc(
       // Re-show window that was hidden when focus was lost
       ShowWindow(self->m_hwnd, SW_SHOWNOACTIVATE);
     }
-    qInfo() << "[DEVLOG] D3D11Overlay: focus GAINED — hwnd:" << hwnd
+    qInfo() << "[DIAG] D3D11Overlay: FOREGROUND_GAINED hwnd:" << hwnd
             << "isGW2:" << isGW2 << "isOverlay:" << isOverlay;
     QMetaObject::invokeMethod(self, [self]() {
       emit self->focusChanged(true);
@@ -737,7 +745,7 @@ void CALLBACK D3D11OverlayWindow::foregroundProc(
     QMetaObject::invokeMethod(self, [self]() {
       emit self->focusChanged(false);
     }, Qt::QueuedConnection);
-    qInfo() << "[DEVLOG] D3D11Overlay: focus LOST — hwnd:" << hwnd
+    qInfo() << "[DIAG] D3D11Overlay: FOREGROUND_LOST hwnd:" << hwnd
             << "hideOnUnfocus:" << self->m_hideOnUnfocus
             << "contentVisible:" << self->m_contentVisible;
   }
@@ -776,14 +784,70 @@ void D3D11OverlayWindow::onRenderFrame() {
     return;
   }
 
-  // Per-tick z-order refresh: same as OverlayWindow::ensureZOrder.
-  // Without this, D3D11 z-order only updates on GW2 location change events
-  // (winEventProc), missing focus-change z-order transitions.
-  updatePosition();
+  // Throttle z-order + position refresh to ~15Hz (every 4th tick at 62.5Hz).
+  // updatePosition() calls SetWindowPos which triggers DWM recomposition.
+  // WinEvent hook handles immediate position changes between refreshes.
+  if (++m_positionTickCount % 4 == 0) {
+    updatePosition();
 
-  // TacO approach: track wall-clock time since uiTick last changed.
-  // When GW2 is on a loading screen or character select, uiTick freezes.
-  // After 333ms stale (TacO's proven threshold), hide markers/trails.
+    // Z-order management (throttled together with position).
+    // D3D11 responsibility: "I am always below the Qt overlay."
+    // Qt overlay manages its own position (TOPMOST when GW2 focused,
+    // above-GW2 when not). D3D11 anchors itself below Qt.
+    // This guarantees: GW2 → D3D11 (trails) → Qt (markers + dot)
+    // regardless of focus state — no race condition.
+    // Previously ran every frame (62.5Hz) causing excessive DWM recomposition.
+    if (m_hwnd && m_gw2Hwnd) {
+      HWND qtHwnd = m_qtOverlayHwnd;
+
+      if (qtHwnd) {
+        // Single-process mode: anchor below paired Qt overlay.
+        // Only call SetWindowPos if the anchor changed.
+        if (qtHwnd != m_lastInsertAfterHwnd) {
+          ::SetWindowPos(m_hwnd, qtHwnd, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+          m_lastInsertAfterHwnd = qtHwnd;
+        }
+      } else {
+        // Multi-process mode: use layer-aware z-ordering.
+        // Find the highest AIO sibling below our layer and insert above it.
+        HWND gw2 = reinterpret_cast<HWND>(m_gw2Hwnd);
+        HWND insertAfter = OverlayZOrder::findInsertAfter(
+            gw2, m_zOrderLayer, m_hwnd);
+        if (!insertAfter) {
+          // No lower sibling — insert just above GW2
+          insertAfter = ::GetNextWindow(gw2, GW_HWNDPREV);
+        }
+        // Cache check: skip SetWindowPos if insertion point unchanged.
+        // Redundant SetWindowPos triggers DWM recomposition → flicker.
+        if (insertAfter && insertAfter != m_hwnd &&
+            insertAfter != m_lastInsertAfterHwnd) {
+          ::SetWindowPos(m_hwnd, insertAfter, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+          m_lastInsertAfterHwnd = insertAfter;
+        } else if (!insertAfter || insertAfter == m_hwnd) {
+          if (m_lastInsertAfterHwnd != HWND_TOP) {
+            ::SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0,
+                           SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            m_lastInsertAfterHwnd = HWND_TOP;
+          }
+        }
+      }
+    }
+  }
+
+  // Loading-screen-aware visibility (replaces pure uiTick stall detection).
+  //
+  // OLD approach: hide when uiTick stalls for 333ms. This caused flickering
+  // during normal gameplay because GPU load from rendering briefly stalls
+  // uiTick, triggering false STALL_TOGGLE at ~3Hz.
+  //
+  // NEW approach (matches OverlayWindow pattern at line 713-719):
+  // 1. mapId == 0 → character select, not in-game
+  // 2. position == (0,0,0) → loading screen, pre-spawn
+  // 3. uiTick stall > 2s → edge-case fallback (legitimate disconnect/crash)
+  //
+  // During normal gameplay, brief GPU stalls no longer hide content.
   if (m_mumbleLink && m_mumbleLink->isConnected()) {
     uint32_t currentTick = m_mumbleLink->uiTick();
     qint64 now = m_frameTimer.elapsed();
@@ -793,8 +857,23 @@ void D3D11OverlayWindow::onRenderFrame() {
       m_lastTickChangeMs = now;
     }
 
-    bool shouldShow = (now - m_lastTickChangeMs) < kStallMs;
+    // Primary: detect actual loading screens via game state
+    bool hasValidMap = m_mumbleLink->mapId() > 0;
+    bool hasValidPosition = (m_mumbleLink->playerX() != 0.0f ||
+                             m_mumbleLink->playerY() != 0.0f ||
+                             m_mumbleLink->playerZ() != 0.0f);
+    // Secondary: long stall fallback (2s) for edge cases only
+    bool longStall = (now - m_lastTickChangeMs) >= 2000;
+
+    bool shouldShow = hasValidMap && hasValidPosition && !longStall;
     if (shouldShow != m_contentVisible) {
+      qInfo() << "[DIAG] D3D11Overlay: VISIBILITY_TOGGLE"
+              << "visible:" << shouldShow
+              << "mapId:" << m_mumbleLink->mapId()
+              << "validPos:" << hasValidPosition
+              << "stallMs:" << (now - m_lastTickChangeMs)
+              << "longStall:" << longStall
+              << "uiTick:" << currentTick;
       m_contentVisible = shouldShow;
       if (!shouldShow) {
         m_needsClearFrame = true; // Render one transparent frame to erase
@@ -813,37 +892,6 @@ void D3D11OverlayWindow::onRenderFrame() {
     return;
   }
 
-  // Per-frame z-order management.
-  // D3D11 responsibility: "I am always below the Qt overlay."
-  // Qt overlay manages its own position (TOPMOST when GW2 focused,
-  // above-GW2 when not). D3D11 anchors itself below Qt every frame.
-  // This guarantees: GW2 → D3D11 (trails) → Qt (markers + dot)
-  // regardless of focus state — no race condition.
-  if (m_hwnd && m_gw2Hwnd) {
-    HWND qtHwnd = m_qtOverlayHwnd;
-
-    if (qtHwnd) {
-      // SetWindowPos(A, B) → A goes BELOW B in z-order.
-      // D3D11 goes below Qt → Qt is always on top of D3D11.
-      ::SetWindowPos(m_hwnd, qtHwnd, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    } else {
-      // Multi-process mode: Qt overlay is a separate process, no HWND ref.
-      // Position just above GW2 (non-TOPMOST). The Qt overlay child handles
-      // its own TOPMOST, so D3D11 stays below it in z-order:
-      //   Qt overlay (TOPMOST) → D3D11 (above GW2) → GW2
-      HWND gw2 = reinterpret_cast<HWND>(m_gw2Hwnd);
-      HWND wnd = ::GetNextWindow(gw2, GW_HWNDPREV);
-      if (wnd && wnd != m_hwnd) {
-        ::SetWindowPos(m_hwnd, wnd, 0, 0, 0, 0,
-                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-      } else {
-        // GW2 at top of non-TOPMOST stack — place overlay at top (non-TOPMOST)
-        ::SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0,
-                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-      }
-    }
-  }
 
   render();
 }

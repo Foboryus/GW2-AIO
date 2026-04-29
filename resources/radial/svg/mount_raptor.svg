@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Raptor: sleek running dinosaur silhouette -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Body -->
+    <path d="M30 68 C35 52, 50 42, 65 44 C75 45, 82 50, 88 58 L95 55 C97 54, 100 56, 98 58 L90 62 C92 68, 90 76, 85 80"/>
+    <!-- Tail -->
+    <path d="M30 68 C25 72, 18 70, 15 65 C12 60, 14 54, 20 52"/>
+    <!-- Legs -->
+    <path d="M55 70 L50 90 L45 92 M48 90 L55 92"/>
+    <path d="M75 72 L72 88 L67 92 M70 88 L77 92"/>
+    <!-- Head crest -->
+    <path d="M95 55 C100 48, 105 50, 103 55"/>
+    <!-- Eye -->
+    <circle cx="94" cy="54" r="2" fill="#C09C57"/>
+    <!-- Jaw -->
+    <path d="M98 58 L105 60 L100 63 L95 62"/>
+  </g>
+</svg>

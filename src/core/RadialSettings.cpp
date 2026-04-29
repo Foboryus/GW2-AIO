@@ -137,22 +137,22 @@ RadialSettings RadialSettings::fromJson(const QJsonObject &obj) {
   // Mount wheel
   QJsonObject mountObj = obj["mountWheel"].toObject();
   s.mountWheelEnabled = mountObj["enabled"].toBool(true);
-  s.mountHotkey = mountObj["hotkey"].toInt(0);
-  s.mountHotkeyModifiers = mountObj["hotkeyModifiers"].toInt(0);
+  s.mountHotkey = mountObj["hotkey"].toInt(0x58);             // VK_X
+  s.mountHotkeyModifiers = mountObj["hotkeyModifiers"].toInt(0x04000000); // Ctrl
   s.mounts = elementMapFromJson(mountObj["elements"].toObject());
 
   // Novelty wheel
   QJsonObject noveltyObj = obj["noveltyWheel"].toObject();
   s.noveltyWheelEnabled = noveltyObj["enabled"].toBool(true);
-  s.noveltyHotkey = noveltyObj["hotkey"].toInt(0);
-  s.noveltyHotkeyModifiers = noveltyObj["hotkeyModifiers"].toInt(0);
+  s.noveltyHotkey = noveltyObj["hotkey"].toInt(0x4E);          // VK_N
+  s.noveltyHotkeyModifiers = noveltyObj["hotkeyModifiers"].toInt(0x04000000); // Ctrl
   s.novelties = elementMapFromJson(noveltyObj["elements"].toObject());
 
   // Marker wheel
   QJsonObject markerObj = obj["markerWheel"].toObject();
   s.markerWheelEnabled = markerObj["enabled"].toBool(true);
-  s.markerHotkey = markerObj["hotkey"].toInt(0);
-  s.markerHotkeyModifiers = markerObj["hotkeyModifiers"].toInt(0);
+  s.markerHotkey = markerObj["hotkey"].toInt(0x4D);            // VK_M
+  s.markerHotkeyModifiers = markerObj["hotkeyModifiers"].toInt(0x04000000); // Ctrl
   s.markers = elementMapFromJson(markerObj["elements"].toObject());
 
   // Display

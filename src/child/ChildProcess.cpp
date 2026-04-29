@@ -46,12 +46,24 @@ bool ChildProcess::start()
     connect(m_mumbleLink, &MumbleLink::mapChanged,
             this, &ChildProcess::onMapChanged);
 
-    // Start MumbleLink polling at focused rate
-    if (!m_mumbleLink->start(FOCUSED_POLL_MS)) {
+    // Start MumbleLink polling at IDLE rate — children start unfocused
+    // (m_focused = false). Will switch to focused rate on first focus gain.
+    if (!m_mumbleLink->start(IDLE_POLL_MS)) {
         qWarning() << "ChildProcess: Failed to start MumbleLink for segment"
                    << m_mumbleName;
         return false;
     }
+
+    // Start diagnostic timer
+    m_statusTimer.start();
+
+    qInfo() << "[DIAG] ChildProcess: STARTED"
+            << m_profileName
+            << "gw2Pid:" << m_gw2Pid
+            << "mumble:" << m_mumbleName
+            << "initialPollRate:" << IDLE_POLL_MS << "ms"
+            << "focused:" << m_focused
+            << "inGame:" << m_inGame;
 
     // Start monitoring the GW2 process — exit when it dies
     startPidMonitor();
@@ -131,22 +143,124 @@ void ChildProcess::onMumbleDataUpdated()
         return;
     }
 
-    // Detect focus changes from MumbleLink's gameHasFocus flag
-    const bool gw2Focused = m_mumbleLink->gameHasFocus();
-    if (gw2Focused != m_focused) {
-        m_focused = gw2Focused;
+    ++m_tickCount;
 
-        if (m_focused) {
-            setFocusedPollRate();
-        } else {
+    // Periodic status log for diagnostics
+    if (m_statusTimer.elapsed() >= STATUS_LOG_INTERVAL_MS) {
+        qInfo() << "[DIAG] ChildProcess status:"
+                << m_profileName
+                << "focused:" << m_focused
+                << "inGame:" << m_inGame
+                << "ticks:" << m_tickCount
+                << "pollRate:" << (m_focused ? FOCUSED_POLL_MS : IDLE_POLL_MS) << "ms"
+                << "mapId:" << m_currentMapId;
+        m_tickCount = 0;
+        m_statusTimer.restart();
+    }
+
+    // Detect focus changes via GetForegroundWindow (Layer 1)
+    // Focus GAIN: instant (first tick that sees GW2/self in foreground)
+    // Focus LOSS: debounced — requires FOCUS_LOSS_DEBOUNCE_MS of continuous
+    // non-GW2 foreground. This prevents system processes (wsappx, svchost,
+    // Service Host) from causing false focus-loss events when they briefly
+    // steal foreground.
+    HWND fgWnd = GetForegroundWindow();
+    DWORD fgPid = 0;
+    if (fgWnd) {
+        GetWindowThreadProcessId(fgWnd, &fgPid);
+    }
+    // Accept focus if foreground belongs to GW2 OR to our own process.
+    const DWORD selfPid = GetCurrentProcessId();
+    const bool fgIsOurs = (fgPid == static_cast<DWORD>(m_gw2Pid) ||
+                           fgPid == selfPid);
+
+
+    // --- Focus GAIN: instant, no debounce ---
+    if (fgIsOurs && !m_focused) {
+        m_focused = true;
+        m_focusLossPending = false;  // Cancel any pending loss
+        setFocusedPollRate();
+
+        qInfo() << "[DIAG] ChildProcess: FOCUS_CHANGED"
+                << m_profileName
+                << "focused: true"
+                << "source: GetForegroundWindow"
+                << "pollRate:" << FOCUSED_POLL_MS << "ms"
+                << "inGame:" << m_inGame
+                << "mapId:" << m_currentMapId;
+
+        onFocusChanged(true);
+    }
+    // --- Focus LOSS: debounced ---
+    else if (!fgIsOurs && m_focused) {
+        if (!m_focusLossPending) {
+            // Start debounce timer
+            m_focusLossPending = true;
+            m_focusLossTimer.start();
+        } else if (m_focusLossTimer.elapsed() >= FOCUS_LOSS_DEBOUNCE_MS) {
+            // Debounce expired — foreground has been consistently non-ours
+            m_focused = false;
+            m_focusLossPending = false;
             setIdlePollRate();
+
+            qInfo() << "[DIAG] ChildProcess: FOCUS_CHANGED"
+                    << m_profileName
+                    << "focused: false"
+                    << "source: GetForegroundWindow (debounced)"
+                    << "pollRate:" << IDLE_POLL_MS << "ms"
+                    << "inGame:" << m_inGame
+                    << "mapId:" << m_currentMapId;
+
+            onFocusChanged(false);
         }
+        // else: still within debounce window — ignore transient loss
+    }
+    // --- Foreground returned during debounce: cancel pending loss ---
+    else if (fgIsOurs && m_focusLossPending) {
+        m_focusLossPending = false;
+    }
+}
 
-        onFocusChanged(m_focused);
+void ChildProcess::notifyOverlayFocusChanged(bool focused)
+{
+    // Layer 2: Focus update from overlay's WinEvent hook.
+    // Focus GAIN: instant (0ms latency)
+    // Focus LOSS: debounced — system processes (wsappx, svchost) briefly
+    // steal foreground, triggering WinEvent FOREGROUND_LOST. We use the
+    // same debounce timer as Layer 1 to absorb these transients.
 
-        qInfo() << "ChildProcess: Focus changed to"
-                << (m_focused ? "focused" : "unfocused")
-                << "for" << m_profileName;
+    if (focused) {
+        // --- Instant focus gain ---
+        m_focusLossPending = false;  // Cancel any pending loss
+        if (m_focused) {
+            return;  // Already focused — no-op
+        }
+        m_focused = true;
+        setFocusedPollRate();
+
+        qInfo() << "[DIAG] ChildProcess: FOCUS_CHANGED"
+                << m_profileName
+                << "focused: true"
+                << "source: OverlayWinEvent"
+                << "pollRate:" << FOCUSED_POLL_MS << "ms"
+                << "inGame:" << m_inGame
+                << "mapId:" << m_currentMapId;
+
+        onFocusChanged(true);
+    } else {
+        // --- Debounced focus loss ---
+        if (!m_focused) {
+            return;  // Already unfocused — no-op
+        }
+        if (!m_focusLossPending) {
+            m_focusLossPending = true;
+            m_focusLossTimer.start();
+            // Don't fire yet — wait for debounce.
+            // Layer 1 polling will check the timer on subsequent ticks.
+        }
+        // The actual focus=false transition is handled by Layer 1's
+        // debounce check in onMumbleDataUpdated(). This ensures a single
+        // code path for focus loss, preventing race conditions.
     }
 }
 

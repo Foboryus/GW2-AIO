@@ -7,6 +7,7 @@
 #include "features/markers/MarkerSettingsManager.h"
 #include "features/markers/MinimapRenderer.h"
 #include "ui/OverlayWindow.h"
+#include "core/OverlayZOrder.h"
 
 #include <QDir>
 #include <QJsonDocument>
@@ -68,6 +69,7 @@ bool ChildMinimap::onInitialize()
     //    headless=true: no menu widget, no zone editor — just HWND tracking
     m_overlayWindow = new OverlayWindow(mumbleLink(), nullptr, /*headless=*/true);
     m_overlayWindow->setClickThrough(true);  // Always click-through
+    m_overlayWindow->setZOrderLayer(OverlayZOrder::kLayerMinimap);
 
     // 6. Create MinimapRenderer and embed in OverlayWindow
     m_minimapRenderer = new MinimapRenderer(
@@ -103,6 +105,11 @@ bool ChildMinimap::onInitialize()
     m_overlayWindow->setTargetPid(static_cast<uint32_t>(gw2Pid()));
     m_overlayWindow->startTracking();
     qInfo() << "ChildMinimap: OverlayWindow tracking started";
+
+    // 10. Layer 2 focus: wire overlay's WinEvent focus to base class
+    //     for instant focus detection (bypasses MumbleLink polling)
+    connect(m_overlayWindow, &OverlayWindow::gameFocusChanged,
+            this, &ChildMinimap::notifyOverlayFocusChanged);
 
     return true;
 }
@@ -147,8 +154,18 @@ void ChildMinimap::onMapEntered(uint32_t mapId)
     // Enable proximity checking
     m_markerManager->setProximityEnabled(true);
 
-    // Ensure renderer is visible
-    m_minimapRenderer->setRenderingEnabled(true);
+    // Enable rendering ONLY if this instance is focused (Phase 2 fix: BUG 2)
+    // onFocusChanged() will enable rendering when the instance gains focus.
+    const bool shouldRender = isFocused() && isInGame();
+    m_minimapRenderer->setRenderingEnabled(shouldRender);
+
+    qInfo() << "[DIAG] ChildMinimap: MAP_ENTERED"
+            << profileName()
+            << "mapId:" << mapId
+            << "packsLoaded:" << m_packsLoaded
+            << "packCount:" << m_markerManager->packs().size()
+            << "renderingEnabled:" << shouldRender
+            << "focused:" << isFocused();
 }
 
 void ChildMinimap::onMapLeft()
@@ -172,11 +189,15 @@ void ChildMinimap::onMapLeft()
 
 void ChildMinimap::onFocusChanged(bool focused)
 {
-    qInfo() << "ChildMinimap: Focus" << (focused ? "gained" : "lost")
-            << "for" << profileName();
+    const bool shouldRender = focused && isInGame();
+    qInfo() << "[DIAG] ChildMinimap: FOCUS_CHANGED"
+            << profileName()
+            << "focused:" << focused
+            << "inGame:" << isInGame()
+            << "renderingEnabled:" << shouldRender;
 
     if (m_minimapRenderer) {
-        m_minimapRenderer->setRenderingEnabled(focused && isInGame());
+        m_minimapRenderer->setRenderingEnabled(shouldRender);
     }
 }
 

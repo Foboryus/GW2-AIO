@@ -96,3 +96,30 @@ void RadialSettingsManager::resetToDefaults() {
   m_settings = RadialSettings::defaults();
   emit settingsChanged();
 }
+
+void RadialSettingsManager::deleteForProfile(const QString &profileId) {
+  const QString path = filePath(profileId);
+  if (QFile::exists(path)) {
+    QFile::remove(path);
+    qInfo() << "RadialSettingsManager: Deleted settings for" << profileId;
+  }
+  // Clean up backup/temp files (AtomicFileWriter creates these)
+  QFile::remove(path + ".bak");
+  QFile::remove(path + ".tmp");
+}
+
+QJsonObject RadialSettingsManager::readRawJson(const QString &profileId) const {
+  const QString path = filePath(profileId);
+  QFile file(path);
+  if (!file.exists() || !file.open(QIODevice::ReadOnly)) {
+    return {};
+  }
+
+  QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+  file.close();
+
+  if (!doc.isObject()) {
+    return {};
+  }
+  return doc.object();
+}

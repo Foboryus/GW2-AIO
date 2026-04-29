@@ -13,6 +13,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeySequenceEdit>
 #include <QLabel>
 #include <QScrollArea>
 #include <QSlider>
@@ -32,6 +33,40 @@ RadialTabWidget::RadialTabWidget(AccountProfile &profile,
     : QWidget(parent), m_profile(profile), m_dataService(dataService),
       m_radialSettings(dataService ? dataService->radialSettings2() : nullptr) {
   setupUI();
+}
+
+// ============================================================================
+// VK ↔ QKeySequence Conversion Helpers
+// ============================================================================
+
+// Convert VK code + modifier flags to a QKeySequence for display in UI.
+// For A-Z and 0-9, Qt::Key values equal Windows VK codes (0x41-0x5A, 0x30-0x39).
+static QKeySequence vkToKeySequence(int vk, int modifiers) {
+  if (vk == 0) {
+    return QKeySequence();
+  }
+  int qtKey = vk; // Direct for A-Z, 0-9
+  Qt::KeyboardModifiers qtMods;
+  if (modifiers & static_cast<int>(Qt::ControlModifier))
+    qtMods |= Qt::ControlModifier;
+  if (modifiers & static_cast<int>(Qt::ShiftModifier))
+    qtMods |= Qt::ShiftModifier;
+  if (modifiers & static_cast<int>(Qt::AltModifier))
+    qtMods |= Qt::AltModifier;
+  return QKeySequence(QKeyCombination(qtMods, static_cast<Qt::Key>(qtKey)));
+}
+
+// Convert a QKeySequence back to VK code + modifier flags.
+static void keySequenceToVk(const QKeySequence &seq, int &outVk,
+                            int &outModifiers) {
+  if (seq.isEmpty()) {
+    outVk = 0;
+    outModifiers = 0;
+    return;
+  }
+  QKeyCombination combo = seq[0];
+  outVk = static_cast<int>(combo.key());
+  outModifiers = static_cast<int>(combo.keyboardModifiers());
 }
 
 // ============================================================================
@@ -121,18 +156,18 @@ QTableWidget *RadialTabWidget::createElementTable(
       0, QHeaderView::Stretch);
   table->horizontalHeader()->setSectionResizeMode(
       1, QHeaderView::Fixed);
-  table->setColumnWidth(1, 70);
+  table->setColumnWidth(1, 80);
   table->verticalHeader()->setVisible(false);
   table->setSelectionMode(QAbstractItemView::NoSelection);
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
   UIHelpers::applyRole(table, "table");
 
   // Fixed row height for compact layout
-  table->verticalHeader()->setDefaultSectionSize(32);
+  table->verticalHeader()->setDefaultSectionSize(36);
   int maxRows = qMin(static_cast<int>(labels.size()), 10);
   // Header height + rows + small padding
   table->setFixedHeight(table->horizontalHeader()->height() +
-                        maxRows * 32 + 4);
+                        maxRows * 36 + 4);
 
   int row = 0;
   for (auto it = labels.constBegin(); it != labels.constEnd(); ++it) {
@@ -144,7 +179,6 @@ QTableWidget *RadialTabWidget::createElementTable(
     // Enabled column — ToggleSwitch for clear visual feedback
     auto *toggle = new ToggleSwitch();
     toggle->setChecked(true);
-    toggle->setFixedSize(40, 20);
     connect(toggle, &ToggleSwitch::toggled, this,
             &RadialTabWidget::modified);
 
@@ -176,6 +210,21 @@ void RadialTabWidget::setupMountSection(QVBoxLayout *contentLayout) {
   connect(m_mountWheelToggle, &LabeledToggle::toggled, this,
           &RadialTabWidget::modified);
   layout->addWidget(m_mountWheelToggle);
+
+  // Hotkey
+  auto *mountHotkeyRow = new QHBoxLayout();
+  mountHotkeyRow->setSpacing(8);
+  auto *mountHotkeyLabel = new QLabel("Hotkey:", group);
+  UIHelpers::applyRole(mountHotkeyLabel, "label");
+  mountHotkeyRow->addWidget(mountHotkeyLabel);
+  m_mountHotkeyEdit = new QKeySequenceEdit(group);
+  m_mountHotkeyEdit->setMaximumSequenceLength(1);
+  UIHelpers::applyRole(m_mountHotkeyEdit, "input");
+  connect(m_mountHotkeyEdit, &QKeySequenceEdit::keySequenceChanged, this,
+          &RadialTabWidget::modified);
+  mountHotkeyRow->addWidget(m_mountHotkeyEdit);
+  mountHotkeyRow->addStretch();
+  layout->addLayout(mountHotkeyRow);
 
   // Mount element table
   QMap<QString, QString> mountLabels;
@@ -211,6 +260,21 @@ void RadialTabWidget::setupNoveltySection(QVBoxLayout *contentLayout) {
           &RadialTabWidget::modified);
   layout->addWidget(m_noveltyWheelToggle);
 
+  // Hotkey
+  auto *noveltyHotkeyRow = new QHBoxLayout();
+  noveltyHotkeyRow->setSpacing(8);
+  auto *noveltyHotkeyLabel = new QLabel("Hotkey:", group);
+  UIHelpers::applyRole(noveltyHotkeyLabel, "label");
+  noveltyHotkeyRow->addWidget(noveltyHotkeyLabel);
+  m_noveltyHotkeyEdit = new QKeySequenceEdit(group);
+  m_noveltyHotkeyEdit->setMaximumSequenceLength(1);
+  UIHelpers::applyRole(m_noveltyHotkeyEdit, "input");
+  connect(m_noveltyHotkeyEdit, &QKeySequenceEdit::keySequenceChanged, this,
+          &RadialTabWidget::modified);
+  noveltyHotkeyRow->addWidget(m_noveltyHotkeyEdit);
+  noveltyHotkeyRow->addStretch();
+  layout->addLayout(noveltyHotkeyRow);
+
   QMap<QString, QString> noveltyLabels;
   noveltyLabels["chair"] = "Chair";
   noveltyLabels["instrument"] = "Instrument";
@@ -242,6 +306,21 @@ void RadialTabWidget::setupMarkerSection(QVBoxLayout *contentLayout) {
   connect(m_markerWheelToggle, &LabeledToggle::toggled, this,
           &RadialTabWidget::modified);
   layout->addWidget(m_markerWheelToggle);
+
+  // Hotkey
+  auto *markerHotkeyRow = new QHBoxLayout();
+  markerHotkeyRow->setSpacing(8);
+  auto *markerHotkeyLabel = new QLabel("Hotkey:", group);
+  UIHelpers::applyRole(markerHotkeyLabel, "label");
+  markerHotkeyRow->addWidget(markerHotkeyLabel);
+  m_markerHotkeyEdit = new QKeySequenceEdit(group);
+  m_markerHotkeyEdit->setMaximumSequenceLength(1);
+  UIHelpers::applyRole(m_markerHotkeyEdit, "input");
+  connect(m_markerHotkeyEdit, &QKeySequenceEdit::keySequenceChanged, this,
+          &RadialTabWidget::modified);
+  markerHotkeyRow->addWidget(m_markerHotkeyEdit);
+  markerHotkeyRow->addStretch();
+  layout->addLayout(markerHotkeyRow);
 
   QMap<QString, QString> markerLabels;
   markerLabels["arrow"] = "Arrow";
@@ -500,12 +579,18 @@ void RadialTabWidget::load() {
 
   // Wheels
   m_mountWheelToggle->setChecked(s.mountWheelEnabled);
+  m_mountHotkeyEdit->setKeySequence(
+      vkToKeySequence(s.mountHotkey, s.mountHotkeyModifiers));
   loadElementTable(m_mountTable, s.mounts);
 
   m_noveltyWheelToggle->setChecked(s.noveltyWheelEnabled);
+  m_noveltyHotkeyEdit->setKeySequence(
+      vkToKeySequence(s.noveltyHotkey, s.noveltyHotkeyModifiers));
   loadElementTable(m_noveltyTable, s.novelties);
 
   m_markerWheelToggle->setChecked(s.markerWheelEnabled);
+  m_markerHotkeyEdit->setKeySequence(
+      vkToKeySequence(s.markerHotkey, s.markerHotkeyModifiers));
   loadElementTable(m_markerTable, s.markers);
 
   // Display
@@ -545,12 +630,18 @@ void RadialTabWidget::save() {
 
   // Wheels
   s.mountWheelEnabled = m_mountWheelToggle->isChecked();
+  keySequenceToVk(m_mountHotkeyEdit->keySequence(),
+                  s.mountHotkey, s.mountHotkeyModifiers);
   s.mounts = saveElementTable(m_mountTable, s.mounts);
 
   s.noveltyWheelEnabled = m_noveltyWheelToggle->isChecked();
+  keySequenceToVk(m_noveltyHotkeyEdit->keySequence(),
+                  s.noveltyHotkey, s.noveltyHotkeyModifiers);
   s.novelties = saveElementTable(m_noveltyTable, s.novelties);
 
   s.markerWheelEnabled = m_markerWheelToggle->isChecked();
+  keySequenceToVk(m_markerHotkeyEdit->keySequence(),
+                  s.markerHotkey, s.markerHotkeyModifiers);
   s.markers = saveElementTable(m_markerTable, s.markers);
 
   // Display

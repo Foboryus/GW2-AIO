@@ -6,6 +6,7 @@
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "ui/OverlayWindow.h"
+#include "core/OverlayZOrder.h"
 
 #include <QDir>
 #include <QJsonDocument>
@@ -54,6 +55,7 @@ bool ChildOverlay::onInitialize()
     m_overlayWindow = new OverlayWindow(mumbleLink());
     m_overlayWindow->setMarkerManager(m_markerManager);
     m_overlayWindow->setMarkerSettings(m_markerSettings);
+    m_overlayWindow->setZOrderLayer(OverlayZOrder::kLayerHUD);
 
     // 5. Start tracking GW2 window (HWND, position, z-order)
     // Use guaranteed command-line PID to target the correct GW2 window.
@@ -103,6 +105,10 @@ bool ChildOverlay::onInitialize()
         sendToGrandfather("RELOAD_PACKS");
         qInfo() << "ChildOverlay: Sent RELOAD_PACKS to grandfather";
     });
+    // 8. Layer 2 focus: wire overlay's WinEvent focus to base class
+    //    for instant focus detection (bypasses MumbleLink polling)
+    connect(m_overlayWindow, &OverlayWindow::gameFocusChanged,
+            this, &ChildOverlay::notifyOverlayFocusChanged);
 
     return true;
 }
@@ -149,8 +155,10 @@ void ChildOverlay::onMapLeft()
 
 void ChildOverlay::onFocusChanged(bool focused)
 {
-    qInfo() << "ChildOverlay: Focus" << (focused ? "gained" : "lost")
-            << "for" << profileName();
+    qInfo() << "[DIAG] ChildOverlay: FOCUS_CHANGED"
+            << profileName()
+            << "focused:" << focused
+            << "inGame:" << isInGame();
     // OverlayWindow handles its own visibility via MumbleLink signals
     // No additional action needed here
 }

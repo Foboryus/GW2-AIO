@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Warclaw: armored war cat -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Body (muscular) -->
+    <path d="M32 68 C35 54, 48 46, 62 48 C75 50, 85 56, 90 65"/>
+    <!-- Head -->
+    <path d="M88 58 C92 52, 96 50, 100 48"/>
+    <!-- Ears -->
+    <path d="M96 50 L92 38 L94 48"/>
+    <path d="M100 48 L102 36 L104 46"/>
+    <!-- Muzzle -->
+    <path d="M100 48 L108 52 L105 56 L98 55"/>
+    <!-- Fangs -->
+    <path d="M104 54 L106 60"/>
+    <!-- Eye -->
+    <circle cx="97" cy="50" r="2" fill="#C09C57"/>
+    <!-- Armor plate on back -->
+    <path d="M45 48 C50 42, 60 40, 70 42 C78 44, 82 48, 84 52"/>
+    <path d="M50 44 L55 38 L62 36 L70 38 L78 42" stroke-dasharray="5 2"/>
+    <!-- Front legs -->
+    <path d="M52 68 L48 88 L44 92 M46 88 L52 92"/>
+    <!-- Back legs -->
+    <path d="M82 68 L80 88 L76 92 M78 88 L84 92"/>
+    <!-- Tail -->
+    <path d="M32 68 C25 65, 20 60, 18 54"/>
+  </g>
+</svg>

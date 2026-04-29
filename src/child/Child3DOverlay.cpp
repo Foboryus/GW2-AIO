@@ -6,6 +6,7 @@
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "rendering/D3D11OverlayWindow.h"
+#include "core/OverlayZOrder.h"
 
 #include <QDir>
 #include <QJsonDocument>
@@ -67,14 +68,13 @@ bool Child3DOverlay::onInitialize()
     m_d3dOverlay->setImageCache(m_imageCache);
     m_d3dOverlay->setQueryContext(m_queryContext);
     m_d3dOverlay->setClickThrough(true);  // Always click-through (no Qt HUD)
-    m_d3dOverlay->setHideOnUnfocus(true); // Hide when GW2 loses focus (multibox)
+    m_d3dOverlay->setHideOnUnfocus(false); // Keep visible in multibox — rendering throttled by m_renderingEnabled
+    m_d3dOverlay->setZOrderLayer(OverlayZOrder::kLayer3D);
 
-    // 6. Connect focus changes from D3D11 overlay
+    // 6. Layer 2 focus: wire D3D11 overlay's WinEvent focus to base class
+    //    for instant focus detection (bypasses MumbleLink polling)
     connect(m_d3dOverlay, &D3D11OverlayWindow::focusChanged,
-            this, [this](bool focused) {
-                qInfo() << "Child3DOverlay: D3D11 focusChanged:" << focused;
-                // Don't duplicate — ChildProcess handles focus via MumbleLink
-            });
+            this, &Child3DOverlay::notifyOverlayFocusChanged);
 
     // 7. Start D3D11 tracking (deferred window creation inside)
     // Use guaranteed command-line PID to target the correct GW2 window.
@@ -124,8 +124,18 @@ void Child3DOverlay::onMapEntered(uint32_t mapId)
     // Enable proximity checking
     m_markerManager->setProximityEnabled(true);
 
-    // Enable rendering
-    m_d3dOverlay->setRenderingEnabled(true);
+    // Enable rendering ONLY if this instance is focused (Phase 2 fix: BUG 2)
+    // onFocusChanged() will enable rendering when the instance gains focus.
+    const bool shouldRender = isFocused() && isInGame();
+    m_d3dOverlay->setRenderingEnabled(shouldRender);
+
+    qInfo() << "[DIAG] Child3DOverlay: MAP_ENTERED"
+            << profileName()
+            << "mapId:" << mapId
+            << "packsLoaded:" << m_packsLoaded
+            << "packCount:" << m_markerManager->packs().size()
+            << "renderingEnabled:" << shouldRender
+            << "focused:" << isFocused();
 }
 
 void Child3DOverlay::onMapLeft()
@@ -155,11 +165,15 @@ void Child3DOverlay::onMapLeft()
 
 void Child3DOverlay::onFocusChanged(bool focused)
 {
-    qInfo() << "Child3DOverlay: Focus" << (focused ? "gained" : "lost")
-            << "for" << profileName();
+    const bool shouldRender = focused && isInGame();
+    qInfo() << "[DIAG] Child3DOverlay: FOCUS_CHANGED"
+            << profileName()
+            << "focused:" << focused
+            << "inGame:" << isInGame()
+            << "renderingEnabled:" << shouldRender;
 
     if (m_d3dOverlay) {
-        m_d3dOverlay->setRenderingEnabled(focused && isInGame());
+        m_d3dOverlay->setRenderingEnabled(shouldRender);
     }
 }
 

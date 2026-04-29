@@ -58,20 +58,20 @@ struct RadialSettings {
 
   // --- Mount wheel ---
   bool mountWheelEnabled = true;
-  int mountHotkey = 0;
-  int mountHotkeyModifiers = 0;
+  int mountHotkey = 0x58;          // VK_X  (Ctrl+X default)
+  int mountHotkeyModifiers = 0x04000000; // Qt::ControlModifier
   QMap<QString, RadialElementConfig> mounts;
 
   // --- Novelty wheel ---
   bool noveltyWheelEnabled = true;
-  int noveltyHotkey = 0;
-  int noveltyHotkeyModifiers = 0;
+  int noveltyHotkey = 0x4E;        // VK_N  (Ctrl+N default)
+  int noveltyHotkeyModifiers = 0x04000000; // Qt::ControlModifier
   QMap<QString, RadialElementConfig> novelties;
 
   // --- Marker wheel ---
   bool markerWheelEnabled = true;
-  int markerHotkey = 0;
-  int markerHotkeyModifiers = 0;
+  int markerHotkey = 0x4D;         // VK_M  (Ctrl+M default)
+  int markerHotkeyModifiers = 0x04000000; // Qt::ControlModifier
   QMap<QString, RadialElementConfig> markers;
 
   // --- Display ---

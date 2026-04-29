@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Skimmer: manta ray gliding -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Wing body -->
+    <path d="M20 60 C30 50, 50 42, 64 40 C78 42, 98 50, 108 60 C98 68, 78 72, 64 74 C50 72, 30 68, 20 60 Z"/>
+    <!-- Tail -->
+    <path d="M64 74 L64 100 L60 105 M64 100 L68 105"/>
+    <!-- Central ridge -->
+    <path d="M64 42 L64 74"/>
+    <!-- Eye spots -->
+    <circle cx="52" cy="56" r="3" fill="#C09C57"/>
+    <circle cx="76" cy="56" r="3" fill="#C09C57"/>
+    <!-- Wing details -->
+    <path d="M40 52 C48 48, 56 46, 64 44"/>
+    <path d="M88 52 C80 48, 72 46, 64 44"/>
+  </g>
+</svg>

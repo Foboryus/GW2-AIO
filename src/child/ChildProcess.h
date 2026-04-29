@@ -22,6 +22,7 @@
 // clang-format on
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QJsonObject>
 #include <QString>
 
@@ -131,6 +132,15 @@ protected:
   virtual bool onInitialize() = 0;
 
   /**
+   * @brief Notify base class of focus change from overlay's WinEvent hook.
+   * Subclasses should connect their overlay window's focusChanged signal
+   * to this method for instant focus detection (Layer 2).
+   * This bypasses the polling-based detection for immediate response.
+   * @param focused true if GW2 window gained foreground focus
+   */
+  void notifyOverlayFocusChanged(bool focused);
+
+  /**
    * @brief Called during shutdown for subclass cleanup
    */
   virtual void onShutdown();
@@ -194,7 +204,22 @@ private:
   uint32_t m_currentMapId = 0;
   bool m_started = false;
 
+  // Focus debounce: system processes (wsappx, svchost) briefly steal foreground,
+  // causing false focus-loss events. We require the foreground to be consistently
+  // non-GW2/non-self for FOCUS_LOSS_DEBOUNCE_MS before accepting focus loss.
+  QElapsedTimer m_focusLossTimer;  // Measures continuous unfocused time
+  bool m_focusLossPending = false; // True while debounce is counting
+
+  // Diagnostic: periodic status logging
+  uint64_t m_tickCount = 0;
+  QElapsedTimer m_statusTimer;
+  static constexpr qint64 STATUS_LOG_INTERVAL_MS = 30000; // Log every 30s
+
   // Poll rate constants
-  static constexpr int FOCUSED_POLL_MS = 10;   // 100Hz when focused
-  static constexpr int IDLE_POLL_MS = 1000;    // 1Hz when unfocused
+  // GW2 writes MumbleLink at ~60Hz — 16ms matches its frame rate exactly.
+  // Unfocused: 5s heartbeat is a safety net for focus regain if WinEvent fails.
+  // Primary focus detection is Layer 2 (WinEvent) at ~0ms latency.
+  static constexpr int FOCUSED_POLL_MS = 16;   // ~62.5Hz when focused (matches GW2 ~60Hz)
+  static constexpr int IDLE_POLL_MS = 5000;    // 5s heartbeat when unfocused
+  static constexpr qint64 FOCUS_LOSS_DEBOUNCE_MS = 500; // 500ms grace period
 };

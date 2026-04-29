@@ -19,6 +19,7 @@
 #include <dwmapi.h>
 
 #include <QDebug>
+#include <QFile>
 
 // Link libraries
 #pragma comment(lib, "d3d11.lib")
@@ -371,6 +372,91 @@ ComPtr<ID3DBlob> D3D11Context::compileShader(const QByteArray &source,
   HRESULT hr = D3DCompile(source.constData(), source.size(), nullptr, nullptr,
                           nullptr, entryPoint, target, compileFlags, 0,
                           shaderBlob.GetAddressOf(), errorBlob.GetAddressOf());
+
+  if (FAILED(hr)) {
+    if (errorBlob) {
+      errorMsg = QString::fromUtf8(
+          static_cast<const char *>(errorBlob->GetBufferPointer()),
+          static_cast<int>(errorBlob->GetBufferSize()));
+    } else {
+      errorMsg =
+          QString("Shader compilation failed: 0x%1").arg(hr, 8, 16, QChar('0'));
+    }
+    return nullptr;
+  }
+
+  return shaderBlob;
+}
+
+// ============================================================================
+// QRC-based ID3DInclude for shader #include resolution
+// ============================================================================
+
+namespace {
+
+/**
+ * @brief Custom ID3DInclude that resolves #include directives from QRC
+ *
+ * When a shader does #include "radial_noise.hlsl", this handler reads
+ * the file from Qt resources (e.g., ":/shaders/radial/radial_noise.hlsl").
+ */
+class QrcInclude : public ID3DInclude {
+public:
+  explicit QrcInclude(const QString &basePath) : m_basePath(basePath) {}
+
+  HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE /*includeType*/,
+                                  LPCSTR pFileName,
+                                  LPCVOID /*pParentData*/,
+                                  LPCVOID *ppData,
+                                  UINT *pBytes) override {
+    QString path = m_basePath + "/" + QString::fromUtf8(pFileName);
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+      qWarning() << "QrcInclude: failed to open" << path;
+      return E_FAIL;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    // Allocate buffer that D3DCompile will use (freed in Close)
+    auto *buf = new char[data.size()];
+    memcpy(buf, data.constData(), data.size());
+
+    *ppData = buf;
+    *pBytes = static_cast<UINT>(data.size());
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE Close(LPCVOID pData) override {
+    delete[] static_cast<const char *>(pData);
+    return S_OK;
+  }
+
+private:
+  QString m_basePath;
+};
+
+} // namespace
+
+ComPtr<ID3DBlob> D3D11Context::compileShaderWithIncludes(
+    const QByteArray &source, const char *entryPoint, const char *target,
+    const QString &qrcBasePath, QString &errorMsg) {
+  ComPtr<ID3DBlob> shaderBlob;
+  ComPtr<ID3DBlob> errorBlob;
+
+  UINT compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+#ifdef QT_DEBUG
+  compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+  compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+#endif
+
+  QrcInclude includeHandler(qrcBasePath);
+
+  HRESULT hr = D3DCompile(source.constData(), source.size(), nullptr, nullptr,
+                           &includeHandler, entryPoint, target, compileFlags, 0,
+                           shaderBlob.GetAddressOf(), errorBlob.GetAddressOf());
 
   if (FAILED(hr)) {
     if (errorBlob) {

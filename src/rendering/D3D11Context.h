@@ -12,6 +12,7 @@
  *
  * Consumers:
  * - D3D11OverlayWindow: creates and owns this context
+ * - RadialOverlayWindow: creates and owns this context
  * - MarkerPipeline, TrailPipeline, SpriteBatch: use device for rendering
  *
  * DO NOT ADD:
@@ -94,8 +95,26 @@ public:
    * @return Compiled shader blob, or nullptr on failure
    */
   ComPtr<ID3DBlob> compileShader(const QByteArray &source,
-                                 const char *entryPoint, const char *target,
-                                 QString &errorMsg);
+                                  const char *entryPoint, const char *target,
+                                  QString &errorMsg);
+
+  /**
+   * @brief Compile an HLSL shader with #include resolution via QRC
+   * @param source HLSL source code
+   * @param entryPoint Shader entry point function name
+   * @param target Shader model target (e.g., "vs_5_0", "ps_5_0")
+   * @param qrcBasePath QRC directory for #include resolution
+   *        (e.g., ":/shaders/radial")
+   * @param errorMsg Output: compilation error message if failed
+   * @return Compiled shader blob, or nullptr on failure
+   */
+  ComPtr<ID3DBlob> compileShaderWithIncludes(const QByteArray &source,
+                                              const char *entryPoint,
+                                              const char *target,
+                                              const QString &qrcBasePath,
+                                              QString &errorMsg);
+
+  // --- Texture helpers ---
 
   /**
    * @brief Create a 2D texture from RGBA pixel data
@@ -105,7 +124,7 @@ public:
    * @return Shader resource view, or nullptr on failure
    */
   ComPtr<ID3D11ShaderResourceView> createTextureFromRGBA(int width, int height,
-                                                         const void *rgbaData);
+                                                          const void *rgbaData);
 
   /**
    * @brief Create a 1x1 white texture (default for untextured rendering)

@@ -10,6 +10,9 @@
 #include "MarkerManager.h"
 #include "ActivationStore.h"
 #include "MarkerSettingsManager.h"
+#include "TacoParser.h"
+
+#include <memory>
 
 #include <QDateTime>
 #include <QDebug>
@@ -155,70 +158,123 @@ void MarkerManager::loadPacksAsync(const QString &path) {
     return;
   }
 
-  auto *thread = QThread::create([this, packPaths, total]() {
-    for (int i = 0; i < packPaths.size(); ++i) {
-      QString packId = QFileInfo(packPaths[i]).completeBaseName();
-      bool disabled =
-          m_markerSettings && !m_markerSettings->isPackEnabled(packId);
-      if (disabled) {
-        qInfo() << "MarkerManager: Loading metadata-only for disabled pack:"
+  // Snapshot disabled-pack set BEFORE spawning thread (thread-safe read).
+  // Avoids reading m_markerSettings from the worker thread.
+  QSet<QString> disabledPacks;
+  if (m_markerSettings) {
+    for (const QString &p : packPaths) {
+      QString packId = QFileInfo(p).completeBaseName();
+      if (!m_markerSettings->isPackEnabled(packId)) {
+        disabledPacks.insert(packId);
+      }
+    }
+  }
+
+  // Thread-local result buffers — written by worker, read by main after finish.
+  // Using shared_ptr so the finished handler (main thread) can safely read
+  // after the worker thread has completed and been destroyed.
+  auto results = std::make_shared<QList<MarkerPack>>();
+  auto failures = std::make_shared<QStringList>();
+  QString cacheDir = m_cacheDir;
+
+  auto *thread = QThread::create(
+      [this, packPaths, total, disabledPacks, cacheDir, results, failures]() {
+        // Thread-local parser — completely independent from m_parser.
+        // This eliminates the data race where the main-thread m_parser
+        // was being called from the worker thread.
+        TacoParser localParser(nullptr);
+        localParser.setCacheDir(cacheDir);
+
+        for (int i = 0; i < packPaths.size(); ++i) {
+          QString packId = QFileInfo(packPaths[i]).completeBaseName();
+          bool disabled = disabledPacks.contains(packId);
+
+          if (disabled) {
+            qInfo()
+                << "MarkerManager: Loading metadata-only for disabled pack:"
                 << packId;
-        m_parser->setMetadataOnly(true);
-      }
-      loadPack(packPaths[i], disabled);
-      if (disabled) {
-        m_parser->setMetadataOnly(false);
-      }
-      emit packsLoadProgress(i + 1, total, QFileInfo(packPaths[i]).fileName());
-    }
-  });
+            localParser.setMetadataOnly(true);
+          }
 
-  connect(thread, &QThread::finished, this, [this, thread]() {
-    buildCategoryTree();
-    // Re-process trails with all packs — clear stale set in case onMapChanged
-    // already ran with a partial pack list during async loading
-    m_loadedTrailMapIds.clear();
-    // Reload trails for all maps that have active ref-counts (multibox safety)
-    if (!m_trailMapRefCount.isEmpty()) {
-      for (auto it = m_trailMapRefCount.constBegin();
-           it != m_trailMapRefCount.constEnd(); ++it) {
-        ensureTrailsLoaded(it.key());
-      }
-    } else {
-      ensureTrailsLoaded(m_currentMapId);
-    }
-    m_asyncLoading = false;
-    m_proximityTimer->start();
-    m_dailyResetTimer->start();
-    emit packsLoaded();
-    emit markersChanged(); // Force pipelines to pick up rebuilt index
+          MarkerPack pack = localParser.parse(packPaths[i]);
 
-    // Detect missing packs: settings reference packs not on disk
-    QStringList missingPacks;
-    if (m_markerSettings) {
-      QSet<QString> loadedIds;
-      for (const auto &pack : m_packs) {
-        loadedIds.insert(pack.id);
-      }
-      // Also count failed packs as "present" (they exist, just broken)
-      for (const auto &f : m_failedPacks) {
-        loadedIds.insert(f);
-      }
-      for (const QString &settingsId : m_markerSettings->enabledPackIds()) {
-        if (!loadedIds.contains(settingsId)) {
-          missingPacks.append(settingsId);
+          if (disabled) {
+            localParser.setMetadataOnly(false);
+            results->append(std::move(pack));
+            qInfo() << "Loaded pack metadata:" << results->last().name
+                     << "(disabled)";
+          } else if (pack.markerCount() > 0 || pack.trailCount() > 0 ||
+                     !pack.categories.isEmpty()) {
+            qInfo() << "Loaded pack:" << pack.name;
+            results->append(std::move(pack));
+          } else {
+            QString name = QFileInfo(packPaths[i]).completeBaseName();
+            qWarning()
+                << "MarkerManager: Pack produced 0 markers/trails:" << name;
+            failures->append(name);
+          }
+
+          emit packsLoadProgress(i + 1, total,
+                                 QFileInfo(packPaths[i]).fileName());
         }
-      }
-    }
+      });
 
-    if (!missingPacks.isEmpty() || !m_failedPacks.isEmpty()) {
-      qInfo() << "MarkerManager: Pack issues —" << missingPacks.size()
-              << "missing," << m_failedPacks.size() << "failed";
-      emit packsLoadIssues(missingPacks, m_failedPacks);
-    }
+  connect(thread, &QThread::finished, this,
+          [this, thread, results, failures]() {
+            // Merge worker results into member variables (main thread only).
+            // Safe: worker thread has fully completed before finished fires.
+            m_packs = std::move(*results);
+            m_failedPacks = std::move(*failures);
 
-    thread->deleteLater();
-  });
+            buildCategoryTree();
+            // Re-process trails with all packs — clear stale set in case
+            // onMapChanged already ran with a partial pack list during async
+            // loading
+            m_loadedTrailMapIds.clear();
+            // Reload trails for all maps that have active ref-counts (multibox
+            // safety)
+            if (!m_trailMapRefCount.isEmpty()) {
+              for (auto it = m_trailMapRefCount.constBegin();
+                   it != m_trailMapRefCount.constEnd(); ++it) {
+                ensureTrailsLoaded(it.key());
+              }
+            } else {
+              ensureTrailsLoaded(m_currentMapId);
+            }
+            m_asyncLoading = false;
+            m_proximityTimer->start();
+            m_dailyResetTimer->start();
+            emit packsLoaded();
+            emit markersChanged(); // Force pipelines to pick up rebuilt index
+
+            // Detect missing packs: settings reference packs not on disk
+            QStringList missingPacks;
+            if (m_markerSettings) {
+              QSet<QString> loadedIds;
+              for (const auto &pack : m_packs) {
+                loadedIds.insert(pack.id);
+              }
+              // Also count failed packs as "present" (they exist, just broken)
+              for (const auto &f : m_failedPacks) {
+                loadedIds.insert(f);
+              }
+              for (const QString &settingsId :
+                   m_markerSettings->enabledPackIds()) {
+                if (!loadedIds.contains(settingsId)) {
+                  missingPacks.append(settingsId);
+                }
+              }
+            }
+
+            if (!missingPacks.isEmpty() || !m_failedPacks.isEmpty()) {
+              qInfo() << "MarkerManager: Pack issues —"
+                      << missingPacks.size() << "missing,"
+                      << m_failedPacks.size() << "failed";
+              emit packsLoadIssues(missingPacks, m_failedPacks);
+            }
+
+            thread->deleteLater();
+          });
 
   thread->start();
 }

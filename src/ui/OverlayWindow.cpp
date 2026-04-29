@@ -2,6 +2,7 @@
 #include "ExclusionZoneEditor.h"
 #include "OverlayMenuWidget.h"
 #include "core/ThemeManager.h"
+#include "core/OverlayZOrder.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "features/markers/MinimapRenderer.h"
 #include <QDateTime>
@@ -72,6 +73,14 @@ OverlayWindow::OverlayWindow(MumbleLink *mumble, QWidget *parent, bool headless)
 OverlayWindow::~OverlayWindow() {
   unregisterProcessExitWait();
   uninstallEventHook();
+}
+
+void OverlayWindow::setZOrderLayer(int layer) {
+  m_zOrderLayer = layer;
+  // Set window title for cross-process z-order discovery
+  const wchar_t *suffix = (layer == OverlayZOrder::kLayerHUD) ? L"HUD" : L"Minimap";
+  std::wstring title = OverlayZOrder::buildTitle(layer, suffix);
+  setWindowTitle(QString::fromStdWString(title));
 }
 
 void OverlayWindow::startTracking() {
@@ -394,28 +403,38 @@ void CALLBACK OverlayWindow::foregroundProc(HWINEVENTHOOK hWinEventHook,
   HWND overlayHwnd = reinterpret_cast<HWND>(self->winId());
 
   if (hwnd == gw2Hwnd) {
-    // GW2 gained focus — overlay goes to TOPMOST and shows content
+    // GW2 gained focus — overlay shows content
     self->setGameFocused(true);
-    SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    qInfo() << "[DEVLOG] OverlayWindow: foreground TOPMOST — gw2 focused";
 
-    // Deferred re-apply: Windows may shuffle TOPMOST z-order after this
-    // callback returns. Queue a second SetWindowPos on the next event loop
-    // iteration (after Windows finishes its focus transition).
-    QMetaObject::invokeMethod(
-        self,
-        [overlayHwnd]() {
-          SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        },
-        Qt::QueuedConnection);
+    if (self->m_zOrderLayer >= OverlayZOrder::kLayerHUD) {
+      // HUD layer: TOPMOST to stay above all siblings
+      SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+      // Deferred re-apply: Windows may shuffle TOPMOST z-order after this
+      // callback returns. Queue a second SetWindowPos on the next event loop
+      // iteration (after Windows finishes its focus transition).
+      QMetaObject::invokeMethod(
+          self,
+          [overlayHwnd]() {
+            SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+          },
+          Qt::QueuedConnection);
+    } else {
+      // Non-HUD layer (e.g., minimap): use layer-based insertion
+      self->ensureZOrder();
+    }
+    qInfo() << "[DIAG] OverlayWindow: FOREGROUND_GW2 layer:"
+            << self->m_zOrderLayer;
   } else {
     // Another window gained focus — hide overlay content, show paused icon.
-    // Clear TOPMOST so overlay stays behind the focused window.
     self->setGameFocused(false);
-    ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    if (self->m_zOrderLayer >= OverlayZOrder::kLayerHUD) {
+      // Clear TOPMOST so overlay stays behind the focused window.
+      ::SetWindowPos(overlayHwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
   }
 }
 #endif
@@ -425,7 +444,7 @@ void OverlayWindow::setGameFocused(bool focused) {
     return;
   }
   m_gameFocused = focused;
-  qInfo() << "[DEVLOG] OverlayWindow: game focus changed to:" << focused;
+  qInfo() << "[DIAG] OverlayWindow: GAME_FOCUS_CHANGED" << "focused:" << focused;
 
   if (m_menuWidget) {
     // Close menu panel when losing focus (prevents interaction on wrong window)
@@ -434,16 +453,44 @@ void OverlayWindow::setGameFocused(bool focused) {
     }
     m_menuWidget->setGameFocused(focused);
   } else if (m_headless) {
-    // Headless mode (ChildMinimap): hide/show entire window on focus change
-    // to prevent minimap overlay from bleeding onto the focused GW2 window.
-    if (focused) {
-      show();
-    } else {
-      hide();
-    }
+    // Headless mode (ChildMinimap): rendering throttle is handled by
+    // ChildProcess::notifyOverlayFocusChanged via gameFocusChanged signal.
+    // Don't hide/show the window here — in multibox, unfocused minimaps should
+    // remain visible (showing the last rendered frame) so the user can
+    // see markers on all instances.
   }
 
-  update();
+  // On focus gain: immediately update position, z-order, and force a
+  // synchronous repaint. Without this, the overlay paints correctly but
+  // stays invisible until onPositionChanged() fires (character movement).
+  // updatePosition() refreshes window geometry (setGeometry → resizeEvent).
+  // ensureZOrder() positions overlay above GW2 in z-order.
+  // repaint() forces immediate synchronous paint + DWM surface flush
+  // (update() only schedules deferred repaint, which DWM may not composite
+  // immediately for WA_TranslucentBackground layered windows).
+  if (focused && m_isTracking && m_gw2Hwnd) {
+    updatePosition();
+    ensureZOrder();
+    qInfo() << "[DIAG] OverlayWindow: FOCUS_REATTACH"
+            << "pos:" << geometry()
+            << "gw2Hwnd:" << m_gw2Hwnd
+            << "overlayHwnd:" << (void*)winId()
+            << "layer:" << m_zOrderLayer
+            << "visible:" << isVisible()
+            << "headless:" << m_headless;
+  }
+
+  // Notify child processes for instant focus detection (Layer 2)
+  emit gameFocusChanged(focused);
+
+  if (focused) {
+    repaint();  // Synchronous — forces DWM to recomposite NOW
+    qInfo() << "[DIAG] OverlayWindow: FOCUS_REPAINT_DONE"
+            << "widgetSize:" << size()
+            << "isVisible:" << isVisible();
+  } else {
+    update();   // Async is fine for unfocus
+  }
 }
 
 void OverlayWindow::onGameConnected(bool connected) {
@@ -618,6 +665,26 @@ void OverlayWindow::updateHudVisibility() {
     }
   }
 
+  // [FOCUS_FIX] Throttled z-order enforcement (~10Hz instead of per-tick).
+  // ensureZOrder() calls findInsertAfter() → EnumWindows() for non-HUD layers,
+  // or SetWindowPos(HWND_TOPMOST) for HUD layers. Both are expensive Win32 calls
+  // that trigger DWM recomposition. 10Hz is sufficient for z-order maintenance.
+  // Modulo 4 at 62.5Hz focused poll = ~15.6Hz enforcement rate.
+  if (m_isTracking && m_gw2Hwnd && m_gameFocused) {
+    if (++m_zOrderTickCount % 4 == 0) {
+      ensureZOrder();
+    }
+    // [DIAG] Throttled log: once per ~10 seconds
+    if (m_zOrderTickCount % 625 == 1) {
+      qInfo() << "[DIAG] OverlayWindow: ZORDER_TICK"
+              << "layer:" << m_zOrderLayer
+              << "overlayHwnd:" << (void*)winId()
+              << "gw2Hwnd:" << m_gw2Hwnd
+              << "visible:" << isVisible()
+              << "enforcementHz: ~15";
+    }
+  }
+
   if (!m_mumbleLink->isConnected()) {
     return;
   }
@@ -654,10 +721,12 @@ void OverlayWindow::updateHudVisibility() {
 
   if (shouldShow != m_contentVisible) {
     m_contentVisible = shouldShow;
-    qInfo() << "[DEVLOG] OverlayWindow: HUD visibility changed to:" << shouldShow
+    qInfo() << "[DIAG] OverlayWindow: HUD_VISIBILITY"
+            << "visible:" << shouldShow
             << "mapId:" << m_mumbleLink->mapId()
             << "validPos:" << hasValidPosition
             << "tickStalled:" << tickStalled
+            << "stallMs:" << (now - m_lastTickChangeMs)
             << "mapOpen:" << mapOpen
             << "hideForMap:" << hideForMap;
     if (m_menuWidget) {
@@ -698,12 +767,36 @@ void OverlayWindow::ensureZOrder() {
 
   HWND overlayHwnd = reinterpret_cast<HWND>(winId());
 
-  // Per-tick TOPMOST maintenance: foregroundProc promotes to TOPMOST on focus
-  // change, but Windows can shuffle TOPMOST z-order when other TOPMOST windows
-  // appear. Refresh TOPMOST each tick to stay above siblings (D3D11 overlay,
-  // minimap renderer). This is only called when m_gameFocused is true.
-  ::SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  if (m_zOrderLayer >= OverlayZOrder::kLayerHUD) {
+    // HUD layer: per-tick TOPMOST maintenance. foregroundProc promotes to
+    // TOPMOST on focus change, but Windows can shuffle TOPMOST z-order when
+    // other TOPMOST windows appear. Only called when m_gameFocused is true.
+    ::SetWindowPos(overlayHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  } else {
+    // Non-HUD layer (e.g., minimap): layer-based insertion.
+    HWND gw2 = static_cast<HWND>(m_gw2Hwnd);
+    HWND insertAfter = OverlayZOrder::findInsertAfter(
+        gw2, m_zOrderLayer, overlayHwnd);
+    if (!insertAfter) {
+      insertAfter = ::GetNextWindow(gw2, GW_HWNDPREV);
+    }
+    // Cache check: skip SetWindowPos if insertion point unchanged.
+    // Redundant SetWindowPos triggers DWM recomposition → flicker.
+    if (insertAfter && insertAfter != overlayHwnd &&
+        insertAfter != m_lastInsertAfterHwnd) {
+      ::SetWindowPos(overlayHwnd, insertAfter, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+      m_lastInsertAfterHwnd = insertAfter;
+    } else if (!insertAfter || insertAfter == overlayHwnd) {
+      if (m_lastInsertAfterHwnd != HWND_TOP) {
+        ::SetWindowPos(overlayHwnd, HWND_TOP, 0, 0, 0, 0,
+                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        m_lastInsertAfterHwnd = HWND_TOP;
+      }
+    }
+    // else: z-order unchanged — no SetWindowPos needed
+  }
 #endif
 }
 

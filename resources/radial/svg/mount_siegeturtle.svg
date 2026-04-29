@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Siege Turtle: large armored turtle -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Shell (large dome) -->
+    <path d="M25 70 C25 45, 45 30, 64 30 C83 30, 103 45, 103 70"/>
+    <!-- Shell pattern -->
+    <path d="M64 30 L64 70"/>
+    <path d="M40 40 L50 70"/>
+    <path d="M88 40 L78 70"/>
+    <path d="M30 55 L98 55"/>
+    <!-- Head -->
+    <path d="M25 70 C20 68, 15 65, 12 60 L8 58"/>
+    <!-- Eye -->
+    <circle cx="14" cy="62" r="2" fill="#C09C57"/>
+    <!-- Beak -->
+    <path d="M8 58 L5 55 L10 56"/>
+    <!-- Front flippers -->
+    <path d="M35 72 L25 85 L20 88"/>
+    <path d="M45 74 L40 88 L35 90"/>
+    <!-- Back flippers -->
+    <path d="M85 74 L90 88 L95 90"/>
+    <path d="M95 72 L102 85 L108 88"/>
+    <!-- Tail -->
+    <path d="M98 70 C105 72, 108 70, 110 66"/>
+    <!-- Siege cannon (on top) -->
+    <path d="M58 30 L55 20 L73 20 L70 30"/>
+    <path d="M60 20 L58 12 L70 12 L68 20"/>
+  </g>
+</svg>

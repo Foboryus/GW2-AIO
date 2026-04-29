@@ -332,6 +332,7 @@ public:
                           const QString &savedGfxDir,
                           const QString &savedHotkeysDir,
                           const QString &markerStateDir = {},
+                          const QString &radialConfigDir = {},
                           QObject *parent = nullptr);
 
   // Profile management
@@ -408,6 +409,7 @@ private:
   QString m_savedGfxDir;
   QString m_savedHotkeysDir;
   QString m_markerStateDir;
+  QString m_radialConfigDir;
 
   // Helper methods
   QString generateId() const;

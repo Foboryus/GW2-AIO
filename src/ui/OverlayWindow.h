@@ -53,9 +53,22 @@ public:
    */
   void setTargetPid(uint32_t pid) { m_targetPid = pid; }
 
+  /**
+   * @brief Set z-order layer for cross-process overlay stacking.
+   * Must be called before startTracking(). See OverlayZOrder.h.
+   */
+  void setZOrderLayer(int layer);
+
 signals:
   void editExclusionZonesRequested();
   void detailsTrackerToggled(bool visible);
+
+  /**
+   * @brief Emitted when this overlay's GW2 instance gains/loses foreground focus.
+   * Driven by WinEvent hook — instant detection (0ms latency).
+   * Child processes connect this to ChildProcess::notifyOverlayFocusChanged().
+   */
+  void gameFocusChanged(bool focused);
 
 public:
   /**
@@ -183,6 +196,9 @@ private:
   bool m_isClickThrough = true; // Start transparent — game gets all clicks
   bool m_headless = false;       // No menu/zone editor (child minimap mode)
   uint32_t m_targetPid = 0;      // Guaranteed GW2 PID from command-line
+  int m_zOrderLayer = 400;       // Default: HUD layer (see OverlayZOrder.h)
+  int m_zOrderTickCount = 0;     // Throttle counter for ensureZOrder() calls
+  HWND m_lastInsertAfterHwnd = nullptr; // Z-order cache: skip redundant SetWindowPos
 
   // Focus state: true when this overlay's GW2 is the foreground window.
   // When unfocused, overlay hides content and shows paused icon.

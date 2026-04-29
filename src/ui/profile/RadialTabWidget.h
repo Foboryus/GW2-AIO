@@ -15,6 +15,7 @@
 #include <QWidget>
 
 class QComboBox;
+class QKeySequenceEdit;
 class QLabel;
 class QSlider;
 class QSpinBox;
@@ -74,12 +75,15 @@ private:
 
   // --- Wheels ---
   LabeledToggle *m_mountWheelToggle = nullptr;
+  QKeySequenceEdit *m_mountHotkeyEdit = nullptr;
   QTableWidget *m_mountTable = nullptr;
 
   LabeledToggle *m_noveltyWheelToggle = nullptr;
+  QKeySequenceEdit *m_noveltyHotkeyEdit = nullptr;
   QTableWidget *m_noveltyTable = nullptr;
 
   LabeledToggle *m_markerWheelToggle = nullptr;
+  QKeySequenceEdit *m_markerHotkeyEdit = nullptr;
   QTableWidget *m_markerTable = nullptr;
 
   // --- Display ---

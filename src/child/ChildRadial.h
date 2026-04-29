@@ -2,13 +2,17 @@
 
 /**
  * @file ChildRadial.h
- * @brief Radial menu child process
+ * @brief Radial menu child process — D3D11 radial wheel rendering
  *
- * Lightest child — Qt widgets only, no D3D11.
- * Owns: RadialController (future).
+ * Owns: RadialController (which owns RadialOverlayWindow).
+ * Receives per-profile radial settings via IPC and renders the
+ * radial wheel overlay on the GW2 window.
  */
 
 #include "ChildProcess.h"
+
+class RadialController;
+class RadialSettingsManager;
 
 class ChildRadial : public ChildProcess {
   Q_OBJECT
@@ -29,4 +33,8 @@ protected:
   void onMapLeft() override;
   void onFocusChanged(bool focused) override;
   void onSettingsReceived(const QJsonObject &settings) override;
+
+private:
+  RadialController *m_controller = nullptr;
+  RadialSettingsManager *m_radialSettings = nullptr;
 };

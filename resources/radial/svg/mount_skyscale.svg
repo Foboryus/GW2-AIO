@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Skyscale: dragon with small wings -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Body (serpentine) -->
+    <path d="M35 75 C40 60, 55 50, 68 52 C78 54, 85 60, 88 68"/>
+    <!-- Neck and head -->
+    <path d="M85 58 C88 48, 92 42, 96 38"/>
+    <!-- Head -->
+    <path d="M96 38 L104 35 L106 40 L100 44 L96 42"/>
+    <!-- Horns -->
+    <path d="M98 38 L95 28 M102 36 L104 26"/>
+    <!-- Eye -->
+    <circle cx="100" cy="39" r="2" fill="#C09C57"/>
+    <!-- Small wings -->
+    <path d="M60 50 C52 38, 40 32, 30 30 C38 38, 42 44, 48 48"/>
+    <path d="M72 52 C78 40, 86 34, 94 32 C88 38, 84 44, 80 48"/>
+    <!-- Legs -->
+    <path d="M50 72 L46 88 L42 92"/>
+    <path d="M78 70 L80 86 L84 90"/>
+    <!-- Tail (curling) -->
+    <path d="M35 75 C28 78, 22 76, 18 72 C15 68, 16 62, 20 58 C24 55, 28 56, 30 60"/>
+    <!-- Spines -->
+    <path d="M50 50 L48 44 M58 48 L57 42 M66 50 L66 44"/>
+  </g>
+</svg>

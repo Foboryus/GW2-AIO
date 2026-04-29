@@ -468,144 +468,154 @@ QProcess *LaunchManager::launchWithProfile(AccountProfile &profile) {
     // to the Steam/Epic one at ~L1134. Deferred dedup due to different security
     // models (default DACL here vs NULL DACL for Steam/Epic). See
     // docs/audit-report-phase1.md for details.
-    // Start pipe server in background thread - stays alive for entire game
-    // session
-    std::thread([this, pid, profile, pipeName, shouldPositionWindow,
-                 gw2Path]() {
+
+    // Create named pipe on the MAIN THREAD so it's guaranteed ready before
+    // DLL injection. The background thread receives the handle and waits
+    // for connections. This eliminates the need for any timer delay.
 #ifdef Q_OS_WIN
-      bool shouldContinue = true;
+    std::wstring pipeNameW = pipeName.toStdWString();
+    HANDLE hPipeInitial = CreateNamedPipeW(
+        pipeNameW.c_str(), PIPE_ACCESS_INBOUND,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 256, 256,
+        INFINITE, nullptr);
 
-      while (shouldContinue) {
-        // Create named pipe
-        HANDLE hPipe = CreateNamedPipeW(
-            pipeName.toStdWString().c_str(), PIPE_ACCESS_INBOUND,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 256, 256,
-            INFINITE, // No timeout - wait as long as needed
-            nullptr);
+    if (hPipeInitial == INVALID_HANDLE_VALUE) {
+      qWarning() << "Failed to create pipe:" << GetLastError();
+    } else {
+      qInfo() << "Creating Named Pipe for session tracking:" << pipeName;
 
-        if (hPipe == INVALID_HANDLE_VALUE) {
-          qWarning() << "Failed to create pipe:" << GetLastError();
-          return;
-        }
+      // Start pipe server in background thread with pre-created handle
+      std::thread([this, pid, profile, pipeName, shouldPositionWindow, gw2Path,
+                   hPipeInitial]() {
+        HANDLE hPipe = hPipeInitial;
+        bool shouldContinue = true;
+        bool isFirstIteration = true;
 
-        qInfo() << "Waiting for helper DLL connection (PID:" << pid << ")...";
+        while (shouldContinue) {
+          // On first iteration, use the pre-created pipe handle.
+          // On subsequent iterations, create a new pipe for the next message.
+          if (!isFirstIteration) {
+            std::wstring pipeW = pipeName.toStdWString();
+            hPipe = CreateNamedPipeW(
+                pipeW.c_str(), PIPE_ACCESS_INBOUND,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 256, 256,
+                INFINITE, nullptr);
 
-        // Wait for connection from helper DLL
-        if (ConnectNamedPipe(hPipe, nullptr) ||
-            GetLastError() == ERROR_PIPE_CONNECTED) {
-          char buffer[256];
-          DWORD bytesRead;
+            if (hPipe == INVALID_HANDLE_VALUE) {
+              qWarning() << "Failed to recreate pipe:" << GetLastError();
+              return;
+            }
+          }
+          isFirstIteration = false;
 
-          if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead,
-                       nullptr) &&
-              bytesRead > 0) {
-            buffer[bytesRead] = '\0';
-            qInfo() << "Received signal from helper DLL (PID:" << pid
-                    << "):" << buffer;
+          qInfo() << "Waiting for helper DLL connection (PID:" << pid << ")...";
 
-            if (strcmp(buffer, "LOADED") == 0) {
-              // Mark as successfully loaded (GPU active) and sync build ID
-              QMetaObject::invokeMethod(
-                  this,
-                  [this, pid, gw2Path]() {
-                    m_loadedPids.insert(pid);
-                    emit profileLoaded(gw2Path); // Triggers build ID sync
-                  },
-                  Qt::QueuedConnection);
+          // Wait for connection from helper DLL
+          if (ConnectNamedPipe(hPipe, nullptr) ||
+              GetLastError() == ERROR_PIPE_CONNECTED) {
+            char buffer[256];
+            DWORD bytesRead;
 
-              // Signal received - position window ONLY if enabled
-              if (shouldPositionWindow) {
+            if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead,
+                         nullptr) &&
+                bytesRead > 0) {
+              buffer[bytesRead] = '\0';
+              qInfo() << "Received signal from helper DLL (PID:" << pid
+                      << "):" << buffer;
+
+              if (strcmp(buffer, "LOADED") == 0) {
+                // Mark as successfully loaded (GPU active) and sync build ID
+                QMetaObject::invokeMethod(
+                    this,
+                    [this, pid, gw2Path]() {
+                      m_loadedPids.insert(pid);
+                      emit profileLoaded(gw2Path); // Triggers build ID sync
+                    },
+                    Qt::QueuedConnection);
+
+                // Signal received - position window ONLY if enabled
+                if (shouldPositionWindow) {
+                  QMetaObject::invokeMethod(
+                      this,
+                      [this, pid, profile]() {
+                        qInfo()
+                            << "Game loaded! Positioning window via DLL signal";
+                        setWindowPosition(pid, profile.windowX, profile.windowY,
+                                          profile.windowWidth,
+                                          profile.windowHeight);
+                      },
+                      Qt::QueuedConnection);
+                } else {
+                  qInfo()
+                      << "Game loaded (no window positioning for this profile)";
+                }
+
+                // Rename window title to include profile name
                 QMetaObject::invokeMethod(
                     this,
                     [this, pid, profile]() {
-                      qInfo()
-                          << "Game loaded! Positioning window via DLL signal";
-                      setWindowPosition(pid, profile.windowX, profile.windowY,
-                                        profile.windowWidth,
-                                        profile.windowHeight);
+                      setWindowTitle(pid, profile.nickname);
                     },
                     Qt::QueuedConnection);
-              } else {
-                qInfo()
-                    << "Game loaded (no window positioning for this profile)";
+
+                // Notify after window is positioned + renamed — children
+                // depend on final window geometry.
+                QMetaObject::invokeMethod(
+                    this,
+                    [this, profileId = profile.id]() {
+                      emit profileCharacterSelectReached(profileId);
+                    },
+                    Qt::QueuedConnection);
+
+              } else if (strcmp(buffer, "EXITING") == 0) {
+                // Playtime tracking cancelled - just log and exit
+                qInfo() << "Game exiting, profile:" << profile.nickname;
+
+                // Trigger CEF orphan detection (NamedPipe trigger)
+                CefManager::instance().registerExitSignal(
+                    pid, CefTriggerSource::NamedPipe);
+
+                shouldContinue = false;
               }
-
-              // Rename window title to include profile name
-              QMetaObject::invokeMethod(
-                  this,
-                  [this, pid, profile]() {
-                    setWindowTitle(pid, profile.nickname);
-                  },
-                  Qt::QueuedConnection);
-
-              // Notify after window is positioned + renamed — children
-              // depend on final window geometry.
-              QMetaObject::invokeMethod(
-                  this,
-                  [this, profileId = profile.id]() {
-                    emit profileCharacterSelectReached(profileId);
-                  },
-                  Qt::QueuedConnection);
-
-            } else if (strcmp(buffer, "EXITING") == 0) {
-              // Playtime tracking cancelled - just log and exit
-              qInfo() << "Game exiting, profile:" << profile.nickname;
-
-              // Trigger CEF orphan detection (NamedPipe trigger)
-              CefManager::instance().registerExitSignal(
-                  pid, CefTriggerSource::NamedPipe);
-
+            }
+          } else {
+            // Connection failed - check if process still exists
+            HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE,
+                                          static_cast<DWORD>(pid));
+            if (hProcess == nullptr) {
+              qInfo() << "Process" << pid
+                      << "no longer exists, ending pipe server";
               shouldContinue = false;
+            } else {
+              CloseHandle(hProcess);
             }
           }
-        } else {
-          // Connection failed - check if process still exists
-          HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE,
-                                        static_cast<DWORD>(pid));
-          if (hProcess == nullptr) {
-            qInfo() << "Process" << pid
-                    << "no longer exists, ending pipe server";
-            shouldContinue = false;
-          } else {
-            CloseHandle(hProcess);
-          }
+
+          DisconnectNamedPipe(hPipe);
+          CloseHandle(hPipe);
         }
 
-        DisconnectNamedPipe(hPipe);
-        CloseHandle(hPipe);
+        // Note: Crash detection and cleanup handled by startProcessMonitor
+
+        qInfo() << "Pipe server ended for PID:" << pid;
+      }).detach();
+
+      // Inject helper DLL immediately — pipe is guaranteed ready
+      // (created on main thread above, bg thread is just waiting)
+      if (!m_injectedPids.contains(pid)) {
+        QString helperDllPath =
+            QCoreApplication::applicationDirPath() + "/GW2AIOHelper.dll";
+        if (QFile::exists(helperDllPath)) {
+          qInfo() << "Injecting helper DLL:" << helperDllPath;
+          m_injectedPids.insert(pid);
+          m_dllInjector->inject(static_cast<DWORD>(pid), helperDllPath);
+        } else {
+          qWarning() << "Helper DLL not found:" << helperDllPath
+                     << "— window positioning will not work";
+        }
       }
-
-      // Note: Crash detection and cleanup handled by startProcessMonitor
-
-      qInfo() << "Pipe server ended for PID:" << pid;
+    }
 #endif
-    }).detach();
-
-    // Inject helper DLL (after a short delay for pipe to be ready)
-    QTimer::singleShot(
-        1000, this, [this, pid, profile, shouldPositionWindow]() {
-          QString helperDllPath =
-              QCoreApplication::applicationDirPath() + "/GW2AIOHelper.dll";
-          if (QFile::exists(helperDllPath)) {
-            qInfo() << "Injecting helper DLL:" << helperDllPath;
-            m_dllInjector->inject(static_cast<DWORD>(pid), helperDllPath);
-          } else {
-            qWarning() << "Helper DLL not found:" << helperDllPath;
-            // DOCUMENTED EXCEPTION to "NO TIMERS for window positioning" rule:
-            // This 45s fallback only fires when the helper DLL is missing
-            // (build misconfiguration or manual deletion). Under normal
-            // operation, the DLL signals via named pipe which is event-based.
-            // Without the DLL there is no alternative signal source.
-            // Fallback to 45 second timer for window positioning
-            if (shouldPositionWindow) {
-              QTimer::singleShot(45000, this, [this, pid, profile]() {
-                qInfo() << "Fallback: Positioning window after 45s timeout";
-                setWindowPosition(pid, profile.windowX, profile.windowY,
-                                  profile.windowWidth, profile.windowHeight);
-              });
-            }
-          }
-        });
   }
 
   return proc;
@@ -1271,11 +1281,18 @@ void LaunchManager::onGW2WindowDetected(qint64 pid,
 
     // Inject helper DLL immediately after pipe is created
     // The pipe server is already listening, so DLL can connect when ready
-    QString helperDllPath =
-        QCoreApplication::applicationDirPath() + "/GW2AIOHelper.dll";
-    if (QFile::exists(helperDllPath)) {
-      qInfo() << "Injecting helper DLL for PID:" << pid;
-      m_dllInjector->inject(static_cast<DWORD>(pid), helperDllPath);
+    // Guard: skip if standalone path already injected (timer-based)
+    if (!m_injectedPids.contains(pid)) {
+      QString helperDllPath =
+          QCoreApplication::applicationDirPath() + "/GW2AIOHelper.dll";
+      if (QFile::exists(helperDllPath)) {
+        qInfo() << "Injecting helper DLL for PID:" << pid;
+        m_injectedPids.insert(pid);
+        m_dllInjector->inject(static_cast<DWORD>(pid), helperDllPath);
+      }
+    } else {
+      qInfo() << "Skipping DLL injection for PID:" << pid
+              << "— already injected via standalone path";
     }
 
     // Inject any profile-specific DLLs
@@ -1354,6 +1371,10 @@ void LaunchManager::startProcessMonitor(HANDLE hProcess, qint64 pid,
           m_loadedPids.remove(pid);
           m_pendingProfiles.remove(pid);
           m_monitoredPids.remove(pid);
+          m_injectedPids.remove(pid);
+
+          // Check if this was a deliberate kill (user action, not a crash)
+          bool wasDeliberate = m_deliberatelyKilledPids.remove(pid);
 
           // Clean up stale mumble link name
           if (m_profileMumbleNames.contains(profile.id)) {
@@ -1371,8 +1392,8 @@ void LaunchManager::startProcessMonitor(HANDLE hProcess, qint64 pid,
           // show a modal dialog and block the event loop).
           emit profileExited(profile.id);
 
-          if (!wasLoaded) {
-            // Process died before GPU signal - crash during launch
+          if (!wasLoaded && !wasDeliberate) {
+            // Process died before GPU signal AND was not user-killed
             qWarning() << "Pre-injection crash detected for PID:" << pid;
 
             // Safety net: deactivate junction if crash happened before LOADED
@@ -1385,6 +1406,9 @@ void LaunchManager::startProcessMonitor(HANDLE hProcess, qint64 pid,
                                                   : "Unknown error";
             emit profileCrashDuringLaunch(profile.id, profile.nickname, gw2Path,
                                           reason);
+          } else if (wasDeliberate) {
+            qInfo() << "User-killed exit for PID:" << pid
+                    << "(deliberate \u2014 no crash popup)";
           } else {
             qInfo() << "Normal exit for PID:" << pid << "(LOADED was received)";
           }

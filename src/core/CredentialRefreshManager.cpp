@@ -154,6 +154,7 @@ void CredentialRefreshManager::onProfileLoaded(const QString &gw2Path) {
 
   // GW2 has updated the .dat file by now — safe to terminate
   // (GW2 does NOT write to Local.dat on exit, only during startup)
+  m_launchManager->markDeliberatelyKilled(m_currentPid);
   terminateProcess(m_currentPid);
 }
 
@@ -184,6 +185,7 @@ void CredentialRefreshManager::onTimeout() {
 
   // Kill the hung process and move on
   if (m_currentPid > 0) {
+    m_launchManager->markDeliberatelyKilled(m_currentPid);
     terminateProcess(m_currentPid);
     // onProcessExited will trigger refreshNext
   } else {
@@ -200,6 +202,7 @@ void CredentialRefreshManager::cancel() {
   m_timeoutTimer->stop();
 
   if (m_currentPid > 0) {
+    m_launchManager->markDeliberatelyKilled(m_currentPid);
     terminateProcess(m_currentPid);
   }
 

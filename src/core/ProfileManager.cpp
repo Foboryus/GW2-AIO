@@ -57,9 +57,11 @@ ProfileManager::ProfileManager(const QString &profilesDir,
                                const QString &savedDatsDir,
                                const QString &savedGfxDir,
                                const QString &savedHotkeysDir,
-                               const QString &markerStateDir, QObject *parent)
+                               const QString &markerStateDir,
+                               const QString &radialConfigDir, QObject *parent)
     : QObject(parent), m_savedDatsDir(savedDatsDir), m_savedGfxDir(savedGfxDir),
-      m_savedHotkeysDir(savedHotkeysDir), m_markerStateDir(markerStateDir) {
+      m_savedHotkeysDir(savedHotkeysDir), m_markerStateDir(markerStateDir),
+      m_radialConfigDir(radialConfigDir) {
   m_profilesDir = profilesDir;
   m_manifestPath = QDir(m_profilesDir).filePath("manifest.json");
   QDir parentDir(m_profilesDir);
@@ -617,6 +619,21 @@ bool ProfileManager::exportProfile(const QString &id, const QString &filePath) {
     }
   }
 
+  // Embed radial settings if present
+  if (!m_radialConfigDir.isEmpty()) {
+    QString radialPath =
+        QDir(m_radialConfigDir).filePath(id + ".json");
+    QFile radialFile(radialPath);
+    if (radialFile.exists() && radialFile.open(QIODevice::ReadOnly)) {
+      QJsonDocument radialDoc = QJsonDocument::fromJson(radialFile.readAll());
+      radialFile.close();
+      if (radialDoc.isObject()) {
+        exportObj["_embedded_radialSettings"] = radialDoc.object();
+        qInfo() << "Embedded radial settings in export";
+      }
+    }
+  }
+
   file.write(QJsonDocument(exportObj).toJson());
   file.close();
 
@@ -712,6 +729,27 @@ bool ProfileManager::importProfile(const QString &filePath) {
       }
       qInfo() << "Extracted marker state:" << markerState.keys().size()
               << "files to" << stateDir;
+    }
+  }
+
+  // Extract embedded radial settings if present
+  if (importObj.contains("_embedded_radialSettings") &&
+      !m_radialConfigDir.isEmpty()) {
+    QJsonObject radialObj = importObj["_embedded_radialSettings"].toObject();
+    // Validate type field (versioned file format rule)
+    if (radialObj["type"].toString() == "radial_settings") {
+      QDir().mkpath(m_radialConfigDir);
+      QString destPath =
+          QDir(m_radialConfigDir).filePath(imported.id + ".json");
+      QFile f(destPath);
+      if (f.open(QIODevice::WriteOnly)) {
+        f.write(QJsonDocument(radialObj).toJson());
+        f.close();
+        qInfo() << "Extracted radial settings to:" << destPath;
+      }
+    } else {
+      qWarning() << "Skipped embedded radial settings — invalid type:"
+                 << radialObj["type"].toString();
     }
   }
 

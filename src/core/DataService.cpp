@@ -36,7 +36,8 @@ DataService::DataService(QObject *parent)
       m_profileManager(new ProfileManager(
           m_storageBackend->profilesDir(), m_storageBackend->savedDatsDir(),
           m_storageBackend->savedGfxDir(), m_storageBackend->savedHotkeysDir(),
-          m_storageBackend->markerStateDir(), this)),
+          m_storageBackend->markerStateDir(),
+          m_storageBackend->radialConfigDir(), this)),
       m_settingsManager(
           new SettingsManager(m_storageBackend->settingsFilePath(), this)),
       m_updateManager(
@@ -90,6 +91,7 @@ DataService::DataService(QObject *parent)
             ActivationStore::deleteProfileState(
                 m_storageBackend->markerStateDir(), id);
             m_markerSettings->deleteForProfile(id);
+            m_radialSettings2->deleteForProfile(id);
             // Clean up API cache and credential when profile is deleted
             m_apiCache->clearProfile(id);
             m_apiKeyManager->removeKey(id);

@@ -143,11 +143,18 @@ public:
    */
   static QString getProcessPath(qint64 pid);
 
-  // Managers
   MutexManager *mutexManager() { return m_mutexManager; }
   DllInjector *dllInjector() { return m_dllInjector; }
   LocalDatManager *localDatManager() { return m_localDatManager; }
   void setLocalDatManager(LocalDatManager *mgr) { m_localDatManager = mgr; }
+
+  /**
+   * @brief Mark a PID as deliberately killed (user action, not a crash)
+   *
+   * Call this before terminating a GW2 process from user UI (refresh,
+   * credential refresh, etc.) to suppress false "Pre-injection crash" reports.
+   */
+  void markDeliberatelyKilled(qint64 pid) { m_deliberatelyKilledPids.insert(pid); }
 
   /**
    * @brief Get the MumbleLink segment name for a running profile
@@ -259,6 +266,13 @@ private:
   // Process monitoring for pre-injection crash detection
   QSet<qint64> m_monitoredPids; // PIDs with active process monitors (prevents
                                 // duplicates)
+
+  // PIDs deliberately killed by user (not a crash — suppress crash popup)
+  QSet<qint64> m_deliberatelyKilledPids;
+
+  // PIDs already injected with helper DLL (prevent double-injection)
+  QSet<qint64> m_injectedPids;
+
   void startProcessMonitor(HANDLE hProcess, qint64 pid,
                            const AccountProfile &profile,
                            const QString &gw2Path);

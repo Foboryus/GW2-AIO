@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Jackal: mystical sand jackal -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Body -->
+    <path d="M35 72 C38 58, 50 48, 65 50 C78 52, 85 60, 88 70"/>
+    <!-- Head -->
+    <path d="M85 60 C90 52, 95 48, 100 45 L105 42"/>
+    <!-- Pointed ears -->
+    <path d="M95 48 L90 32 L92 46"/>
+    <path d="M100 45 L100 28 L103 42"/>
+    <!-- Muzzle -->
+    <path d="M105 42 L112 48 L108 52 L100 50"/>
+    <!-- Eye -->
+    <circle cx="98" cy="47" r="2" fill="#C09C57"/>
+    <!-- Front legs -->
+    <path d="M55 70 L52 92 L48 95 M50 92 L56 95"/>
+    <!-- Back legs -->
+    <path d="M80 72 L82 92 L78 95 M80 92 L86 95"/>
+    <!-- Tail (flowing/mystical) -->
+    <path d="M35 72 C28 68, 20 65, 15 58 C12 52, 15 48, 20 50"/>
+    <!-- Sand wisps -->
+    <path d="M40 80 C35 82, 28 80, 25 76" stroke-dasharray="4 3"/>
+    <path d="M90 78 C95 80, 100 78, 102 74" stroke-dasharray="4 3"/>
+  </g>
+</svg>

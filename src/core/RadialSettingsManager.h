@@ -62,6 +62,19 @@ public:
    */
   QString currentProfileId() const { return m_currentProfileId; }
 
+  /**
+   * @brief Delete radial settings file for a profile (cleanup on profile deletion)
+   * @param profileId Profile UUID
+   */
+  void deleteForProfile(const QString &profileId);
+
+  /**
+   * @brief Read raw JSON for a profile (for export embedding)
+   * @param profileId Profile UUID
+   * @return QJsonObject of settings, or empty object if not found
+   */
+  QJsonObject readRawJson(const QString &profileId) const;
+
 signals:
   /**
    * @brief Emitted when settings are modified via setSettings() or resetToDefaults()

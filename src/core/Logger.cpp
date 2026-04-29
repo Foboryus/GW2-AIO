@@ -40,7 +40,8 @@ void Logger::initialize() {
 
     // Create log file with date
     QString date = QDate::currentDate().toString("yyyy-MM-dd");
-    m_logFilePath = QDir(m_logDir).filePath(QString("gw2aio_%1.log").arg(date));
+    m_logFilePath = QDir(m_logDir).filePath(
+        QString("%1_%2.log").arg(m_filePrefix, date));
 
     m_logFile = new QFile(m_logFilePath);
     if (m_logFile->open(QIODevice::Append | QIODevice::Text)) {
@@ -151,7 +152,7 @@ QString Logger::levelToString(Level level) const {
 void Logger::rotateLogsIfNeeded() {
   QDir logDir(m_logDir);
   QStringList logs =
-      logDir.entryList({"gw2aio_*.log"}, QDir::Files, QDir::Time);
+      logDir.entryList({m_filePrefix + "_*.log"}, QDir::Files, QDir::Time);
 
   // Delete old logs beyond max
   while (logs.size() > m_maxLogFiles) {

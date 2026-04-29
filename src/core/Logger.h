@@ -38,6 +38,14 @@ public:
   void initialize();
 
   /**
+   * @brief Set a custom file prefix for the log filename.
+   * Must be called BEFORE initialize(). Defaults to "gw2aio".
+   * Example: setFilePrefix("gw2aio_radial_2885f7f4")
+   *   → log file: gw2aio_radial_2885f7f4_2026-04-28.log
+   */
+  void setFilePrefix(const QString &prefix) { m_filePrefix = prefix; }
+
+  /**
    * @brief Alias for setConsoleEnabled
    */
   void setConsoleOutput(bool enabled) { m_consoleEnabled = enabled; }
@@ -101,6 +109,7 @@ private:
   QTextStream *m_stream = nullptr;
   QString m_logFilePath;
   QString m_logDir;
+  QString m_filePrefix = QStringLiteral("gw2aio");
 
   Level m_minLevel = Level::Debug;
   bool m_consoleEnabled = true;

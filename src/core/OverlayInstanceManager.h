@@ -95,4 +95,9 @@ private:
   QString m_markerStateDir;
 
   QHash<QString, OverlayInstance *> m_instances;
+
+  // Tracks which MumbleLink* was last emitted via focusedMumbleLinkChanged.
+  // When the owning instance is destroyed, we must emit nullptr to prevent
+  // dangling pointer access in controllers (RadialController, DPSController, etc).
+  MumbleLink *m_focusedMumbleLink = nullptr;
 };

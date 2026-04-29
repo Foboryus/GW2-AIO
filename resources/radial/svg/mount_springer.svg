@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Springer: rabbit/kangaroo leaping upward -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Body -->
+    <path d="M55 75 C50 60, 55 48, 64 42 C72 37, 80 42, 82 52 C84 60, 80 70, 75 78"/>
+    <!-- Long ears -->
+    <path d="M60 42 C55 28, 50 20, 48 18"/>
+    <path d="M68 38 C68 24, 72 18, 75 15"/>
+    <!-- Back legs (powerful) -->
+    <path d="M58 78 L50 95 L42 98 M48 95 L56 100"/>
+    <path d="M72 78 L78 95 L85 98 M80 95 L72 100"/>
+    <!-- Tail -->
+    <path d="M75 78 C82 82, 88 78, 90 72"/>
+    <!-- Eye -->
+    <circle cx="72" cy="45" r="2" fill="#C09C57"/>
+    <!-- Nose -->
+    <path d="M80 52 L84 54 L80 56"/>
+  </g>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Roller Beetle: armored beetle rolling -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Shell (dome) -->
+    <path d="M30 68 C30 42, 50 28, 64 28 C78 28, 98 42, 98 68"/>
+    <!-- Shell segments -->
+    <path d="M64 28 L64 68"/>
+    <path d="M42 36 C48 50, 52 60, 54 68"/>
+    <path d="M86 36 C80 50, 76 60, 74 68"/>
+    <!-- Underside -->
+    <path d="M30 68 L98 68"/>
+    <!-- Head -->
+    <path d="M40 68 C38 72, 35 74, 30 74 L25 72"/>
+    <!-- Mandibles -->
+    <path d="M25 72 L20 68 M25 72 L20 76"/>
+    <!-- Eye -->
+    <circle cx="32" cy="70" r="2" fill="#C09C57"/>
+    <!-- Legs -->
+    <path d="M45 68 L42 82 L38 85"/>
+    <path d="M60 68 L58 80 L54 83"/>
+    <path d="M75 68 L77 80 L81 83"/>
+    <path d="M88 68 L90 82 L94 85"/>
+    <!-- Speed lines -->
+    <path d="M100 50 L115 48" stroke-dasharray="4 3"/>
+    <path d="M100 58 L118 56" stroke-dasharray="4 3"/>
+    <path d="M98 66 L116 65" stroke-dasharray="4 3"/>
+  </g>
+</svg>

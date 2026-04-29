@@ -54,9 +54,10 @@ void OverlayInstance::start() {
   qInfo() << "OverlayInstance: starting — profile:" << m_profileId
           << "mumbleLink:" << m_mumbleLinkName;
 
-  // Start MumbleLink polling — needed for child spawn triggers
-  // (character select detection, map changes, focus)
-  m_mumbleLink->start(10);
+  // Main process only needs connection/spawn monitoring — 10Hz is sufficient.
+  // Child processes handle their own high-frequency polling independently.
+  // (5 profiles × 10Hz = 50 timer events/sec vs previous 500/sec at 100Hz)
+  m_mumbleLink->start(100);
 
   // Load per-profile marker preferences — needed for IPC settings push
   m_markerSettings->loadForProfile(m_profileId);

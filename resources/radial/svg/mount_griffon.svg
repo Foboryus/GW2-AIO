@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Griffon: wings spread, diving -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Left wing -->
+    <path d="M64 55 C50 40, 30 28, 12 22 C18 30, 22 38, 28 44 C20 40, 14 35, 8 32 C15 42, 25 48, 35 52 L64 55"/>
+    <!-- Right wing -->
+    <path d="M64 55 C78 40, 98 28, 116 22 C110 30, 106 38, 100 44 C108 40, 114 35, 120 32 C113 42, 103 48, 93 52 L64 55"/>
+    <!-- Body -->
+    <path d="M56 55 C58 60, 60 70, 60 80 L64 85 L68 80 C68 70, 70 60, 72 55"/>
+    <!-- Head -->
+    <path d="M58 55 C58 48, 62 44, 64 42 C66 44, 70 48, 70 55"/>
+    <!-- Beak -->
+    <path d="M64 42 L64 35 L60 40 M64 35 L68 40"/>
+    <!-- Eye -->
+    <circle cx="61" cy="48" r="1.5" fill="#C09C57"/>
+    <circle cx="67" cy="48" r="1.5" fill="#C09C57"/>
+    <!-- Tail feathers -->
+    <path d="M60 80 L55 95 M64 85 L64 98 M68 80 L73 95"/>
+  </g>
+</svg>

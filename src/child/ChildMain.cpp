@@ -91,10 +91,32 @@ int main(int argc, char *argv[])
     // === Initialize AppConfig ===
     AppConfig::instance().initialize();
 
-    // === Initialize Logger to children/ subdirectory ===
+    // === Determine feature type from compile-time define ===
+    QString featureType;
+#ifdef CHILD_FEATURE_3D
+    featureType = QStringLiteral("3d");
+#elif defined(CHILD_FEATURE_MINIMAP)
+    featureType = QStringLiteral("minimap");
+#elif defined(CHILD_FEATURE_BIGMAP)
+    featureType = QStringLiteral("bigmap");
+#elif defined(CHILD_FEATURE_RADIAL)
+    featureType = QStringLiteral("radial");
+#elif defined(CHILD_FEATURE_OVERLAY)
+    featureType = QStringLiteral("overlay");
+#else
+    featureType = QStringLiteral("unknown");
+#endif
+
+    // === Initialize Logger to children/ subdirectory with per-process file ===
+    // Each child gets its own log file to avoid multi-process write contention.
+    // Format: gw2aio_{feature}_{profileId8}_{date}.log
+    // Example: gw2aio_radial_2885f7f4_2026-04-28.log
     QString childrenLogDir = QDir(AppConfig::instance().logsDir())
                                  .filePath("children");
     QDir().mkpath(childrenLogDir);
+    QString logPrefix = QString("gw2aio_%1_%2")
+                            .arg(featureType, profileId.left(8));
+    Logger::instance().setFilePrefix(logPrefix);
     Logger::instance().initialize(childrenLogDir);
     Logger::instance().setConsoleOutput(true);
 

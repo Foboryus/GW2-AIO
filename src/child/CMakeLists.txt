@@ -201,11 +201,24 @@ target_link_libraries(GW2AIO-bigmap PRIVATE ${CHILD_QT_LIBS} ${CHILD_D3D_LIBS})
 child_set_manifest(GW2AIO-bigmap)
 
 # ============================================================================
-# GW2AIO-radial: Radial Menu Child (lightweight — no D3D11)
+# GW2AIO-radial: Radial Menu Child (D3D11 radial wheel rendering)
 # ============================================================================
 add_executable(GW2AIO-radial WIN32
     ${CHILD_FRAMEWORK_SOURCES}
     ChildRadial.cpp ChildRadial.h
+    RadialOverlayWindow.cpp RadialOverlayWindow.h
+    RadialController.cpp RadialController.h
+    RadialRenderer.cpp RadialRenderer.h
+    RadialWheel.cpp RadialWheel.h
+    RadialElement.h
+
+    # D3D11 rendering context (shared source — device, swap chain, shaders)
+    ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
+
+    # Radial settings (per-profile configuration)
+    ${CMAKE_SOURCE_DIR}/src/core/RadialSettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/RadialSettingsManager.cpp
+
     ${CHILD_CORE_SOURCES}
     ${CHILD_QRC_SOURCES}
     ${CMAKE_SOURCE_DIR}/resources/child.rc
@@ -215,6 +228,7 @@ target_include_directories(GW2AIO-radial PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(GW2AIO-radial PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Xml Qt6::Svg
     QuaZip::QuaZip
+    ${CHILD_D3D_LIBS}
 )
 child_set_manifest(GW2AIO-radial)
 

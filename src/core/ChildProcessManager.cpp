@@ -13,6 +13,7 @@
 #include "core/AppConfig.h"
 #include "core/OverlayInstance.h"
 #include "core/OverlayInstanceManager.h"
+#include "core/RadialSettingsManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 
 #include <QCoreApplication>
@@ -204,11 +205,16 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
         QString key;
         bool enabled;
     };
+    // Load radial toggle from per-profile radial settings
+    const QString radialConfigDir = AppConfig::instance().radialConfigDir();
+    RadialSettingsManager radialSettings(radialConfigDir);
+    radialSettings.loadForProfile(profileId);
+
     const QList<FeatureToggle> features = {
         {QStringLiteral("3d"),      settings.render3dEnabled()},
         {QStringLiteral("minimap"), settings.renderMinimapEnabled()},
         {QStringLiteral("bigmap"),  settings.renderBigMapEnabled()},
-        {QStringLiteral("radial"),  true},  // Always spawn (no toggle yet)
+        {QStringLiteral("radial"),  radialSettings.settings().radialEnabled},
         {QStringLiteral("overlay"), true},  // Always spawn — overlay HUD menu
     };
 
@@ -231,55 +237,83 @@ void ChildProcessManager::terminateChildren(const QString &profileId)
         return;
     }
 
-    qInfo() << "ChildProcessManager: terminating children for profile:"
-            << profileId;
-
     QList<ChildProcessInfo> &children = m_children[profileId];
+    int totalChildren = children.size();
+
+    qInfo() << "[CHILD_EXIT] BEGIN terminateChildren — profile:" << profileId
+            << "count:" << totalChildren;
+
+    int childIdx = 0;
     for (ChildProcessInfo &child : children) {
+        childIdx++;
+        qInfo() << "[CHILD_EXIT] Child" << childIdx << "/" << totalChildren
+                << "feature:" << child.featureKey
+                << "profile:" << child.profileName
+                << "pid:" << child.processId
+                << "hasPipe:" << (child.pipeHandle != INVALID_HANDLE_VALUE)
+                << "hasProcess:" << (child.processHandle != nullptr);
+
         // Try graceful via pipe first: send STOP command
         if (child.pipeHandle != INVALID_HANDLE_VALUE) {
+            qInfo() << "[CHILD_EXIT]   Step 1: sending STOP via pipe...";
             const char *stopMsg = "STOP\n";
             DWORD written = 0;
-            WriteFile(child.pipeHandle, stopMsg,
+            BOOL writeOk = WriteFile(child.pipeHandle, stopMsg,
                       static_cast<DWORD>(strlen(stopMsg)), &written, nullptr);
             FlushFileBuffers(child.pipeHandle);
+            qInfo() << "[CHILD_EXIT]   Step 1: STOP sent — writeOk:" << writeOk
+                    << "bytes:" << written;
 
             // Wait briefly for graceful exit
             if (child.processHandle) {
+                qInfo() << "[CHILD_EXIT]   Step 2: waiting 2s for graceful exit...";
                 DWORD waitResult = WaitForSingleObject(child.processHandle, 2000);
                 if (waitResult != WAIT_OBJECT_0) {
                     // Force terminate if didn't exit gracefully
-                    qWarning() << "ChildProcessManager: force-terminating child"
-                               << child.featureKey << "for" << child.profileName;
+                    qWarning() << "[CHILD_EXIT]   Step 2: TIMEOUT — force-terminating"
+                               << child.featureKey;
                     TerminateProcess(child.processHandle, 1);
+                } else {
+                    qInfo() << "[CHILD_EXIT]   Step 2: graceful exit confirmed";
                 }
             }
         } else if (child.processHandle) {
             // No pipe — force terminate
+            qInfo() << "[CHILD_EXIT]   Step 1: no pipe — force-terminating";
             TerminateProcess(child.processHandle, 1);
         }
 
         // Cleanup handles
         if (child.pipeHandle != INVALID_HANDLE_VALUE) {
+            qInfo() << "[CHILD_EXIT]   Step 3: closing pipe handle...";
             DisconnectNamedPipe(child.pipeHandle);
             CloseHandle(child.pipeHandle);
             child.pipeHandle = INVALID_HANDLE_VALUE;
+            qInfo() << "[CHILD_EXIT]   Step 3: pipe closed";
         }
         if (child.processHandle) {
+            qInfo() << "[CHILD_EXIT]   Step 4: closing process handle...";
             CloseHandle(child.processHandle);
             child.processHandle = nullptr;
+            qInfo() << "[CHILD_EXIT]   Step 4: process handle closed";
         }
 
         // Clean up hardlink
         if (!child.exePath.isEmpty() && QFileInfo::exists(child.exePath)) {
+            qInfo() << "[CHILD_EXIT]   Step 5: removing hardlink:" << child.exePath;
             QFile::remove(child.exePath);
         }
 
+        qInfo() << "[CHILD_EXIT]   Step 6: emitting childTerminated signal...";
         emit childTerminated(profileId, child.featureKey);
+        qInfo() << "[CHILD_EXIT] Child" << childIdx << "/" << totalChildren
+                << "DONE —" << child.featureKey;
     }
 
     m_children.remove(profileId);
     m_profilePids.remove(profileId);
+
+    qInfo() << "[CHILD_EXIT] END terminateChildren — profile:" << profileId;
 }
 
 void ChildProcessManager::terminateChild(const QString &profileId,
@@ -386,11 +420,16 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
         QString key;
         bool enabled;
     };
+    // Load radial toggle from per-profile radial settings
+    const QString radialConfigDir = AppConfig::instance().radialConfigDir();
+    RadialSettingsManager radialSettings(radialConfigDir);
+    radialSettings.loadForProfile(profileId);
+
     const QList<FeatureToggle> featureToggles = {
         {QStringLiteral("3d"),      settings.renderingEnabled() && settings.render3dEnabled()},
         {QStringLiteral("minimap"), settings.renderingEnabled() && settings.renderMinimapEnabled()},
         {QStringLiteral("bigmap"),  settings.renderingEnabled() && settings.renderBigMapEnabled()},
-        {QStringLiteral("radial"),  settings.renderingEnabled()},  // No dedicated toggle
+        {QStringLiteral("radial"),  settings.renderingEnabled() && radialSettings.settings().radialEnabled},
         // Overlay is ALWAYS ON — it's the control panel. Never kill it.
         // Users need it to re-enable rendering if they disabled it.
         {QStringLiteral("overlay"), true},

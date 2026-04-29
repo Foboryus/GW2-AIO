@@ -149,6 +149,7 @@ int main(int argc, char *argv[]) {
   Logger::instance().setConsoleOutput(opts.consoleLog);
 
   qInfo() << "GW2 AIO Manager starting...";
+  qInfo() << "Version:" << APP_VERSION;
   qInfo() << "Data directory:" << AppConfig::instance().dataDir();
 
   // Apply default theme (will be re-applied from saved setting after
@@ -204,6 +205,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Detect GW2
+  qInfo() << "[STARTUP] Detecting GW2...";
   splash.setStatus("Detecting Guild Wars 2...");
   splash.setProgress(20);
 
@@ -220,6 +222,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Feature controllers will receive their MumbleLink dynamically from the focused OverlayInstance.
+  qInfo() << "[STARTUP] Loading feature controllers...";
   splash.setStatus("Loading feature controllers...");
   splash.setProgress(40);
 
@@ -239,6 +242,7 @@ int main(int argc, char *argv[]) {
   //   dpsController.setMeterVisible(true);
   // }
 
+  qInfo() << "[STARTUP] Loading marker system...";
   splash.setStatus("Loading marker system...");
   splash.setProgress(60);
 
@@ -266,6 +270,7 @@ int main(int argc, char *argv[]) {
   // per-instance OverlayInstance objects managed by OverlayInstanceManager.
   // See Phase 4 in docs/Overlay Multibox/implementation_plan.md
 
+  qInfo() << "[STARTUP] Loading Blish modules...";
   splash.setStatus("Loading Blish modules...");
   splash.setProgress(80);
 
@@ -280,18 +285,21 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  qInfo() << "[STARTUP] Creating MainWindow...";
   splash.setStatus("Starting UI...");
   splash.setProgress(90);
 
   // Note: MainWindow creates its own tray icon in setupTrayIcon()
 
   // Create main window
+  qInfo() << "[STARTUP] MainWindow constructor...";
   MainWindow mainWindow(&dataService, &markerController);
   mainWindow.setGW2Path(gw2Path);
 
   // Create overlay instance manager — self-contained, wires to LaunchManager
   // internally via profileWindowConfirmed (create) and profileExited (destroy).
   // Main.cpp does NOT need to connect overlay signals — the manager handles it.
+  qInfo() << "[STARTUP] Creating OverlayInstanceManager...";
   OverlayInstanceManager overlayManager(
       mainWindow.launchManager(), &markerController,
       dataService.storageBackend()->markerStateDir());
@@ -299,6 +307,7 @@ int main(int argc, char *argv[]) {
   // Create child process manager — spawns feature children (GW2AIO-3d-<Profile>.exe)
   // when GW2 window is confirmed, terminates them when GW2 exits.
   // Self-contained wiring: connects to LaunchManager signals internally.
+  qInfo() << "[STARTUP] Creating ChildProcessManager...";
   ChildProcessManager childProcessManager(
       mainWindow.launchManager(), dataService.profileManager());
   childProcessManager.setOverlayInstanceManager(&overlayManager);
@@ -315,6 +324,7 @@ int main(int argc, char *argv[]) {
   QObject::connect(&overlayManager, &OverlayInstanceManager::focusedMumbleLinkChanged,
                    &moduleController, &ModuleController::setMumbleLink);
 
+  qInfo() << "[STARTUP] All systems initialized — showing UI...";
   splash.setStatus("Ready!");
   splash.setProgress(100);
 

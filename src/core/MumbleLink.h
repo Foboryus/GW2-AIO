@@ -260,6 +260,11 @@ private:
   CompassData m_miniMap;
   CompassData m_bigMap;
 
+  // Compass change-detection (per-instance, NOT static — avoids cross-instance
+  // log ping-pong when multiple MumbleLink objects have different compass sizes)
+  int m_lastLoggedCompassW = 0;
+  int m_lastLoggedCompassH = 0;
+
   // Process
   uint8_t m_mountIndex = 0;
   uint32_t m_processId = 0;
