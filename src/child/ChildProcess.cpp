@@ -564,11 +564,17 @@ void ChildProcess::setFocusedPollRate()
     if (m_mumbleLink && m_mumbleLink->isRunning()) {
         m_mumbleLink->setUpdateInterval(FOCUSED_POLL_MS);
     }
+    if (m_pipeReadTimer) {
+        m_pipeReadTimer->setInterval(FOCUSED_PIPE_POLL_MS);
+    }
 }
 
 void ChildProcess::setIdlePollRate()
 {
     if (m_mumbleLink && m_mumbleLink->isRunning()) {
         m_mumbleLink->setUpdateInterval(IDLE_POLL_MS);
+    }
+    if (m_pipeReadTimer) {
+        m_pipeReadTimer->setInterval(IDLE_PIPE_POLL_MS);
     }
 }

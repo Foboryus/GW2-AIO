@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Skiff: small boat -->
+  <g stroke="#C09C57" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Hull -->
+    <path d="M24 72 C24 72, 30 84, 64 84 C98 84, 104 72, 104 72"/>
+    <!-- Hull bottom curve -->
+    <path d="M30 84 C40 92, 88 92, 98 84"/>
+    <!-- Deck line -->
+    <path d="M28 72 L100 72"/>
+    <!-- Mast -->
+    <path d="M64 72 L64 32"/>
+    <!-- Sail -->
+    <path d="M64 36 L84 56 L64 60 Z"/>
+    <!-- Bow ornament -->
+    <path d="M100 72 C106 68, 108 64, 104 60"/>
+    <!-- Flag -->
+    <path d="M64 32 L76 36 L64 40"/>
+  </g>
+</svg>

@@ -102,6 +102,7 @@ private:
   bool m_wasKeyDown = false;
   bool m_isFocused = false; // Must match ChildProcess::m_focused default
   bool m_iconsLoaded = false;
+  bool m_isRunning = false;  // Guard against double-stop
 
   // Frame timing
   QElapsedTimer m_frameTimer;

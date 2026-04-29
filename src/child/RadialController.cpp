@@ -70,10 +70,14 @@ void RadialController::start() {
   m_lastFrameMs = m_frameTimer.elapsed();
 
   m_overlayWindow->startTracking();
+  m_isRunning = true;
   qInfo() << "RadialController: Started for PID:" << m_targetPid;
 }
 
 void RadialController::stop() {
+  if (!m_isRunning) return;  // Guard against double-stop
+  m_isRunning = false;
+
   if (m_overlayWindow) {
     m_overlayWindow->stopTracking();
     delete m_overlayWindow;
