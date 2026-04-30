@@ -64,9 +64,13 @@ int main(int argc, char *argv[]) {
   app.setOrganizationName("GW2AIO");
   app.setWindowIcon(QIcon(":/icons/app-icon.svg"));
 
-  // Prevent Qt from quitting when the last visible window closes
-  // This is needed because we have system tray functionality and parentless
-  // dialogs
+  // CRITICAL: Prevent AIO from auto-quitting when GW2 instances close.
+  // Default Qt behavior (quitOnLastWindowClosed=true) causes app.exec()
+  // to return when the last visible QWidget closes. When MainWindow is
+  // hidden in tray and overlay teardown destroys widgets, Qt thinks
+  // "no visible windows" and exits — killing all remaining profiles.
+  // With this set to false, AIO only exits via explicit QApplication::quit()
+  // (tray "Quit" action or MainWindow close button with m_forceQuit).
   app.setQuitOnLastWindowClosed(false);
 
 // === Single-instance enforcement ===

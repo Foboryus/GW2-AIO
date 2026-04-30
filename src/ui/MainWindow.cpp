@@ -1346,8 +1346,9 @@ void MainWindow::updateTrayMenu() {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-  // If force quit was requested (from tray menu), actually close
+  // If force quit was requested (from tray menu "Quit" action), actually close
   if (m_forceQuit) {
+    qInfo() << "MainWindow: closeEvent — force quit requested, terminating app";
     event->accept();
     qApp->quit(); // Ensure app terminates
     return;
@@ -1357,15 +1358,18 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   bool showTray = m_dataService->showTrayIcon();
 
   if (showTray) {
-    // Minimize to tray instead of closing
+    // Minimize to tray instead of closing — AIO stays running
+    qInfo() << "MainWindow: closeEvent — minimizing to tray (tray enabled)";
     hide();
     m_trayIcon->show();
     m_trayIcon->showMessage("GW2 AIO Manager", "Minimized to tray.",
                             QSystemTrayIcon::Information, 1500);
     event->ignore();
   } else {
-    // No tray - just close
+    // No tray — truly close the application
+    qInfo() << "MainWindow: closeEvent — tray disabled, terminating app";
     event->accept();
+    qApp->quit();
   }
 }
 
