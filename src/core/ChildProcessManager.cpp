@@ -200,6 +200,13 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
         return;
     }
 
+    // === Step 1: Spawn compositor FIRST (single overlay window) ===
+    // The compositor must be running before feature children start producing
+    // shared textures, so it can open them by name.
+    qInfo() << "[COMPOSITOR_LIFECYCLE] Spawning compositor FIRST for" << profileId;
+    spawnChild(profileId, mumbleName, gw2Pid, QStringLiteral("compositor"));
+
+    // === Step 2: Spawn feature children ===
     // Map feature keys to their toggle state
     struct FeatureToggle {
         QString key;
@@ -226,6 +233,8 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
                     << "disabled for profile" << profileId << "— skipped";
         }
     }
+
+    qInfo() << "[COMPOSITOR_LIFECYCLE] All children spawned for" << profileId;
 
     // Ensure pipe polling is running to read upstream messages from children
     startPipePolling();
@@ -426,6 +435,7 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
     radialSettings.loadForProfile(profileId);
 
     const QList<FeatureToggle> featureToggles = {
+        {QStringLiteral("compositor"), true},  // Compositor — always on
         {QStringLiteral("3d"),      settings.renderingEnabled() && settings.render3dEnabled()},
         {QStringLiteral("minimap"), settings.renderingEnabled() && settings.renderMinimapEnabled()},
         {QStringLiteral("bigmap"),  settings.renderingEnabled() && settings.renderBigMapEnabled()},
@@ -801,6 +811,50 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
                           static_cast<DWORD>(relay.size()), &written, nullptr);
             }
         }
+    } else if (message.startsWith("COMPOSITOR_READY")) {
+        // Compositor window is up and rendering — log dimensions
+        // Format: COMPOSITOR_READY:<width>:<height>
+        QStringList parts = message.split(':');
+        int w = parts.size() > 1 ? parts[1].toInt() : 0;
+        int h = parts.size() > 2 ? parts[2].toInt() : 0;
+        qInfo() << "[COMPOSITOR_LIFECYCLE] Compositor READY for" << profileId
+                << "— size:" << w << "x" << h;
+
+    } else if (message.startsWith("RESIZE:")) {
+        // Compositor resize — relay to ALL feature children of this profile
+        QStringList parts = message.split(':');
+        int w = parts.size() > 1 ? parts[1].toInt() : 0;
+        int h = parts.size() > 2 ? parts[2].toInt() : 0;
+        qInfo() << "[COMPOSITOR_LIFECYCLE] RESIZE from compositor —"
+                << w << "x" << h << "relaying to features for" << profileId;
+
+        QByteArray relay = (message + "\n").toUtf8();
+        if (m_children.contains(profileId)) {
+            for (auto &sibling : m_children[profileId]) {
+                if (sibling.featureKey == "compositor") continue;
+                if (sibling.pipeHandle == INVALID_HANDLE_VALUE) continue;
+                DWORD written = 0;
+                WriteFile(sibling.pipeHandle, relay.constData(),
+                          static_cast<DWORD>(relay.size()), &written, nullptr);
+            }
+        }
+
+    } else if (message.startsWith("INTERACTIVE_RECTS")) {
+        // Feature child reports clickable areas — relay to compositor
+        qInfo() << "[COMPOSITOR_LIFECYCLE] INTERACTIVE_RECTS from" << featureKey
+                << "for" << profileId << "— relaying to compositor";
+
+        QByteArray relay = (message + "\n").toUtf8();
+        if (m_children.contains(profileId)) {
+            for (auto &sibling : m_children[profileId]) {
+                if (sibling.featureKey != "compositor") continue;
+                if (sibling.pipeHandle == INVALID_HANDLE_VALUE) continue;
+                DWORD written = 0;
+                WriteFile(sibling.pipeHandle, relay.constData(),
+                          static_cast<DWORD>(relay.size()), &written, nullptr);
+            }
+        }
+
     } else {
         qInfo() << "ChildProcessManager: Unknown message from" << featureKey
                 << ":" << message.left(50);

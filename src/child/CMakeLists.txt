@@ -263,3 +263,29 @@ target_link_libraries(GW2AIO-overlay PRIVATE
     dwmapi  # For DWM window composition (OverlayWindow)
 )
 child_set_manifest(GW2AIO-overlay)
+
+# ============================================================================
+# GW2AIO-compositor: Compositor Child (single overlay window per GW2 instance)
+# ============================================================================
+add_executable(GW2AIO-compositor WIN32
+    ${CHILD_FRAMEWORK_SOURCES}
+    ChildCompositor.cpp ChildCompositor.h
+
+    # D3D11 rendering context (device, swap chain, shaders)
+    ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
+
+    # Shared texture (cross-process GPU texture sharing)
+    ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
+
+    ${CHILD_CORE_SOURCES}
+    ${CHILD_QRC_SOURCES}
+    ${CMAKE_SOURCE_DIR}/resources/child.rc
+)
+target_compile_definitions(GW2AIO-compositor PRIVATE CHILD_FEATURE_COMPOSITOR)
+target_include_directories(GW2AIO-compositor PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(GW2AIO-compositor PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Xml Qt6::Svg
+    QuaZip::QuaZip
+    ${CHILD_D3D_LIBS}
+)
+child_set_manifest(GW2AIO-compositor)

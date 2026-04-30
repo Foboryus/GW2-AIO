@@ -291,6 +291,7 @@ set(MODULE_SOURCES
 set(RENDERING_HEADERS
     src/rendering/D3D11Context.h
     src/rendering/D3D11OverlayWindow.h
+    src/rendering/SharedTexture.h
     src/rendering/ExclusionData.h
     src/rendering/GlyphAtlas.h
     src/rendering/SpriteBatch.h
@@ -301,6 +302,7 @@ set(RENDERING_HEADERS
 set(RENDERING_SOURCES
     src/rendering/D3D11Context.cpp
     src/rendering/D3D11OverlayWindow.cpp
+    src/rendering/SharedTexture.cpp
     src/rendering/DebugOverlayWidget.cpp
     src/rendering/GlyphAtlas.cpp
     src/rendering/SpriteBatch.cpp

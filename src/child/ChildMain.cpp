@@ -42,6 +42,9 @@
 #ifdef CHILD_FEATURE_OVERLAY
 #include "ChildOverlay.h"
 #endif
+#ifdef CHILD_FEATURE_COMPOSITOR
+#include "ChildCompositor.h"
+#endif
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -103,6 +106,8 @@ int main(int argc, char *argv[])
     featureType = QStringLiteral("radial");
 #elif defined(CHILD_FEATURE_OVERLAY)
     featureType = QStringLiteral("overlay");
+#elif defined(CHILD_FEATURE_COMPOSITOR)
+    featureType = QStringLiteral("compositor");
 #else
     featureType = QStringLiteral("unknown");
 #endif
@@ -149,6 +154,10 @@ int main(int argc, char *argv[])
     child = new ChildOverlay(profileId, mumbleName, gw2Pid,
                              pipeName, profileName);
     qInfo() << "Feature: Overlay HUD";
+#elif defined(CHILD_FEATURE_COMPOSITOR)
+    child = new ChildCompositor(profileId, mumbleName, gw2Pid,
+                                pipeName, profileName);
+    qInfo() << "Feature: Compositor";
 #else
     qCritical() << "No feature defined at compile time!";
     return 1;
