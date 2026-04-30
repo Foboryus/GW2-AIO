@@ -27,10 +27,11 @@ namespace OverlayZOrder {
 // Layer Constants (bottom → top, gaps of 100 for future insertion)
 // ============================================================================
 
-constexpr int kLayer3D      = 100;  // 3D markers/trails (Child3DOverlay)
-constexpr int kLayerMinimap = 200;  // Minimap/MapUI (ChildMinimap)
-constexpr int kLayerRadial  = 300;  // Radial menu (ChildRadial)
-constexpr int kLayerHUD     = 400;  // Diamond/pause/settings (ChildOverlay)
+constexpr int kLayer3D         = 100;  // 3D markers/trails (Child3DOverlay)
+constexpr int kLayerMinimap    = 200;  // Minimap/MapUI (ChildMinimap)
+constexpr int kLayerRadial     = 300;  // Radial menu (ChildRadial)
+constexpr int kLayerHUD        = 400;  // Diamond/pause/settings (ChildOverlay)
+constexpr int kLayerCompositor = 500;  // Compositor (always on top of all overlays)
 // Main AIO window: HWND_TOPMOST (not managed here)
 
 // ============================================================================

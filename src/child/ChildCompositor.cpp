@@ -10,6 +10,7 @@
 #include "rendering/D3D11Context.h"
 #include "rendering/SharedTexture.h"
 #include "core/MumbleLink.h"
+#include "core/OverlayZOrder.h"
 
 #include <windowsx.h>  // GET_X_LPARAM, GET_Y_LPARAM
 
@@ -250,7 +251,8 @@ bool ChildCompositor::createCompositorWindow()
   DWORD exStyle = WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP |
                   WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
 
-  std::wstring title = L"GW2AIO_Compositor_" + profileName().toStdWString();
+  std::wstring title = OverlayZOrder::buildTitle(
+      OverlayZOrder::kLayerCompositor, L"Compositor");
   m_hwnd = CreateWindowExW(
       exStyle, m_windowClassName.c_str(), title.c_str(),
       WS_POPUP, 0, 0, 100, 100,
@@ -610,8 +612,10 @@ void ChildCompositor::updatePosition()
   int height = rect.bottom - rect.top;
   if (width <= 0 || height <= 0) return;
 
-  // Single SetWindowPos — just above GW2, no z-order competition
-  HWND insertAfter = GetNextWindow(m_gw2Hwnd, GW_HWNDPREV);
+  // Z-order via OverlayZOrder system — compositor is layer 500 (topmost overlay)
+  // findInsertAfter finds the highest sibling below our layer to insert after.
+  HWND insertAfter = OverlayZOrder::findInsertAfter(
+      m_gw2Hwnd, OverlayZOrder::kLayerCompositor, m_hwnd);
   if (insertAfter == m_hwnd) {
     SetWindowPos(m_hwnd, nullptr, topLeft.x, topLeft.y, width, height,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOZORDER);
@@ -619,8 +623,15 @@ void ChildCompositor::updatePosition()
     SetWindowPos(m_hwnd, insertAfter, topLeft.x, topLeft.y, width, height,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
   } else {
-    SetWindowPos(m_hwnd, HWND_TOP, topLeft.x, topLeft.y, width, height,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    // No lower sibling found — place above GW2
+    HWND aboveGw2 = GetNextWindow(m_gw2Hwnd, GW_HWNDPREV);
+    if (aboveGw2 && aboveGw2 != m_hwnd) {
+      SetWindowPos(m_hwnd, aboveGw2, topLeft.x, topLeft.y, width, height,
+                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    } else {
+      SetWindowPos(m_hwnd, HWND_TOP, topLeft.x, topLeft.y, width, height,
+                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
   }
 
   // Resize D3D11 if needed

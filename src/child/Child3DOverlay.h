@@ -106,12 +106,6 @@ private:
   HWND m_gw2Hwnd = nullptr;
   static HWND findGW2WindowByPid(DWORD pid);
 
-  // [TEMP DIAGNOSTIC] Hardcoded triangle for DrawIndexed test
-  Microsoft::WRL::ComPtr<ID3D11Buffer> m_diagTriangleVB;
-  Microsoft::WRL::ComPtr<ID3D11VertexShader> m_diagTriangleVS;
-  Microsoft::WRL::ComPtr<ID3D11PixelShader> m_diagTrianglePS;
-  Microsoft::WRL::ComPtr<ID3D11InputLayout> m_diagTriangleIL;
-
   // Intermediate render target (non-shared, for pipeline Draw calls)
   Microsoft::WRL::ComPtr<ID3D11Texture2D> m_intermediateRT;
   Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_intermediateRTV;

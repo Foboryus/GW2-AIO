@@ -560,66 +560,6 @@ void Child3DOverlay::render()
 
     m_d3dContext->beginFrame();
 
-    // [TEMP DIAGNOSTIC] Hardcoded triangle — proves DrawIndexed works on SharedTexture RTV
-    // If this triangle is visible, the issue is in the pipeline shaders/state
-    // If invisible, DrawIndexed fundamentally doesn't work on keyed-mutex textures
-    if (!m_diagTriangleVB) {
-        // Compile minimal shaders
-        static const char *diagVS = R"(
-            float4 VS(float2 pos : POSITION) : SV_Position {
-                return float4(pos, 0.5, 1.0);
-            }
-        )";
-        static const char *diagPS = R"(
-            float4 PS() : SV_Target {
-                return float4(1.0, 0.0, 1.0, 0.8); // Bright magenta, premultiplied
-            }
-        )";
-        QString err;
-        auto vsBlob = m_d3dContext->compileShader(QByteArray(diagVS), "VS", "vs_5_0", err);
-        auto psBlob = m_d3dContext->compileShader(QByteArray(diagPS), "PS", "ps_5_0", err);
-        if (vsBlob && psBlob) {
-            m_d3dContext->device()->CreateVertexShader(
-                vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr,
-                m_diagTriangleVS.GetAddressOf());
-            m_d3dContext->device()->CreatePixelShader(
-                psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr,
-                m_diagTrianglePS.GetAddressOf());
-
-            D3D11_INPUT_ELEMENT_DESC layout[] = {
-                {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0}
-            };
-            m_d3dContext->device()->CreateInputLayout(
-                layout, 1, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
-                m_diagTriangleIL.GetAddressOf());
-
-            // Triangle covering top-left quarter in NDC (-1,-1 to 0,0)
-            float verts[] = {
-                -0.8f, -0.8f,  // top-left
-                 0.0f, -0.8f,  // top-right
-                -0.8f,  0.0f,  // bottom-left
-            };
-            D3D11_BUFFER_DESC bd = {};
-            bd.ByteWidth = sizeof(verts);
-            bd.Usage = D3D11_USAGE_IMMUTABLE;
-            bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-            D3D11_SUBRESOURCE_DATA sd = {verts};
-            m_d3dContext->device()->CreateBuffer(&bd, &sd, m_diagTriangleVB.GetAddressOf());
-            qInfo() << "[DEV][3D] Diagnostic triangle created";
-        }
-    }
-    if (m_diagTriangleVB && m_diagTriangleVS && m_diagTrianglePS) {
-        auto *ctx = m_d3dContext->context();
-        ctx->IASetInputLayout(m_diagTriangleIL.Get());
-        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        UINT stride = sizeof(float) * 2, offset = 0;
-        ID3D11Buffer *vbs[] = {m_diagTriangleVB.Get()};
-        ctx->IASetVertexBuffers(0, 1, vbs, &stride, &offset);
-        ctx->VSSetShader(m_diagTriangleVS.Get(), nullptr, 0);
-        ctx->PSSetShader(m_diagTrianglePS.Get(), nullptr, 0);
-        ctx->Draw(3, 0);
-    }
-
     // Exclusion zones
     updateAndBindExclusionZones();
 
