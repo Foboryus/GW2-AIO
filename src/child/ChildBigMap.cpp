@@ -14,7 +14,8 @@ bool ChildBigMap::onInitialize()
 {
     qInfo() << "ChildBigMap: Initializing for" << profileName();
     // TODO Phase 8b: create big map renderer (active only when M key map open)
-    qInfo() << "ChildBigMap: Stub — no rendering yet";
+    qInfo() << "[DEV][BIGMAP] Init complete (stub):"
+            << "targetPid:" << gw2Pid();
     return true;
 }
 
@@ -35,8 +36,9 @@ void ChildBigMap::onMapLeft()
 
 void ChildBigMap::onFocusChanged(bool focused)
 {
-    qInfo() << "ChildBigMap: Focus" << (focused ? "gained" : "lost")
-            << "for" << profileName();
+    qInfo() << "[DEV][BIGMAP] Focus" << (focused ? "gained" : "lost")
+            << "for" << profileName()
+            << "inGame:" << isInGame();
 }
 
 void ChildBigMap::onSettingsReceived(const QJsonObject &settings)

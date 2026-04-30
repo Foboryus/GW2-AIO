@@ -61,7 +61,12 @@ bool ChildRadial::onInitialize()
     connect(m_controller->overlayWindow(), &RadialOverlayWindow::focusChanged,
             this, &ChildRadial::notifyOverlayFocusChanged);
 
-    qInfo() << "ChildRadial: Initialized successfully";
+    qInfo() << "[DEV][RADIAL] Init complete:"
+            << "controller:" << (m_controller != nullptr)
+            << "overlayWindow:" << (m_controller->overlayWindow() != nullptr)
+            << "targetPid:" << gw2Pid()
+            << "enabled:" << m_radialSettings->settings().radialEnabled
+            << "mounts:" << m_radialSettings->settings().mounts.size();
     return true;
 }
 
@@ -94,6 +99,7 @@ void ChildRadial::onFocusChanged(bool focused)
 
     if (m_controller) {
         m_controller->onFocusChanged(focused);
+        qInfo() << "[DEV][RADIAL] Focus applied to controller";
     }
 }
 

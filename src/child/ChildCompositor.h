@@ -85,6 +85,7 @@ private:
   void onRenderFrame();
   void renderLayers();
   bool initializeQuadPipeline();
+  void tryOpenConsumers();
 
   // --- GW2 window tracking ---
   void installEventHook();
@@ -138,9 +139,10 @@ private:
   // Fullscreen quad pipeline (compositor shader)
   ComPtr<ID3D11VertexShader> m_quadVS;
   ComPtr<ID3D11PixelShader> m_quadPS;
-  ComPtr<ID3D11Buffer> m_quadVB;
-  ComPtr<ID3D11InputLayout> m_quadLayout;
+  ComPtr<ID3D11Buffer> m_quadVB;        // unused (SV_VertexID approach)
+  ComPtr<ID3D11InputLayout> m_quadLayout; // unused (SV_VertexID approach)
   ComPtr<ID3D11SamplerState> m_linearSampler;
+  ComPtr<ID3D11Buffer> m_screenSizeCB;  // PS constant buffer: float2 screenSize + pad
 
   // Shared texture consumers (one per feature layer)
   QHash<QString, SharedTextureConsumer *> m_layers;

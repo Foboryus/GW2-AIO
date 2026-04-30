@@ -110,6 +110,12 @@ bool ChildOverlay::onInitialize()
     connect(m_overlayWindow, &OverlayWindow::gameFocusChanged,
             this, &ChildOverlay::notifyOverlayFocusChanged);
 
+    qInfo() << "[DEV][OVERLAY] Init complete:"
+            << "overlayWindow:" << (m_overlayWindow != nullptr)
+            << "markerManager:" << (m_markerManager != nullptr)
+            << "targetPid:" << gw2Pid()
+            << "zOrder:" << OverlayZOrder::kLayerHUD;
+
     return true;
 }
 
@@ -159,6 +165,13 @@ void ChildOverlay::onFocusChanged(bool focused)
             << profileName()
             << "focused:" << focused
             << "inGame:" << isInGame();
+
+    if (m_overlayWindow) {
+        qInfo() << "[DEV][OVERLAY] Window state:"
+                << "visible:" << m_overlayWindow->isVisible()
+                << "size:" << m_overlayWindow->size()
+                << "pos:" << m_overlayWindow->pos();
+    }
     // OverlayWindow handles its own visibility via MumbleLink signals
     // No additional action needed here
 }

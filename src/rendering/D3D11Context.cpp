@@ -83,6 +83,41 @@ bool D3D11Context::initialize(HWND hwnd, const QSize &size) {
   return true;
 }
 
+bool D3D11Context::initializeOffscreen(const QSize &size) {
+  if (m_initialized) {
+    qWarning() << "D3D11Context already initialized";
+    return true;
+  }
+
+  m_hwnd = nullptr;
+  m_width = size.width();
+  m_height = size.height();
+  m_offscreen = true;
+
+  if (!createDevice()) {
+    qCritical() << "D3D11Context: Failed to create D3D11 device (offscreen)";
+    return false;
+  }
+
+  // No swap chain in offscreen mode — RTV comes from SharedTexture
+
+  if (!createBlendStates()) {
+    qCritical() << "D3D11Context: Failed to create blend states (offscreen)";
+    shutdown();
+    return false;
+  }
+
+  if (!createRasterizerState()) {
+    qCritical() << "D3D11Context: Failed to create rasterizer state (offscreen)";
+    shutdown();
+    return false;
+  }
+
+  m_initialized = true;
+  qInfo() << "D3D11Context initialized (offscreen):" << m_width << "x" << m_height;
+  return true;
+}
+
 void D3D11Context::shutdown() {
   if (m_context) {
     m_context->ClearState();
@@ -97,6 +132,8 @@ void D3D11Context::shutdown() {
   m_device.Reset();
 
   m_initialized = false;
+  m_offscreen = false;
+  m_externalRTV = nullptr;
   m_hwnd = nullptr;
   m_width = 0;
   m_height = 0;
@@ -113,9 +150,10 @@ void D3D11Context::beginFrame() {
     return;
   }
 
-  // Set render target
-  ID3D11RenderTargetView *rtvs[] = {m_rtv.Get()};
-  m_context->OMSetRenderTargets(1, rtvs, nullptr);
+  // Set render target (external RTV for offscreen, swap chain RTV for windowed)
+  ID3D11RenderTargetView *activeRTV = m_externalRTV ? m_externalRTV : m_rtv.Get();
+  if (!activeRTV) return;
+  m_context->OMSetRenderTargets(1, &activeRTV, nullptr);
 
   // Set alpha blend state
   float blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -134,11 +172,17 @@ void D3D11Context::beginFrame() {
 
   // Clear to fully transparent black (DWM will composite alpha)
   float clearColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-  m_context->ClearRenderTargetView(m_rtv.Get(), clearColor);
+  m_context->ClearRenderTargetView(activeRTV, clearColor);
 }
 
 void D3D11Context::endFrame() {
   if (!m_initialized) {
+    return;
+  }
+
+  if (m_offscreen) {
+    // Offscreen mode: flush GPU commands (no swap chain to Present)
+    // Caller (SharedTextureProducer) will Flush() + ReleaseSync() after this
     return;
   }
 
@@ -158,12 +202,27 @@ void D3D11Context::endFrame() {
   }
 }
 
+void D3D11Context::setExternalRTV(ID3D11RenderTargetView *rtv) {
+  m_externalRTV = rtv;
+}
+
 // ============================================================================
 // Resize
 // ============================================================================
 
 void D3D11Context::resize(const QSize &size) {
-  if (!m_initialized || !m_swapChain) {
+  if (!m_initialized) {
+    return;
+  }
+
+  // Offscreen mode: no swap chain to resize — just update dimensions
+  if (m_offscreen) {
+    m_width = size.width();
+    m_height = size.height();
+    return;
+  }
+
+  if (!m_swapChain) {
     return;
   }
 

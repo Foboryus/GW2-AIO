@@ -86,9 +86,19 @@ bool ChildCompositor::onInitialize()
           sendToGrandfather(("COMPOSITOR_READY:" +
                           QString::number(m_d3dContext->width()) + ":" +
                           QString::number(m_d3dContext->height()) + "\n").toUtf8());
+
+          // Create SharedTextureConsumer for each layer (lazy-open later)
+          for (const QString &layerKey : m_layerOrder) {
+            if (!m_layers.contains(layerKey)) {
+              m_layers[layerKey] = new SharedTextureConsumer();
+              qInfo() << "[DEV][COMPOSITOR] Created consumer slot for layer:" << layerKey;
+            }
+          }
+
           qInfo() << "[DEV][COMPOSITOR] Window created + rendering started"
                   << m_d3dContext->width() << "x" << m_d3dContext->height()
-                  << "COMPOSITOR_READY sent";
+                  << "COMPOSITOR_READY sent"
+                  << "consumerSlots:" << m_layers.size();
         }
       }
     }
@@ -310,6 +320,7 @@ void ChildCompositor::destroyCompositorWindow()
   m_quadVB.Reset();
   m_quadLayout.Reset();
   m_linearSampler.Reset();
+  m_screenSizeCB.Reset();
 
   // Release DComp
   m_dcompVisual.Reset();
@@ -382,11 +393,19 @@ bool ChildCompositor::initializeQuadPipeline()
     }
   )";
 
-  // Pixel shader: sample layer texture with premultiplied alpha
+  // Pixel shader: [FIX-6] Real passthrough compositor
+  // DIAG #14 confirmed: SV_Position UV bypass works, 3D content visible.
+  // Now just pass through the shared texture content with premultiplied alpha.
+  // Blend state (SRC=ONE, DEST=INV_SRC_ALPHA) in beginFrame() handles compositing.
   static const char *psSource = R"(
     Texture2D layerTex : register(t0);
     SamplerState samp  : register(s0);
-    float4 PS(float2 uv : TEXCOORD0) : SV_Target {
+    cbuffer ScreenSize : register(b0) {
+      float2 screenSize;
+      float2 pad;
+    };
+    float4 PS(float4 pos : SV_Position) : SV_Target {
+      float2 uv = pos.xy / screenSize;
       return layerTex.Sample(samp, uv);
     }
   )";
@@ -421,7 +440,19 @@ bool ChildCompositor::initializeQuadPipeline()
   // Linear sampler for texture filtering
   m_linearSampler = m_d3dContext->createLinearSampler();
 
-  qInfo() << "ChildCompositor: Quad pipeline initialized";
+  // Constant buffer for screen size (16 bytes: float2 screenSize + float2 pad)
+  D3D11_BUFFER_DESC cbDesc = {};
+  cbDesc.ByteWidth = 16;
+  cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+  cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+  cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  hr = dev->CreateBuffer(&cbDesc, nullptr, m_screenSizeCB.GetAddressOf());
+  if (FAILED(hr)) {
+    qWarning() << "ChildCompositor: screenSize CB creation failed";
+    return false;
+  }
+
+  qInfo() << "ChildCompositor: Quad pipeline initialized (SV_Position UV bypass)";
   return true;
 }
 
@@ -438,13 +469,27 @@ void ChildCompositor::onRenderFrame()
   static uint64_t s_frameCount = 0;
   s_frameCount++;
   if (s_frameCount % 1000 == 0) {
+    int openCount = 0;
+    for (auto *c : m_layers) { if (c && c->isOpen()) ++openCount; }
     qInfo() << "[DEV][COMPOSITOR] Frame" << s_frameCount
             << "layers:" << m_layers.size()
+            << "open:" << openCount
             << "interactiveRects:" << m_interactiveRects.size();
   }
 
+  // Lazy-open: try to open consumers that haven't connected yet.
+  // Producers (feature children) may not be ready at compositor start.
+  // Retry every ~2s (125 frames at 62.5Hz) to avoid hammering.
+  if (s_frameCount % 125 == 1) {
+    tryOpenConsumers();
+  }
+
   m_d3dContext->beginFrame();
+
+  // [TEMP DIAGNOSTIC] Draw shared texture content as-is
+  // Also add a subtle green border to confirm compositor draws work
   renderLayers();
+
   m_d3dContext->endFrame();
 }
 
@@ -462,14 +507,44 @@ void ChildCompositor::renderLayers()
   ID3D11SamplerState *samplers[] = {m_linearSampler.Get()};
   ctx->PSSetSamplers(0, 1, samplers);
 
+  // Update screen size constant buffer (PS b0)
+  if (m_screenSizeCB) {
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT hr = ctx->Map(m_screenSizeCB.Get(), 0,
+                          D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (SUCCEEDED(hr)) {
+      float cbData[4] = {
+        static_cast<float>(m_d3dContext->width()),
+        static_cast<float>(m_d3dContext->height()),
+        0.0f, 0.0f  // pad
+      };
+      memcpy(mapped.pData, cbData, sizeof(cbData));
+      ctx->Unmap(m_screenSizeCB.Get(), 0);
+    }
+    ID3D11Buffer *cbs[] = {m_screenSizeCB.Get()};
+    ctx->PSSetConstantBuffers(0, 1, cbs);
+  }
+
+  // Diagnostic counters (static — survive across calls)
+  static uint64_t s_acquireSuccess = 0;
+  static uint64_t s_acquireFail = 0;
+  static uint64_t s_notOpen = 0;
+
   // Draw each layer in order (bottom to top)
   for (const QString &layerKey : m_layerOrder) {
     auto *consumer = m_layers.value(layerKey, nullptr);
-    if (!consumer || !consumer->isOpen()) continue;
+    if (!consumer || !consumer->isOpen()) {
+      ++s_notOpen;
+      continue;
+    }
 
     ID3D11ShaderResourceView *srv = consumer->acquireForRead(0);
-    if (!srv) continue;  // Producer hasn't released yet, skip
+    if (!srv) {
+      ++s_acquireFail;
+      continue;  // Producer hasn't released yet, skip
+    }
 
+    ++s_acquireSuccess;
     ctx->PSSetShaderResources(0, 1, &srv);
     ctx->Draw(3, 0);  // Fullscreen triangle
 
@@ -478,6 +553,43 @@ void ChildCompositor::renderLayers()
     ctx->PSSetShaderResources(0, 1, &nullSRV);
 
     consumer->releaseAfterRead();
+  }
+
+  // Log frame flow every ~4s (250 frames at 62.5Hz)
+  if ((s_acquireSuccess + s_acquireFail) > 0 &&
+      (s_acquireSuccess + s_acquireFail + s_notOpen) % 250 == 0) {
+    qInfo() << "[DEV][COMPOSITOR] FrameFlow:"
+            << "acquired:" << s_acquireSuccess
+            << "failed:" << s_acquireFail
+            << "notOpen:" << s_notOpen;
+  }
+}
+
+void ChildCompositor::tryOpenConsumers()
+{
+  if (!m_d3dContext || !m_d3dContext->device()) return;
+
+  // QI to ID3D11Device1 (required by OpenSharedResourceByName)
+  ComPtr<ID3D11Device1> device1;
+  HRESULT hr = m_d3dContext->device()->QueryInterface(
+      IID_PPV_ARGS(device1.GetAddressOf()));
+  if (FAILED(hr)) {
+    qWarning() << "[DEV][COMPOSITOR] ID3D11Device1 QI failed — cannot open shared textures";
+    return;
+  }
+
+  for (const QString &layerKey : m_layerOrder) {
+    auto *consumer = m_layers.value(layerKey, nullptr);
+    if (!consumer || consumer->isOpen()) continue;
+
+    // Build the shared texture name: GW2AIO_Tex_<profileId>_<layerKey>
+    QString texName = QString("GW2AIO_Tex_%1_%2").arg(profileId(), layerKey);
+
+    if (consumer->open(device1.Get(), texName)) {
+      qInfo() << "[DEV][COMPOSITOR] Opened shared texture:" << texName
+              << "layer:" << layerKey;
+    }
+    // Failure is expected — producer may not exist yet. Will retry.
   }
 }
 

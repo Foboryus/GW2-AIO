@@ -26,8 +26,7 @@ add_executable(GW2AIO-3d WIN32
 
     # Rendering pipeline (shared source files — compiled into this target)
     ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
-    ${CMAKE_SOURCE_DIR}/src/rendering/D3D11OverlayWindow.cpp
-    ${CMAKE_SOURCE_DIR}/src/rendering/DebugOverlayWidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
     ${CMAKE_SOURCE_DIR}/src/rendering/GlyphAtlas.cpp
     ${CMAKE_SOURCE_DIR}/src/rendering/SpriteBatch.cpp
     ${CMAKE_SOURCE_DIR}/src/rendering/MarkerPipeline.cpp

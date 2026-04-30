@@ -111,6 +111,11 @@ bool ChildMinimap::onInitialize()
     connect(m_overlayWindow, &OverlayWindow::gameFocusChanged,
             this, &ChildMinimap::notifyOverlayFocusChanged);
 
+    qInfo() << "[DEV][MINIMAP] Init complete:"
+            << "overlay:" << (m_overlayWindow != nullptr)
+            << "renderer:" << (m_minimapRenderer != nullptr)
+            << "targetPid:" << gw2Pid();
+
     return true;
 }
 
@@ -199,6 +204,13 @@ void ChildMinimap::onFocusChanged(bool focused)
     if (m_minimapRenderer) {
         m_minimapRenderer->setRenderingEnabled(shouldRender);
     }
+
+    if (m_overlayWindow) {
+        qInfo() << "[DEV][MINIMAP] Window state:"
+                << "visible:" << m_overlayWindow->isVisible()
+                << "size:" << m_overlayWindow->size()
+                << "pos:" << m_overlayWindow->pos();
+    }
 }
 
 // ============================================================================
@@ -270,9 +282,12 @@ void ChildMinimap::syncMinimapSettings()
     m_minimapRenderer->setShowBigMapMarkers(
         mainOn && m_markerSettings->renderBigMapEnabled());
 
-    qInfo() << "ChildMinimap: Settings synced — rendering:" << mainOn
+    qInfo() << "[DEV][MINIMAP] Settings synced:"
+            << "rendering:" << mainOn
             << "minimap:" << m_markerSettings->renderMinimapEnabled()
-            << "bigMap:" << m_markerSettings->renderBigMapEnabled();
+            << "bigMap:" << m_markerSettings->renderBigMapEnabled()
+            << "opacity:" << m_markerSettings->minimapOpacity()
+            << "markerScale:" << m_markerSettings->minimapMarkerScale();
 }
 
 void ChildMinimap::onReloadPacks()

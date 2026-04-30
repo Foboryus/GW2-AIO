@@ -52,6 +52,18 @@ public:
   bool initialize(HWND hwnd, const QSize &size);
 
   /**
+   * @brief Initialize D3D11 device only (no window, no swap chain)
+   *
+   * Used by feature children that render to SharedTexture instead of
+   * a window. The RTV is set externally via setExternalRTV().
+   * beginFrame() clears the external RTV; endFrame() flushes (no Present).
+   *
+   * @param size Initial render target size (for viewport)
+   * @return true if device creation succeeded
+   */
+  bool initializeOffscreen(const QSize &size);
+
+  /**
    * @brief Shutdown and release all D3D11 resources
    */
   void shutdown();
@@ -68,9 +80,20 @@ public:
   void beginFrame();
 
   /**
-   * @brief End a frame — present the swap chain
+   * @brief End a frame — present the swap chain (windowed) or flush (offscreen)
    */
   void endFrame();
+
+  /**
+   * @brief Set an external RTV for offscreen rendering
+   *
+   * Replaces the swap chain back-buffer RTV. Used by SharedTexture
+   * workflow: feature children acquire the shared texture, set its
+   * RTV here, render, then release.
+   *
+   * @param rtv External render target view (owned by caller)
+   */
+  void setExternalRTV(ID3D11RenderTargetView *rtv);
 
   // --- Accessors ---
 
@@ -155,4 +178,6 @@ private:
   int m_width = 0;
   int m_height = 0;
   bool m_initialized = false;
+  bool m_offscreen = false;  // true = device-only, no swap chain
+  ID3D11RenderTargetView *m_externalRTV = nullptr; // Non-owning, set by caller
 };
