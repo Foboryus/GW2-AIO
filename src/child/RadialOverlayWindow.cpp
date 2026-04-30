@@ -517,6 +517,9 @@ void CALLBACK RadialOverlayWindow::foregroundProc(
 
   if (isGW2 || isOverlay) {
     self->m_contentVisible = true;
+    // Invalidate z-order cache: Windows reshuffles z-order during foreground
+    // transitions. Stale cache causes updatePosition() to skip SetWindowPos.
+    self->m_lastInsertAfterHwnd = nullptr;
     if (self->m_hideOnUnfocus) {
       ShowWindow(self->m_hwnd, SW_SHOWNOACTIVATE);
     }

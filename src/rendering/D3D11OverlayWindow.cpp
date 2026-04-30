@@ -797,6 +797,13 @@ void D3D11OverlayWindow::onRenderFrame() {
     // This guarantees: GW2 → D3D11 (trails) → Qt (markers + dot)
     // regardless of focus state — no race condition.
     // Previously ran every frame (62.5Hz) causing excessive DWM recomposition.
+    //
+    // Periodic cache invalidation: D3D11 has no foreground hook, so the
+    // z-order cache can become stale after focus transitions (Windows
+    // reshuffles z-order). Invalidate every ~1s so the overlay re-asserts.
+    if (m_positionTickCount % 60 == 0) {
+      m_lastInsertAfterHwnd = nullptr;
+    }
     if (m_hwnd && m_gw2Hwnd) {
       HWND qtHwnd = m_qtOverlayHwnd;
 

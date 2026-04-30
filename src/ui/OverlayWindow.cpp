@@ -469,6 +469,11 @@ void OverlayWindow::setGameFocused(bool focused) {
   // (update() only schedules deferred repaint, which DWM may not composite
   // immediately for WA_TranslucentBackground layered windows).
   if (focused && m_isTracking && m_gw2Hwnd) {
+    // Invalidate z-order cache: Windows reshuffles z-order during foreground
+    // transitions, so the cached insertion point is stale. Without this,
+    // ensureZOrder() sees "same insertion point" and skips SetWindowPos,
+    // leaving the overlay behind GW2 (invisible).
+    m_lastInsertAfterHwnd = nullptr;
     updatePosition();
     ensureZOrder();
     qInfo() << "[DIAG] OverlayWindow: FOCUS_REATTACH"
