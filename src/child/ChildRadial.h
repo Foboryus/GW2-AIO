@@ -73,4 +73,5 @@ private:
   int m_gw2Width = 0;
   int m_gw2Height = 0;
   bool m_d3dInitialized = false;  ///< True after ensureD3D11() succeeds
+  bool m_lastWroteContent = false;  ///< True after writing radial content — triggers clear frame on deactivation
 };

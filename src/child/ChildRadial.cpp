@@ -204,7 +204,26 @@ void ChildRadial::onRenderTick()
     m_controller->pollHotkey();
 
     // Only render when wheel is active or fading
-    if (!m_controller->needsRendering()) return;
+    if (!m_controller->needsRendering()) {
+        // Phase 5.6: Write one clear frame when rendering stops.
+        // The compositor's staging copy retains the last frame — if we don't
+        // clear, the radial stays visible forever after hotkey release.
+        if (m_lastWroteContent) {
+            ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
+            if (rtv) {
+                // Clear the intermediate RT to transparent
+                float clearColor[4] = {0, 0, 0, 0};
+                m_d3dContext->context()->ClearRenderTargetView(
+                    m_intermediateRTV.Get(), clearColor);
+                // Copy transparent intermediate → shared texture
+                m_d3dContext->context()->CopyResource(
+                    m_sharedTexture->texture(), m_intermediateRT.Get());
+                m_sharedTexture->releaseAfterWrite();
+                m_lastWroteContent = false;
+            }
+        }
+        return;
+    }
 
     // Poll GW2 window size
     pollGW2WindowSize();
@@ -250,6 +269,7 @@ void ChildRadial::onRenderTick()
 
     // Release shared texture (Flush + ReleaseSync inside)
     m_sharedTexture->releaseAfterWrite();
+    m_lastWroteContent = true;
 }
 
 // ============================================================================

@@ -291,21 +291,9 @@ bool SharedTextureConsumer::open(ID3D11Device1 *device, const QString &name) {
     return false;
   }
 
-  // Create SRV for sampling in compositor's pixel shader
-  D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-  srvDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-  srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-  srvDesc.Texture2D.MipLevels = 1;
-
-  // Need base device (ID3D11Device) for CreateShaderResourceView
-  ComPtr<ID3D11Device> baseDevice;
-  m_device->QueryInterface(IID_PPV_ARGS(baseDevice.GetAddressOf()));
-
-  hr = baseDevice->CreateShaderResourceView(m_texture.Get(), &srvDesc,
-                                            m_srv.GetAddressOf());
-  if (FAILED(hr)) {
-    qCritical() << "SharedTextureConsumer: CreateShaderResourceView failed:"
-                << Qt::hex << hr;
+  // Create staging texture (local copy for zero-contention rendering)
+  if (!createStagingTexture()) {
+    qCritical() << "SharedTextureConsumer: failed to create staging texture";
     m_keyedMutex.Reset();
     m_texture.Reset();
     return false;
@@ -317,55 +305,114 @@ bool SharedTextureConsumer::open(ID3D11Device1 *device, const QString &name) {
   return true;
 }
 
-void SharedTextureConsumer::shutdown() {
-  if (m_acquired) {
-    releaseAfterRead();
+bool SharedTextureConsumer::createStagingTexture() {
+  // Query the shared texture's dimensions
+  D3D11_TEXTURE2D_DESC sharedDesc = {};
+  m_texture->GetDesc(&sharedDesc);
+
+  // Create a local texture with the same size/format (not shared, no mutex)
+  D3D11_TEXTURE2D_DESC stagingDesc = {};
+  stagingDesc.Width = sharedDesc.Width;
+  stagingDesc.Height = sharedDesc.Height;
+  stagingDesc.MipLevels = 1;
+  stagingDesc.ArraySize = 1;
+  stagingDesc.Format = sharedDesc.Format;  // DXGI_FORMAT_B8G8R8A8_UNORM
+  stagingDesc.SampleDesc.Count = 1;
+  stagingDesc.SampleDesc.Quality = 0;
+  stagingDesc.Usage = D3D11_USAGE_DEFAULT;
+  stagingDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+  stagingDesc.MiscFlags = 0;  // Not shared — local to compositor
+
+  ComPtr<ID3D11Device> baseDevice;
+  m_device->QueryInterface(IID_PPV_ARGS(baseDevice.GetAddressOf()));
+
+  HRESULT hr = baseDevice->CreateTexture2D(&stagingDesc, nullptr,
+                                           m_stagingTexture.GetAddressOf());
+  if (FAILED(hr)) {
+    qCritical() << "SharedTextureConsumer: CreateTexture2D (staging) failed:"
+                << Qt::hex << hr;
+    return false;
   }
 
+  // Create SRV for the staging texture (used in compositor's Draw call)
+  D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = sharedDesc.Format;
+  srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+  srvDesc.Texture2D.MipLevels = 1;
+
+  hr = baseDevice->CreateShaderResourceView(m_stagingTexture.Get(), &srvDesc,
+                                            m_stagingSrv.GetAddressOf());
+  if (FAILED(hr)) {
+    qCritical() << "SharedTextureConsumer: CreateSRV (staging) failed:"
+                << Qt::hex << hr;
+    m_stagingTexture.Reset();
+    return false;
+  }
+
+  qInfo() << "SharedTextureConsumer: staging texture created"
+          << sharedDesc.Width << "x" << sharedDesc.Height;
+  return true;
+}
+
+void SharedTextureConsumer::shutdown() {
+  if (m_acquired) {
+    // Safety: release if somehow still acquired (shouldn't happen with staging)
+    m_keyedMutex->ReleaseSync(0);
+    m_acquired = false;
+  }
+
+  m_stagingSrv.Reset();
+  m_stagingTexture.Reset();
   m_srv.Reset();
   m_keyedMutex.Reset();
   m_texture.Reset();
 
   m_device = nullptr;
   m_opened = false;
+  m_hasValidStaging = false;
 
   qInfo() << "SharedTextureConsumer: shutdown" << m_name;
 }
 
 ID3D11ShaderResourceView *SharedTextureConsumer::acquireForRead(DWORD timeoutMs) {
-  if (!m_opened || !m_keyedMutex) {
+  if (!m_opened || !m_keyedMutex || !m_stagingTexture) {
     return nullptr;
-  }
-
-  if (m_acquired) {
-    qWarning() << "SharedTextureConsumer: already acquired for read";
-    return m_srv.Get();
   }
 
   // Key 1 = consumer's turn to read
   HRESULT hr = m_keyedMutex->AcquireSync(1, timeoutMs);
   if (hr == WAIT_TIMEOUT) {
-    // Producer hasn't released yet — skip this layer
-    return nullptr;
+    // Producer busy writing — return LAST GOOD staging copy if available.
+    // The staging texture retains the previous frame's content, so showing
+    // a 1-frame-stale image is vastly better than a transparent hole (flicker).
+    return m_hasValidStaging ? m_stagingSrv.Get() : nullptr;
   }
   if (FAILED(hr)) {
-    qWarning() << "SharedTextureConsumer: AcquireSync failed:"
-               << Qt::hex << hr;
-    return nullptr;
+    // Hard failure (device lost, etc.) — return last good frame if available
+    return m_hasValidStaging ? m_stagingSrv.Get() : nullptr;
   }
 
-  m_acquired = true;
-  return m_srv.Get();
+  // Copy shared texture → local staging texture
+  // This is a GPU-side copy (~0.1ms), much faster than the producer's render
+  ComPtr<ID3D11DeviceContext> ctx;
+  ComPtr<ID3D11Device> baseDevice;
+  m_device->QueryInterface(IID_PPV_ARGS(baseDevice.GetAddressOf()));
+  baseDevice->GetImmediateContext(ctx.GetAddressOf());
+
+  ctx->CopyResource(m_stagingTexture.Get(), m_texture.Get());
+  m_hasValidStaging = true;
+
+  // Release mutex IMMEDIATELY — producer can start writing the next frame
+  // Key 0 = producer's turn to write
+  m_keyedMutex->ReleaseSync(0);
+
+  // Return SRV of the staging copy — compositor can hold this as long as needed
+  return m_stagingSrv.Get();
 }
 
 void SharedTextureConsumer::releaseAfterRead() {
-  if (!m_acquired || !m_keyedMutex) {
-    return;
-  }
-
-  // Key 0 = producer's turn to write
-  m_keyedMutex->ReleaseSync(0);
-  m_acquired = false;
+  // No-op: mutex was released inside acquireForRead() after the staging copy.
+  // Kept for API compatibility with the compositor render loop.
 }
 
 bool SharedTextureConsumer::reopen() {
@@ -380,3 +427,4 @@ bool SharedTextureConsumer::reopen() {
   shutdown();
   return open(savedDevice, savedName);
 }
+

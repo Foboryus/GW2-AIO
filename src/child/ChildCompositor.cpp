@@ -562,6 +562,8 @@ void ChildCompositor::renderLayers()
       continue;
     }
 
+    // acquireForRead: mutex → CopyResource(staging) → release mutex → return staging SRV
+    // Mutex is NOT held during Draw — zero contention with producer
     ID3D11ShaderResourceView *srv = consumer->acquireForRead(0);
     if (!srv) {
       ++s_acquireFail;
@@ -571,12 +573,6 @@ void ChildCompositor::renderLayers()
     ++s_acquireSuccess;
     ctx->PSSetShaderResources(0, 1, &srv);
     ctx->Draw(3, 0);  // Fullscreen triangle
-
-    // Unbind SRV before releasing mutex
-    ID3D11ShaderResourceView *nullSRV = nullptr;
-    ctx->PSSetShaderResources(0, 1, &nullSRV);
-
-    consumer->releaseAfterRead();
   }
 
   // Log frame flow every ~4s (250 frames at 62.5Hz)
