@@ -144,7 +144,7 @@ void MinimapRenderer::changeEvent(QEvent *e) {
   QWidget::changeEvent(e);
 }
 
-QRectF MinimapRenderer::computeMinimapRect() const {
+QRectF MinimapRenderer::computeMinimapRect(int screenW, int screenH) const {
   if (!m_mumble || !m_mumble->isConnected()) {
     return QRectF();
   }
@@ -154,11 +154,7 @@ QRectF MinimapRenderer::computeMinimapRect() const {
     return QRectF();
   }
 
-  // Compass is in the bottom-right corner by default.
-  // If isMinimapTopRight(), it's in the top-right corner.
-  // The compass dimensions come from MumbleContext (with uiScale applied).
-  int screenW = width();
-  int screenH = height();
+
 
   // --- GW2 window-too-small scaling (TacO: GetWindowTooSmallScale) ---
   // When GW2's client area is below ~1024px wide, GW2 internally scales
@@ -230,7 +226,6 @@ void MinimapRenderer::paintEvent(QPaintEvent *) {
   }
 
   // --- Fade animation: step opacity toward target each frame ---
-  // Use faster steps for map toggle, slower for loading screen hide
   qreal fadeIn = m_mapFading ? kMapFadeInStep : kFadeInStep;
   qreal fadeOut = m_mapFading ? kMapFadeOutStep : kFadeOutStep;
 
@@ -250,11 +245,53 @@ void MinimapRenderer::paintEvent(QPaintEvent *) {
     return;
   }
 
-  QRectF miniRect = computeMinimapRect();
+  QPainter painter(this);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  renderContent(painter, width(), height());
+}
+
+bool MinimapRenderer::renderToImage(QImage &target) {
+  if (!m_mumble || !m_mumble->isConnected()) {
+    return false;
+  }
+  if (!m_renderingEnabled || target.isNull()) {
+    return false;
+  }
+
+  // Update fade state (same logic as paintEvent)
+  bool currentMapOpen = m_mumble->isMapOpen();
+  if (currentMapOpen != m_lastMapOpen) {
+    m_lastMapOpen = currentMapOpen;
+    m_mapFading = true;
+    m_fadeOpacity = 0.0;
+  }
+  qreal fadeIn = m_mapFading ? kMapFadeInStep : kFadeInStep;
+  qreal fadeOut = m_mapFading ? kMapFadeOutStep : kFadeOutStep;
+  if (m_shouldBeVisible && m_fadeOpacity < 1.0) {
+    m_fadeOpacity = qMin(1.0, m_fadeOpacity + fadeIn);
+    if (m_fadeOpacity >= 1.0) m_mapFading = false;
+  } else if (!m_shouldBeVisible && m_fadeOpacity > 0.0) {
+    m_fadeOpacity = qMax(0.0, m_fadeOpacity - fadeOut);
+  }
+  if (m_fadeOpacity <= 0.0) {
+    return false;
+  }
+
+  target.fill(Qt::transparent);
+  QPainter painter(&target);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  renderContent(painter, target.width(), target.height());
+  painter.end();
+  return true;
+}
+
+void MinimapRenderer::renderContent(QPainter &painter, int screenW, int screenH) {
+  painter.setOpacity(static_cast<qreal>(m_opacity) * m_fadeOpacity);
+
+  QRectF miniRect = computeMinimapRect(screenW, screenH);
   if (miniRect.isEmpty()) {
     return;
   }
-
 
   // Determine if big map is open
   bool bigMapOpen = m_mumble->isMapOpen();
@@ -263,17 +300,13 @@ void MinimapRenderer::paintEvent(QPaintEvent *) {
   const CompassData &compass =
       bigMapOpen ? m_mumble->bigMapData() : m_mumble->minimapData();
 
-  // For big map, use the full widget as the render area
-  QRectF renderRect = bigMapOpen ? QRectF(rect()) : miniRect;
+  // For big map, use the full area
+  QRectF renderRect = bigMapOpen ? QRectF(0, 0, screenW, screenH) : miniRect;
 
   // Build transformation matrix (world -> screen pixel coords in renderRect)
   bool ignoreRotation = bigMapOpen; // Big map doesn't rotate
   QMatrix4x4 transform = compass.buildTransformationMatrix(
       renderRect, m_mumble->playerPosition(), ignoreRotation);
-
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing, true);
-  painter.setOpacity(static_cast<qreal>(m_opacity) * m_fadeOpacity);
 
   // Clip to the render area to avoid drawing outside minimap/bigmap
   painter.setClipRect(renderRect);
@@ -301,8 +334,7 @@ void MinimapRenderer::paintEvent(QPaintEvent *) {
                 << "compassRect:" << renderRect
                 << "markerCount:" << markers.size()
                 << "mapScale:" << compass.mapScale
-                << "widgetSize:" << size()
-                << "dpr:" << devicePixelRatio();
+                << "screenSize:" << screenW << "x" << screenH;
       }
     }
 

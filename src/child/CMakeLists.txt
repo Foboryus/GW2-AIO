@@ -158,19 +158,19 @@ endfunction()
 add_executable(GW2AIO-minimap WIN32
     ${CHILD_FRAMEWORK_SOURCES}
     ChildMinimap.cpp ChildMinimap.h
-    ${CHILD_RENDERING_SOURCES}
+
+    # D3D11 offscreen context + SharedTexture (QPainter → QImage → D3D11 → compositor)
+    ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
+
+    # Marker system
     ${CHILD_MARKER_SOURCES}
     ${CHILD_CORE_SOURCES}
 
     # MinimapRenderer (QPainter 2D markers + trails on compass/big map)
     ${CMAKE_SOURCE_DIR}/src/features/markers/MinimapRenderer.cpp
 
-    # OverlayWindow (transparent HWND tracking, z-order, click-through)
-    ${CMAKE_SOURCE_DIR}/src/ui/OverlayWindow.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/OverlayMenuWidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/ExclusionZoneEditor.cpp
-
-    # Theme system (required by OverlayWindow/OverlayMenuWidget)
+    # Theme system (required by MinimapRenderer for border/indicator colors)
     ${CMAKE_SOURCE_DIR}/src/core/ThemeManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ThemeData.cpp
 

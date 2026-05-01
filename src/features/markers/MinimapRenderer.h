@@ -27,6 +27,7 @@
 
 #include <QElapsedTimer>
 #include <QHash>
+#include <QImage>
 #include <QPainterPath>
 #include <QPixmap>
 #include <QWidget>
@@ -68,6 +69,19 @@ public:
   /// Per-instance query context (Phase 7a) — null = use shared state
   void setQueryContext(const MarkerQueryContext *ctx) { m_queryCtx = ctx; }
 
+  /**
+   * @brief Render minimap content to a QImage (for SharedTexture upload)
+   *
+   * Paints the same content as paintEvent but to the provided QImage.
+   * The QImage dimensions represent the GW2 window size (used for
+   * compass position calculation). The image must be pre-allocated
+   * with Format_ARGB32_Premultiplied.
+   *
+   * @param target Target QImage (must be pre-allocated, correct size)
+   * @return true if content was rendered, false if skipped (not connected, etc.)
+   */
+  bool renderToImage(QImage &target);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void changeEvent(QEvent *event) override;
@@ -76,8 +90,11 @@ private slots:
   void onDataUpdated();
 
 private:
+  // Core painting logic — used by both paintEvent and renderToImage
+  void renderContent(QPainter &painter, int screenW, int screenH);
+
   // Determine minimap screen rectangle from Mumble data
-  QRectF computeMinimapRect() const;
+  QRectF computeMinimapRect(int screenW, int screenH) const;
 
   // Draw a single marker dot/icon on the minimap
   void drawMinimapMarker(QPainter &painter, const Marker &marker,
