@@ -99,7 +99,9 @@ public:
 
   ID3D11Device *device() const { return m_device.Get(); }
   ID3D11DeviceContext *context() const { return m_context.Get(); }
-  ID3D11RenderTargetView *renderTargetView() const { return m_rtv.Get(); }
+  ID3D11RenderTargetView *renderTargetView() const {
+    return m_externalRTV ? m_externalRTV : m_rtv.Get();
+  }
   ID3D11BlendState *alphaBlendState() const { return m_alphaBlend.Get(); }
   IDXGISwapChain1 *swapChain() const { return m_swapChain.Get(); }
 
