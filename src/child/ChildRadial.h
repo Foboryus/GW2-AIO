@@ -54,6 +54,8 @@ private:
   void pollGW2WindowSize();
   bool findGW2Window();
   bool createIntermediateRT(int width, int height);
+  bool ensureD3D11();  ///< Lazy device init — called on first map entry or focus gain
+  void teardownD3D11();  ///< Inverse of ensureD3D11 — destroys GPU resources on unfocus
 
   RadialController *m_controller = nullptr;
   RadialSettingsManager *m_radialSettings = nullptr;
@@ -70,4 +72,5 @@ private:
   HWND m_gw2Hwnd = nullptr;
   int m_gw2Width = 0;
   int m_gw2Height = 0;
+  bool m_d3dInitialized = false;  ///< True after ensureD3D11() succeeds
 };

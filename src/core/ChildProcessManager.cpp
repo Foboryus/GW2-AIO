@@ -200,14 +200,10 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
         return;
     }
 
-    // === Step 1: Spawn compositor FIRST (single overlay window) ===
-    // The compositor must be running before feature children start producing
-    // shared textures, so it can open them by name.
-    qInfo() << "[COMPOSITOR_LIFECYCLE] Spawning compositor FIRST for" << profileId;
-    spawnChild(profileId, mumbleName, gw2Pid, QStringLiteral("compositor"));
+    // === Enqueue compositor FIRST (must be running before feature children) ===
+    m_spawnQueue.append({profileId, mumbleName, gw2Pid, QStringLiteral("compositor")});
 
-    // === Step 2: Spawn feature children ===
-    // Map feature keys to their toggle state
+    // === Enqueue feature children (serialized — one at a time via READY signals) ===
     struct FeatureToggle {
         QString key;
         bool enabled;
@@ -227,17 +223,43 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
 
     for (const auto &feat : features) {
         if (feat.enabled) {
-            spawnChild(profileId, mumbleName, gw2Pid, feat.key);
+            m_spawnQueue.append({profileId, mumbleName, gw2Pid, feat.key});
         } else {
             qInfo() << "ChildProcessManager: feature" << feat.key
                     << "disabled for profile" << profileId << "— skipped";
         }
     }
 
-    qInfo() << "[COMPOSITOR_LIFECYCLE] All children spawned for" << profileId;
+    qInfo() << "[COMPOSITOR_LIFECYCLE] Enqueued" << m_spawnQueue.size()
+            << "children for" << profileId << "(serialized spawn queue)";
 
-    // Ensure pipe polling is running to read upstream messages from children
+    // Ensure pipe polling is running to read READY signals from children
     startPipePolling();
+
+    // Start processing the queue if not already in progress
+    if (!m_spawnInProgress) {
+        processSpawnQueue();
+    }
+}
+
+void ChildProcessManager::processSpawnQueue()
+{
+    if (m_spawnQueue.isEmpty()) {
+        m_spawnInProgress = false;
+        qInfo() << "[COMPOSITOR_LIFECYCLE] Spawn queue empty — all children launched";
+        return;
+    }
+
+    m_spawnInProgress = true;
+    const SpawnRequest req = m_spawnQueue.takeFirst();
+
+    qInfo() << "[COMPOSITOR_LIFECYCLE] Spawning next in queue:" << req.featureKey
+            << "for" << req.profileId
+            << "(remaining:" << m_spawnQueue.size() << ")";
+
+    spawnChild(req.profileId, req.mumbleName, req.gw2Pid, req.featureKey);
+    // m_spawnInProgress stays true — processSpawnQueue() will be called
+    // again when the child sends READY or COMPOSITOR_READY
 }
 
 void ChildProcessManager::terminateChildren(const QString &profileId)
@@ -789,6 +811,8 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
     } else if (message.startsWith("READY")) {
         qInfo() << "ChildProcessManager: Child" << featureKey << "READY for"
                 << profileId;
+        // Spawn queue: child is ready — spawn the next one
+        processSpawnQueue();
     } else if (message.startsWith("MAP ")) {
         // Child sends "MAP <mapId>" when entering a new map
         qInfo() << "ChildProcessManager: Child" << featureKey
@@ -819,6 +843,8 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
         int h = parts.size() > 2 ? parts[2].toInt() : 0;
         qInfo() << "[COMPOSITOR_LIFECYCLE] Compositor READY for" << profileId
                 << "— size:" << w << "x" << h;
+        // Spawn queue: compositor is ready — spawn the next feature child
+        processSpawnQueue();
 
     } else if (message.startsWith("RESIZE:")) {
         // Compositor resize — relay to ALL feature children of this profile

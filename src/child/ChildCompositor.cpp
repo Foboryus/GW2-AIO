@@ -139,6 +139,16 @@ void ChildCompositor::onFocusChanged(bool focused)
 
   if (m_hwnd) {
     if (focused) {
+      // Phase 5.5C: Close all consumers — producers destroyed their devices
+      // on the previous unfocus. Consumer handles are stale.
+      // tryOpenConsumers() will re-open them when new producers are ready.
+      for (auto *consumer : m_layers) {
+        if (consumer && consumer->isOpen()) {
+          consumer->shutdown();
+        }
+      }
+      qInfo() << "[DEV][COMPOSITOR] Focus gained — closed stale consumers for re-open";
+
       ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
       updatePosition();
     } else {
@@ -275,8 +285,20 @@ bool ChildCompositor::createCompositorWindow()
   if (width <= 0) width = 1920;
   if (height <= 0) height = 1080;
 
-  // Initialize D3D11
-  if (!m_d3dContext->initialize(m_hwnd, QSize(width, height))) {
+  // Initialize D3D11 (serialized via global named mutex — B7 fix)
+  HANDLE hDeviceMutex = CreateMutexW(nullptr, FALSE, L"Global\\GW2AIO_DeviceInit");
+  if (hDeviceMutex) {
+    WaitForSingleObject(hDeviceMutex, 30000); // 30s timeout
+  }
+
+  bool d3dOk = m_d3dContext->initialize(m_hwnd, QSize(width, height));
+
+  if (hDeviceMutex) {
+    ReleaseMutex(hDeviceMutex);
+    CloseHandle(hDeviceMutex);
+  }
+
+  if (!d3dOk) {
     qCritical() << "ChildCompositor: D3D11 init failed";
     DestroyWindow(m_hwnd);
     m_hwnd = nullptr;
@@ -543,7 +565,7 @@ void ChildCompositor::renderLayers()
     ID3D11ShaderResourceView *srv = consumer->acquireForRead(0);
     if (!srv) {
       ++s_acquireFail;
-      continue;  // Producer hasn't released yet, skip
+      continue;  // Producer busy or idle — skip this frame
     }
 
     ++s_acquireSuccess;

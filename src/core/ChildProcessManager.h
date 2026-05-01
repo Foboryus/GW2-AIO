@@ -201,6 +201,14 @@ private:
                   qint64 gw2Pid,
                   const QString &featureKey);
 
+  /**
+   * @brief Process the next item in the spawn queue
+   *
+   * Called after a child sends READY (or on initial enqueue).
+   * Spawns the next child in the queue one at a time.
+   */
+  void processSpawnQueue();
+
   // --- Members ---
   LaunchManager *m_launchManager = nullptr;
   ProfileManager *m_profileManager = nullptr;
@@ -224,4 +232,14 @@ private:
 
   // Timer for polling child pipes (upstream messages)
   QTimer *m_pipePollingTimer = nullptr;
+
+  // --- Spawn Queue (B7 fix — serialize child spawning) ---
+  struct SpawnRequest {
+    QString profileId;
+    QString mumbleName;
+    qint64 gw2Pid;
+    QString featureKey;
+  };
+  QList<SpawnRequest> m_spawnQueue;
+  bool m_spawnInProgress = false;  ///< True while waiting for READY from last spawn
 };

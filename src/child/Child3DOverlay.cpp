@@ -108,10 +108,130 @@ bool Child3DOverlay::onInitialize()
     m_queryContext->settings = m_markerSettings;
     m_queryContext->mumble = mumbleLink();
 
-    // 5. Create D3D11 device (OFFSCREEN — no window, no swap chain)
-    m_d3dContext = new D3D11Context();
+    // D3D11 device, SharedTexture, pipelines, and IntermediateRT are
+    // deferred to ensureD3D11() — called on first map entry (B7 fix).
+    // This avoids creating 5 full D3D11 contexts at startup.
 
-    // Find GW2 window to get actual client dimensions (same as old D3D11OverlayWindow)
+    // 5. Connect MumbleLink to render frame
+    connect(mumbleLink(), &MumbleLink::dataUpdated,
+            this, &Child3DOverlay::onRenderFrame);
+
+    qInfo() << "[DEV][3D] Init complete (D3D11 DEFERRED):"
+            << "markerMgr:" << (m_markerManager != nullptr)
+            << "targetPid:" << gw2Pid();
+    return true;
+}
+
+void Child3DOverlay::onShutdown()
+{
+    qInfo() << "[DEV][3D] Shutting down" << profileName();
+    teardownD3D11();
+}
+
+// ============================================================================
+// GPU Resource Teardown (Phase 5.5C — full device destruction on unfocus)
+// ============================================================================
+
+void Child3DOverlay::teardownD3D11()
+{
+    if (!m_d3dInitialized) return;
+
+    qInfo() << "[DEV][3D] Tearing down D3D11 for" << profileName();
+
+    // Tear down pipelines (GPU-dependent)
+    delete m_markerPipeline;
+    m_markerPipeline = nullptr;
+    delete m_trailPipeline;
+    m_trailPipeline = nullptr;
+    delete m_spriteBatch;
+    m_spriteBatch = nullptr;
+    delete m_glyphAtlas;
+    m_glyphAtlas = nullptr;
+
+    // Release exclusion CB
+    if (m_exclusionCB) {
+        m_exclusionCB->Release();
+        m_exclusionCB = nullptr;
+    }
+
+    // Release intermediate render target
+    m_intermediateRTV.Reset();
+    m_intermediateRT.Reset();
+
+    // Release shared texture (invalidates compositor consumer)
+    if (m_sharedTexture) {
+        m_sharedTexture->shutdown();
+        delete m_sharedTexture;
+        m_sharedTexture = nullptr;
+    }
+
+    // Release D3D11 device — frees the device object for other profiles
+    if (m_d3dContext) {
+        m_d3dContext->shutdown();
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+    }
+
+    m_d3dInitialized = false;
+    qInfo() << "[DEV][3D] D3D11 teardown complete — device freed";
+}
+
+// ============================================================================
+// Map lifecycle
+// ============================================================================
+
+void Child3DOverlay::onMapEntered(uint32_t mapId)
+{
+    qInfo() << "[DEV][3D] Map entered:" << mapId << profileName();
+
+    // Lazy D3D11 init — create device + pipelines on first map entry (B7 fix)
+    // Only init if focused — unfocused profiles defer to onFocusChanged(true)
+    // to avoid thundering herd (all profiles creating devices simultaneously)
+    if (!m_d3dInitialized) {
+        if (isFocused()) {
+            if (!ensureD3D11()) {
+                qWarning() << "[DEV][3D] D3D11 lazy init failed on map entry"
+                           << "— will retry on focus gain";
+            }
+        } else {
+            qInfo() << "[DEV][3D] Deferring D3D11 init (unfocused)"
+                    << "— will init on focus gain";
+        }
+    }
+
+    if (!m_packsLoaded) {
+        qInfo() << "[DEV][3D] Loading marker packs...";
+        m_markerManager->loadPacksFromDirectory(
+            AppConfig::instance().markerPacksDir());
+        m_packsLoaded = true;
+        qInfo() << "[DEV][3D] Packs loaded, count:"
+                << m_markerManager->packs().size();
+    }
+
+    m_queryContext->mapId = mapId;
+    m_markerManager->acquireMap(mapId);
+    m_markerManager->setProximityEnabled(true);
+
+    m_renderingEnabled = isFocused() && isInGame();
+    m_contentVisible = true;
+    m_lastUiTick = 0;
+    m_lastTickChangeMs = QDateTime::currentMSecsSinceEpoch();
+
+    qInfo() << "[DEV][3D] MAP_ENTERED rendering:" << m_renderingEnabled
+            << "d3dReady:" << m_d3dInitialized;
+}
+
+// ============================================================================
+// Lazy D3D11 Initialization (B7 fix)
+// ============================================================================
+
+bool Child3DOverlay::ensureD3D11()
+{
+    if (m_d3dInitialized) return true;
+
+    qInfo() << "[DEV][3D] Lazy D3D11 init starting for" << profileName();
+
+    // Find GW2 window for dimensions
     QSize initialSize(1920, 1080); // fallback
     m_gw2Hwnd = findGW2WindowByPid(static_cast<DWORD>(gw2Pid()));
     if (m_gw2Hwnd) {
@@ -127,13 +247,26 @@ bool Child3DOverlay::onInitialize()
         qWarning() << "[DEV][3D] GW2 window not found, using fallback size";
     }
 
+    // Acquire global device creation mutex (B7 fix — serialize across all children)
+    HANDLE hDeviceMutex = CreateMutexW(nullptr, FALSE, L"Global\\GW2AIO_DeviceInit");
+    if (hDeviceMutex) {
+        qInfo() << "[DEV][3D] Waiting for device creation mutex...";
+        WaitForSingleObject(hDeviceMutex, 30000); // 30s timeout
+    }
+
+    // D3D11 offscreen context (full — blend states, rasterizer, etc.)
+    m_d3dContext = new D3D11Context();
     if (!m_d3dContext->initializeOffscreen(initialSize)) {
-        qCritical() << "[DEV][3D] D3D11 offscreen init FAILED";
+        qCritical() << "[DEV][3D] D3D11 offscreen init FAILED (E_OUTOFMEMORY?)"
+                    << "— will retry on next map entry";
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
         return false;
     }
     qInfo() << "[DEV][3D] D3D11 offscreen device created:" << initialSize;
 
-    // 6. Create SharedTextureProducer
+    // SharedTextureProducer
     QString texName = QString("GW2AIO_Tex_%1_3d").arg(profileId());
     m_sharedTexture = new SharedTextureProducer();
     if (!m_sharedTexture->initialize(m_d3dContext->device(),
@@ -141,13 +274,16 @@ bool Child3DOverlay::onInitialize()
                                      initialSize.width(), initialSize.height(),
                                      texName)) {
         qCritical() << "[DEV][3D] SharedTextureProducer init FAILED";
+        delete m_sharedTexture;
+        m_sharedTexture = nullptr;
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
         return false;
     }
     qInfo() << "[DEV][3D] SharedTextureProducer created:" << texName;
 
-    // 6b. Create intermediate render target (non-shared)
-    // D3D11 may not support Draw calls directly to SHARED_KEYEDMUTEX textures.
-    // We render to this normal texture, then CopyResource to the shared texture.
+    // Intermediate render target (non-shared)
     {
         D3D11_TEXTURE2D_DESC rtDesc = {};
         rtDesc.Width = static_cast<UINT>(initialSize.width());
@@ -162,20 +298,27 @@ bool Child3DOverlay::onInitialize()
         HRESULT hr = m_d3dContext->device()->CreateTexture2D(
             &rtDesc, nullptr, m_intermediateRT.GetAddressOf());
         if (FAILED(hr)) {
-            qCritical() << "[DEV][3D] Intermediate RT creation failed:" << Qt::hex << hr;
+            qCritical() << "[DEV][3D] Intermediate RT creation FAILED:" << Qt::hex << hr;
+            delete m_sharedTexture; m_sharedTexture = nullptr;
+            delete m_d3dContext; m_d3dContext = nullptr;
+            if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
             return false;
         }
 
         hr = m_d3dContext->device()->CreateRenderTargetView(
             m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
         if (FAILED(hr)) {
-            qCritical() << "[DEV][3D] Intermediate RTV creation failed:" << Qt::hex << hr;
+            qCritical() << "[DEV][3D] Intermediate RTV creation FAILED:" << Qt::hex << hr;
+            m_intermediateRT.Reset();
+            delete m_sharedTexture; m_sharedTexture = nullptr;
+            delete m_d3dContext; m_d3dContext = nullptr;
+            if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
             return false;
         }
         qInfo() << "[DEV][3D] Intermediate RT created:" << initialSize;
     }
 
-    // 7. Initialize rendering pipelines
+    // Rendering pipelines
     m_markerPipeline = new MarkerPipeline(m_d3dContext, mumbleLink(),
                                           m_markerManager, m_markerSettings,
                                           m_imageCache);
@@ -200,7 +343,7 @@ bool Child3DOverlay::onInitialize()
         if (m_trailPipeline) m_trailPipeline->setQueryContext(m_queryContext);
     }
 
-    // 8. Initialize 2D rendering (distance labels)
+    // 2D rendering (distance labels)
     m_spriteBatch = new SpriteBatch(m_d3dContext);
     if (!m_spriteBatch->initialize()) {
         qWarning() << "[DEV][3D] SpriteBatch init failed";
@@ -220,79 +363,23 @@ bool Child3DOverlay::onInitialize()
         m_markerPipeline->setGlyphAtlas(m_glyphAtlas);
     }
 
-    // 9. Create exclusion zone buffer
+    // Exclusion zone buffer
     createExclusionBuffer();
 
-    // 10. Connect MumbleLink to render frame
-    connect(mumbleLink(), &MumbleLink::dataUpdated,
-            this, &Child3DOverlay::onRenderFrame);
+    m_d3dInitialized = true;
 
-    qInfo() << "[DEV][3D] Initialization complete — rendering to SharedTexture";
+    // Release device creation mutex — next child can proceed
+    if (hDeviceMutex) {
+        ReleaseMutex(hDeviceMutex);
+        CloseHandle(hDeviceMutex);
+    }
+
+    qInfo() << "[DEV][3D] Lazy D3D11 init COMPLETE:"
+            << "sharedTex:" << (m_sharedTexture != nullptr)
+            << "markerPipeline:" << (m_markerPipeline != nullptr)
+            << "trailPipeline:" << (m_trailPipeline != nullptr)
+            << "spriteBatch:" << (m_spriteBatch != nullptr);
     return true;
-}
-
-void Child3DOverlay::onShutdown()
-{
-    qInfo() << "[DEV][3D] Shutting down" << profileName();
-
-    // Tear down pipelines
-    delete m_markerPipeline;
-    m_markerPipeline = nullptr;
-    delete m_trailPipeline;
-    m_trailPipeline = nullptr;
-    delete m_spriteBatch;
-    m_spriteBatch = nullptr;
-    delete m_glyphAtlas;
-    m_glyphAtlas = nullptr;
-
-    // Release exclusion CB
-    if (m_exclusionCB) {
-        m_exclusionCB->Release();
-        m_exclusionCB = nullptr;
-    }
-
-    // Release shared texture
-    if (m_sharedTexture) {
-        m_sharedTexture->shutdown();
-        delete m_sharedTexture;
-        m_sharedTexture = nullptr;
-    }
-
-    // Release D3D11 device
-    if (m_d3dContext) {
-        m_d3dContext->shutdown();
-        delete m_d3dContext;
-        m_d3dContext = nullptr;
-    }
-}
-
-// ============================================================================
-// Map lifecycle
-// ============================================================================
-
-void Child3DOverlay::onMapEntered(uint32_t mapId)
-{
-    qInfo() << "[DEV][3D] Map entered:" << mapId << profileName();
-
-    if (!m_packsLoaded) {
-        qInfo() << "[DEV][3D] Loading marker packs...";
-        m_markerManager->loadPacksFromDirectory(
-            AppConfig::instance().markerPacksDir());
-        m_packsLoaded = true;
-        qInfo() << "[DEV][3D] Packs loaded, count:"
-                << m_markerManager->packs().size();
-    }
-
-    m_queryContext->mapId = mapId;
-    m_markerManager->acquireMap(mapId);
-    m_markerManager->setProximityEnabled(true);
-
-    m_renderingEnabled = isFocused() && isInGame();
-    m_contentVisible = true;
-    m_lastUiTick = 0;
-    m_lastTickChangeMs = QDateTime::currentMSecsSinceEpoch();
-
-    qInfo() << "[DEV][3D] MAP_ENTERED rendering:" << m_renderingEnabled;
 }
 
 void Child3DOverlay::onMapLeft()
@@ -317,6 +404,22 @@ void Child3DOverlay::onMapLeft()
 void Child3DOverlay::onFocusChanged(bool focused)
 {
     m_renderingEnabled = focused && isInGame();
+
+    if (focused) {
+        // Phase 5.5C: Recreate D3D11 device on focus gain
+        if (!m_d3dInitialized && isInGame()) {
+            qInfo() << "[DEV][3D] Focus gained — creating D3D11 device";
+            if (!ensureD3D11()) {
+                qWarning() << "[DEV][3D] D3D11 init failed on focus gain"
+                           << "— will retry on next focus gain";
+            }
+        }
+    } else {
+        // Phase 5.5C: Full device destruction on unfocus
+        // Frees device object so other profiles can create theirs
+        teardownD3D11();
+    }
+
     qInfo() << "[DEV][3D] Focus:" << focused << "rendering:" << m_renderingEnabled;
 }
 

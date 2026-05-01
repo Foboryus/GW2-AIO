@@ -106,6 +106,11 @@ private:
   HWND m_gw2Hwnd = nullptr;
   static HWND findGW2WindowByPid(DWORD pid);
 
+  // Lazy D3D11 init (B7 fix) — called on first map entry or focus gain
+  bool ensureD3D11();
+  void teardownD3D11();  ///< Inverse of ensureD3D11 — destroys GPU resources on unfocus
+  bool m_d3dInitialized = false;
+
   // Intermediate render target (non-shared, for pipeline Draw calls)
   Microsoft::WRL::ComPtr<ID3D11Texture2D> m_intermediateRT;
   Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_intermediateRTV;

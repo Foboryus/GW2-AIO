@@ -75,6 +75,15 @@ public:
   void setD3DContext(D3D11Context *ctx) { m_externalCtx = ctx; }
 
   /**
+   * @brief Invalidate all GPU resources (shaders, textures, CBs)
+   *
+   * Called by ChildRadial::teardownD3D11() when the D3D11 device is destroyed.
+   * The renderer and icon textures were created on the old device and are now
+   * dangling. This forces re-initialization on the next renderToTarget() call.
+   */
+  void invalidateGPUResources();
+
+  /**
    * @brief Start in headless mode (no overlay window, no swap chain)
    */
   void startHeadless();

@@ -62,8 +62,7 @@ ChildRadial::~ChildRadial()
 
 bool ChildRadial::onInitialize()
 {
-    qInfo() << "ChildRadial: Initializing D3D11 radial overlay for"
-            << profileName();
+    qInfo() << "ChildRadial: Initializing for" << profileName();
 
     // 1. Load per-profile radial settings from disk
     const QString radialDir = AppConfig::instance().radialConfigDir();
@@ -76,57 +75,26 @@ bool ChildRadial::onInitialize()
             << "mounts:" << m_radialSettings->settings().mounts.size()
             << "wheelScale:" << m_radialSettings->settings().wheelScale;
 
-    // 2. Find GW2 window for dimensions
+    // 2. Find GW2 window for dimensions (needed by controller)
     findGW2Window();
-    int initW = m_gw2Width > 0 ? m_gw2Width : 800;
-    int initH = m_gw2Height > 0 ? m_gw2Height : 600;
 
-    // 3. D3D11 offscreen context
-    m_d3dContext = new D3D11Context();
-    if (!m_d3dContext->initializeOffscreen(QSize(initW, initH))) {
-        qCritical() << "ChildRadial: D3D11 offscreen init failed";
-        return false;
-    }
-    qInfo() << "ChildRadial: D3D11 offscreen context initialized"
-            << initW << "x" << initH;
-
-    // 4. Create intermediate render target (render here, then CopyResource to shared texture)
-    if (!createIntermediateRT(initW, initH)) {
-        qCritical() << "ChildRadial: Intermediate RT creation failed";
-        return false;
-    }
-
-    // 5. SharedTextureProducer
-    m_sharedTexture = new SharedTextureProducer();
-    QString texName = QStringLiteral("GW2AIO_Tex_%1_radial").arg(profileId());
-    if (!m_sharedTexture->initialize(
-            m_d3dContext->device(), m_d3dContext->context(),
-            initW, initH, texName)) {
-        qCritical() << "ChildRadial: SharedTexture init failed";
-        return false;
-    }
-    qInfo() << "ChildRadial: SharedTexture created:" << texName
-            << initW << "x" << initH;
-
-    // 6. Create controller (hotkey polling + wheel state + rendering)
+    // 3. Create controller (hotkey polling + wheel state)
+    //    Controller can poll hotkeys without D3D11 — rendering is guarded
     m_controller = new RadialController(
         mumbleLink(), static_cast<uint32_t>(gw2Pid()), this);
     m_controller->applySettings(m_radialSettings->settings());
 
-    // 7. Provide the D3D11 context to the controller for renderer init
-    m_controller->setD3DContext(m_d3dContext);
-
-    // 8. Wire MumbleLink::dataUpdated → render tick (hotkey polling + rendering)
+    // 4. Wire MumbleLink::dataUpdated → render tick (hotkey polling + rendering)
     connect(mumbleLink(), &MumbleLink::dataUpdated,
             this, &ChildRadial::onRenderTick, Qt::UniqueConnection);
 
-    // 9. Start the controller (without overlay window)
+    // 5. Start the controller (hotkey polling only — no rendering until D3D11 init)
     m_controller->startHeadless();
 
-    qInfo() << "[DEV][RADIAL] Init complete:"
+    // D3D11 device, SharedTexture, and IntermediateRT are deferred to
+    // ensureD3D11() — called on first map entry (lazy init for B7 fix)
+    qInfo() << "[DEV][RADIAL] Init complete (D3D11 DEFERRED):"
             << "controller:" << (m_controller != nullptr)
-            << "sharedTex:" << (m_sharedTexture != nullptr)
-            << "intermediateRT:" << (m_intermediateRT.Get() != nullptr)
             << "targetPid:" << gw2Pid()
             << "enabled:" << m_radialSettings->settings().radialEnabled
             << "mounts:" << m_radialSettings->settings().mounts.size();
@@ -141,9 +109,47 @@ void ChildRadial::onShutdown()
         m_controller->stop();
     }
 
+    teardownD3D11();
+}
+
+// ============================================================================
+// GPU Resource Teardown (Phase 5.5C — full device destruction on unfocus)
+// ============================================================================
+
+void ChildRadial::teardownD3D11()
+{
+    if (!m_d3dInitialized) return;
+
+    qInfo() << "[DEV][RADIAL] Tearing down D3D11 for" << profileName();
+
+    // Invalidate controller's GPU resources (shaders, icon textures, CBs)
+    // They were created on this device and will be dangling after destroy.
+    // The controller's lazy-init will rebuild them on the next device.
+    if (m_controller) {
+        m_controller->invalidateGPUResources();
+        m_controller->setD3DContext(nullptr);
+    }
+
+    // Release intermediate render target
+    m_intermediateRTV.Reset();
+    m_intermediateRT.Reset();
+
+    // Release shared texture (invalidates compositor consumer)
     if (m_sharedTexture) {
         m_sharedTexture->shutdown();
+        delete m_sharedTexture;
+        m_sharedTexture = nullptr;
     }
+
+    // Release D3D11 device — frees the device object for other profiles
+    if (m_d3dContext) {
+        m_d3dContext->shutdown();
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+    }
+
+    m_d3dInitialized = false;
+    qInfo() << "[DEV][RADIAL] D3D11 teardown complete — device freed";
 }
 
 // ============================================================================
@@ -306,6 +312,98 @@ void ChildRadial::pollGW2WindowSize()
 void ChildRadial::onMapEntered(uint32_t mapId)
 {
     Q_UNUSED(mapId);
+
+    // Lazy D3D11 init — create device on first map entry (B7 fix)
+    // Only init if focused — unfocused profiles defer to onFocusChanged(true)
+    if (!m_d3dInitialized) {
+        if (isFocused()) {
+            if (!ensureD3D11()) {
+                qWarning() << "[DEV][RADIAL] D3D11 lazy init failed on map entry"
+                           << "— will retry on focus gain";
+            }
+        } else {
+            qInfo() << "[DEV][RADIAL] Deferring D3D11 init (unfocused)"
+                    << "— will init on focus gain";
+        }
+    }
+}
+
+// ============================================================================
+// Lazy D3D11 Initialization (B7 fix)
+// ============================================================================
+
+bool ChildRadial::ensureD3D11()
+{
+    if (m_d3dInitialized) return true;
+
+    qInfo() << "[DEV][RADIAL] Lazy D3D11 init starting for" << profileName();
+
+    // Get current GW2 window dimensions
+    findGW2Window();
+    int initW = m_gw2Width > 0 ? m_gw2Width : 800;
+    int initH = m_gw2Height > 0 ? m_gw2Height : 600;
+
+    // Acquire global device creation mutex (B7 fix — serialize across all children)
+    HANDLE hDeviceMutex = CreateMutexW(nullptr, FALSE, L"Global\\GW2AIO_DeviceInit");
+    if (hDeviceMutex) {
+        qInfo() << "[DEV][RADIAL] Waiting for device creation mutex...";
+        WaitForSingleObject(hDeviceMutex, 30000);
+    }
+
+    // D3D11 offscreen context
+    m_d3dContext = new D3D11Context();
+    if (!m_d3dContext->initializeOffscreen(QSize(initW, initH))) {
+        qCritical() << "[DEV][RADIAL] D3D11 offscreen init FAILED (E_OUTOFMEMORY?)"
+                    << "— will retry on next map entry";
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+        return false;
+    }
+    qInfo() << "[DEV][RADIAL] D3D11 offscreen context created"
+            << initW << "x" << initH;
+
+    // Intermediate render target
+    if (!createIntermediateRT(initW, initH)) {
+        qCritical() << "[DEV][RADIAL] Intermediate RT creation FAILED";
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+        return false;
+    }
+
+    // SharedTextureProducer
+    m_sharedTexture = new SharedTextureProducer();
+    QString texName = QStringLiteral("GW2AIO_Tex_%1_radial").arg(profileId());
+    if (!m_sharedTexture->initialize(
+            m_d3dContext->device(), m_d3dContext->context(),
+            initW, initH, texName)) {
+        qCritical() << "[DEV][RADIAL] SharedTexture init FAILED";
+        delete m_sharedTexture;
+        m_sharedTexture = nullptr;
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+        return false;
+    }
+    qInfo() << "[DEV][RADIAL] SharedTexture created:" << texName
+            << initW << "x" << initH;
+
+    // Provide D3D11 context to controller for renderer init
+    m_controller->setD3DContext(m_d3dContext);
+
+    m_d3dInitialized = true;
+
+    // Release device creation mutex — next child can proceed
+    if (hDeviceMutex) {
+        ReleaseMutex(hDeviceMutex);
+        CloseHandle(hDeviceMutex);
+    }
+
+    qInfo() << "[DEV][RADIAL] Lazy D3D11 init COMPLETE:"
+            << "sharedTex:" << (m_sharedTexture != nullptr)
+            << "intermediateRT:" << (m_intermediateRT.Get() != nullptr);
+    return true;
 }
 
 void ChildRadial::onMapLeft()
@@ -322,6 +420,20 @@ void ChildRadial::onFocusChanged(bool focused)
             << profileName()
             << "focused:" << focused
             << "inGame:" << isInGame();
+
+    if (focused) {
+        // Phase 5.5C: Recreate D3D11 device on focus gain
+        if (!m_d3dInitialized && isInGame()) {
+            qInfo() << "[DEV][RADIAL] Focus gained — creating D3D11 device";
+            if (!ensureD3D11()) {
+                qWarning() << "[DEV][RADIAL] D3D11 init failed on focus gain"
+                           << "— will retry on next focus gain";
+            }
+        }
+    } else {
+        // Phase 5.5C: Full device destruction on unfocus
+        teardownD3D11();
+    }
 
     if (m_controller) {
         m_controller->onFocusChanged(focused);

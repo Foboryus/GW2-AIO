@@ -25,7 +25,6 @@
 // clang-format on
 
 #include <d3d11_1.h>
-
 #include <QImage>
 
 class ImageCache;
@@ -66,6 +65,8 @@ private:
   // --- GW2 window discovery ---
   HWND m_gw2Hwnd = nullptr;
   bool findGW2Window();
+  bool ensureD3D11();  ///< Lazy device init — called on first map entry or focus gain
+  void teardownD3D11();  ///< Inverse of ensureD3D11 — destroys GPU resources on unfocus
 
   // --- Bare D3D11 device (no D3D11Context — saves GPU memory) ---
   ComPtr<ID3D11Device> m_device;
@@ -85,4 +86,5 @@ private:
   MarkerQueryContext *m_queryContext = nullptr;
 
   bool m_packsLoaded = false;
+  bool m_d3dInitialized = false;  ///< True after ensureD3D11() succeeds
 };

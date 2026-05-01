@@ -91,6 +91,23 @@ void RadialController::startHeadless() {
   qInfo() << "RadialController: Started (headless) for PID:" << m_targetPid;
 }
 
+void RadialController::invalidateGPUResources() {
+  // Shutdown renderer — releases all shaders, CBs, textures, sampler
+  // that were created on the now-destroyed device
+  m_renderer->shutdown();
+
+  // Clear icon SRVs from wheel elements — they point to dead device memory
+  auto &elements = m_wheel->elements();
+  for (auto &elem : elements) {
+    elem.iconSRV.Reset();
+  }
+
+  // Force re-load on next renderToTarget() call
+  m_iconsLoaded = false;
+
+  qInfo() << "RadialController: GPU resources invalidated — will reinit on next render";
+}
+
 bool RadialController::needsRendering() const {
   return m_wheel->isActive() || m_fadeAlpha > 0.0f;
 }

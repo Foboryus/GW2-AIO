@@ -83,46 +83,11 @@ bool ChildMinimap::onInitialize()
 
     // 6. Find GW2 window for dimensions
     findGW2Window();
-    int initW = m_gw2Width > 0 ? m_gw2Width : 800;
-    int initH = m_gw2Height > 0 ? m_gw2Height : 600;
 
-    // 7. Create bare D3D11 device (no blend states, no rasterizer, no RT)
-    //    Minimap only needs UpdateSubresource — saves GPU memory vs D3D11Context
-    D3D_FEATURE_LEVEL featureLevel;
-    UINT flags = 0;
-#ifdef _DEBUG
-    flags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
-    HRESULT hr = D3D11CreateDevice(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
-        nullptr, 0, D3D11_SDK_VERSION,
-        m_device.GetAddressOf(), &featureLevel,
-        m_deviceContext.GetAddressOf());
-    if (FAILED(hr)) {
-        qCritical() << "ChildMinimap: D3D11 bare device creation failed:"
-                    << Qt::hex << hr;
-        return false;
-    }
-    qInfo() << "ChildMinimap: Bare D3D11 device created, feature level:"
-            << Qt::hex << featureLevel;
+    // D3D11 device, SharedTexture, and QImage are deferred to
+    // ensureD3D11() — called on first map entry (lazy init for B7 fix)
 
-    // 8. SharedTextureProducer (uses bare device)
-    m_sharedTexture = new SharedTextureProducer();
-    QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
-    if (!m_sharedTexture->initialize(
-            m_device.Get(), m_deviceContext.Get(),
-            initW, initH, texName)) {
-        qCritical() << "ChildMinimap: SharedTexture init failed";
-        return false;
-    }
-    qInfo() << "ChildMinimap: SharedTexture created:" << texName
-            << initW << "x" << initH;
-
-    // 9. Allocate QImage render target
-    m_renderImage = QImage(initW, initH, QImage::Format_ARGB32_Premultiplied);
-    m_renderImage.fill(Qt::transparent);
-
-    // 10. Wire MumbleLink connection → start/stop MinimapRenderer
+    // 7. Wire MumbleLink connection → start/stop MinimapRenderer
     connect(mumbleLink(), &MumbleLink::connectionChanged,
             this, [this](bool connected) {
                 if (connected) {
@@ -134,19 +99,17 @@ bool ChildMinimap::onInitialize()
                 }
             });
 
-    // 11. Wire settings changes
+    // 8. Wire settings changes
     connect(m_markerSettings, &MarkerSettingsManager::settingsChanged,
             this, &ChildMinimap::syncMinimapSettings);
     syncMinimapSettings();
 
-    // 12. Wire MumbleLink::dataUpdated → render frame
+    // 9. Wire MumbleLink::dataUpdated → render frame
     connect(mumbleLink(), &MumbleLink::dataUpdated,
             this, &ChildMinimap::onRenderFrame, Qt::UniqueConnection);
 
-    qInfo() << "[DEV][MINIMAP] Init complete:"
+    qInfo() << "[DEV][MINIMAP] Init complete (D3D11 DEFERRED):"
             << "renderer:" << (m_minimapRenderer != nullptr)
-            << "sharedTex:" << (m_sharedTexture != nullptr)
-            << "size:" << initW << "x" << initH
             << "targetPid:" << gw2Pid();
 
     return true;
@@ -160,9 +123,36 @@ void ChildMinimap::onShutdown()
         m_minimapRenderer->stop();
     }
 
+    teardownD3D11();
+}
+
+// ============================================================================
+// GPU Resource Teardown (Phase 5.5C — full device destruction on unfocus)
+// ============================================================================
+
+void ChildMinimap::teardownD3D11()
+{
+    if (!m_d3dInitialized) return;
+
+    qInfo() << "[DEV][MINIMAP] Tearing down D3D11 for" << profileName();
+
+    // Release shared texture (invalidates compositor consumer)
     if (m_sharedTexture) {
         m_sharedTexture->shutdown();
+        delete m_sharedTexture;
+        m_sharedTexture = nullptr;
     }
+
+    // Release bare D3D11 device — frees the device object for other profiles
+    if (m_deviceContext) {
+        m_deviceContext->ClearState();
+        m_deviceContext->Flush();
+    }
+    m_deviceContext.Reset();
+    m_device.Reset();
+
+    m_d3dInitialized = false;
+    qInfo() << "[DEV][MINIMAP] D3D11 teardown complete — device freed";
 }
 
 // ============================================================================
@@ -293,6 +283,20 @@ void ChildMinimap::onMapEntered(uint32_t mapId)
 {
     qInfo() << "ChildMinimap: Map entered:" << mapId << "for" << profileName();
 
+    // Lazy D3D11 init — create device on first map entry (B7 fix)
+    // Only init if focused — unfocused profiles defer to onFocusChanged(true)
+    if (!m_d3dInitialized) {
+        if (isFocused()) {
+            if (!ensureD3D11()) {
+                qWarning() << "[DEV][MINIMAP] D3D11 lazy init failed on map entry"
+                           << "— will retry on focus gain";
+            }
+        } else {
+            qInfo() << "[DEV][MINIMAP] Deferring D3D11 init (unfocused)"
+                    << "— will init on focus gain";
+        }
+    }
+
     if (!m_packsLoaded) {
         qInfo() << "ChildMinimap: Loading marker packs...";
         m_markerManager->loadPacksFromDirectory(
@@ -315,7 +319,85 @@ void ChildMinimap::onMapEntered(uint32_t mapId)
             << "packsLoaded:" << m_packsLoaded
             << "packCount:" << m_markerManager->packs().size()
             << "renderingEnabled:" << shouldRender
+            << "d3dReady:" << m_d3dInitialized
             << "focused:" << isFocused();
+}
+
+// ============================================================================
+// Lazy D3D11 Initialization (B7 fix)
+// ============================================================================
+
+bool ChildMinimap::ensureD3D11()
+{
+    if (m_d3dInitialized) return true;
+
+    qInfo() << "[DEV][MINIMAP] Lazy D3D11 init starting for" << profileName();
+
+    findGW2Window();
+    int initW = m_gw2Width > 0 ? m_gw2Width : 800;
+    int initH = m_gw2Height > 0 ? m_gw2Height : 600;
+
+    // Acquire global device creation mutex (B7 fix — serialize across all children)
+    HANDLE hDeviceMutex = CreateMutexW(nullptr, FALSE, L"Global\\GW2AIO_DeviceInit");
+    if (hDeviceMutex) {
+        qInfo() << "[DEV][MINIMAP] Waiting for device creation mutex...";
+        WaitForSingleObject(hDeviceMutex, 30000);
+    }
+
+    // Create bare D3D11 device (no blend states, no rasterizer, no RT)
+    D3D_FEATURE_LEVEL featureLevel;
+    UINT flags = 0;
+#ifdef _DEBUG
+    flags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+    HRESULT hr = D3D11CreateDevice(
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
+        nullptr, 0, D3D11_SDK_VERSION,
+        m_device.GetAddressOf(), &featureLevel,
+        m_deviceContext.GetAddressOf());
+    if (FAILED(hr)) {
+        qCritical() << "[DEV][MINIMAP] D3D11 bare device creation FAILED:"
+                    << Qt::hex << hr
+                    << "— will retry on next map entry";
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+        return false;
+    }
+    qInfo() << "[DEV][MINIMAP] Bare D3D11 device created, feature level:"
+            << Qt::hex << featureLevel;
+
+    // SharedTextureProducer
+    m_sharedTexture = new SharedTextureProducer();
+    QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
+    if (!m_sharedTexture->initialize(
+            m_device.Get(), m_deviceContext.Get(),
+            initW, initH, texName)) {
+        qCritical() << "[DEV][MINIMAP] SharedTexture init FAILED";
+        delete m_sharedTexture;
+        m_sharedTexture = nullptr;
+        m_device.Reset();
+        m_deviceContext.Reset();
+        if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+        return false;
+    }
+    qInfo() << "[DEV][MINIMAP] SharedTexture created:" << texName
+            << initW << "x" << initH;
+
+    // Allocate QImage render target
+    m_renderImage = QImage(initW, initH, QImage::Format_ARGB32_Premultiplied);
+    m_renderImage.fill(Qt::transparent);
+
+    m_d3dInitialized = true;
+
+    // Release device creation mutex — next child can proceed
+    if (hDeviceMutex) {
+        ReleaseMutex(hDeviceMutex);
+        CloseHandle(hDeviceMutex);
+    }
+
+    qInfo() << "[DEV][MINIMAP] Lazy D3D11 init COMPLETE:"
+            << "sharedTex:" << (m_sharedTexture != nullptr)
+            << "size:" << initW << "x" << initH;
+    return true;
 }
 
 void ChildMinimap::onMapLeft()
@@ -345,6 +427,20 @@ void ChildMinimap::onFocusChanged(bool focused)
             << "focused:" << focused
             << "inGame:" << isInGame()
             << "renderingEnabled:" << shouldRender;
+
+    if (focused) {
+        // Phase 5.5C: Recreate D3D11 device on focus gain
+        if (!m_d3dInitialized && isInGame()) {
+            qInfo() << "[DEV][MINIMAP] Focus gained — creating D3D11 device";
+            if (!ensureD3D11()) {
+                qWarning() << "[DEV][MINIMAP] D3D11 init failed on focus gain"
+                           << "— will retry on next focus gain";
+            }
+        }
+    } else {
+        // Phase 5.5C: Full device destruction on unfocus
+        teardownD3D11();
+    }
 
     if (m_minimapRenderer) {
         m_minimapRenderer->setRenderingEnabled(shouldRender);
