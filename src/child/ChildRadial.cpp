@@ -157,20 +157,11 @@ void ChildRadial::onRenderTick()
     ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
     if (!rtv) return;
 
-    // Set the RTV as render target
-    m_d3dContext->context()->OMSetRenderTargets(1, &rtv, nullptr);
-
-    // Clear to transparent
-    float clearColor[4] = {0, 0, 0, 0};
-    m_d3dContext->context()->ClearRenderTargetView(rtv, clearColor);
-
-    // Set viewport
-    D3D11_VIEWPORT vp = {};
-    vp.Width = static_cast<float>(m_gw2Width);
-    vp.Height = static_cast<float>(m_gw2Height);
-    vp.MinDepth = 0.0f;
-    vp.MaxDepth = 1.0f;
-    m_d3dContext->context()->RSSetViewports(1, &vp);
+    // Use setExternalRTV + beginFrame to set all required D3D11 state
+    // (blend state, rasterizer state, viewport, clear) — RadialRenderer
+    // depends on alpha blending being enabled by beginFrame()
+    m_d3dContext->setExternalRTV(rtv);
+    m_d3dContext->beginFrame();
 
     // Get cursor position relative to GW2 window
     POINT cursor = {};
