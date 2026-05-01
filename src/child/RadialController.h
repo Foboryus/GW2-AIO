@@ -63,8 +63,43 @@ public:
 
   /**
    * @brief Get the overlay window (for connecting focusChanged signal)
+   * @note Returns nullptr in headless mode.
    */
   RadialOverlayWindow *overlayWindow() const { return m_overlayWindow; }
+
+  // --- Headless mode (SharedTexture) ---
+
+  /**
+   * @brief Set the D3D11 context for headless rendering (no overlay window)
+   */
+  void setD3DContext(D3D11Context *ctx) { m_externalCtx = ctx; }
+
+  /**
+   * @brief Start in headless mode (no overlay window, no swap chain)
+   */
+  void startHeadless();
+
+  /**
+   * @brief Check if wheel needs GPU rendering (active or fading)
+   */
+  bool needsRendering() const;
+
+  /**
+   * @brief Render wheel to the currently-bound RTV.
+   * Caller must set OMSetRenderTargets, ClearRenderTargetView, RSSetViewports.
+   * @param ctx D3D11 context
+   * @param cursorX Client-space cursor X
+   * @param cursorY Client-space cursor Y
+   * @param viewW Viewport width
+   * @param viewH Viewport height
+   */
+  void renderToTarget(D3D11Context *ctx, int cursorX, int cursorY,
+                      int viewW, int viewH);
+
+  /**
+   * @brief Poll hotkey state and manage wheel lifecycle (public for headless)
+   */
+  void pollHotkey();
 
 private:
   /**
@@ -72,11 +107,6 @@ private:
    * @return true if content was drawn (needs Present), false if idle
    */
   bool renderFrame(D3D11Context *ctx);
-
-  /**
-   * @brief Poll hotkey state and manage wheel lifecycle
-   */
-  void pollHotkey();
 
   /**
    * @brief Populate mount elements from m_settings (replaces setupTestElements)
@@ -106,6 +136,10 @@ private:
   // Frame timing
   QElapsedTimer m_frameTimer;
   qint64 m_lastFrameMs = 0;
+
+  // External D3D11 context for headless mode (not owned)
+  D3D11Context *m_externalCtx = nullptr;
+  bool m_headless = false;
 
   // Fade-out state (Phase 1 fix: clear swap chain on deactivation)
   bool m_wasWheelActive = false;     // Tracks active→inactive transition

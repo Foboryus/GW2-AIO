@@ -214,6 +214,9 @@ add_executable(GW2AIO-radial WIN32
     # D3D11 rendering context (shared source — device, swap chain, shaders)
     ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
 
+    # Shared texture (cross-process GPU texture sharing)
+    ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
+
     # Radial settings (per-profile configuration)
     ${CMAKE_SOURCE_DIR}/src/core/RadialSettings.cpp
     ${CMAKE_SOURCE_DIR}/src/core/RadialSettingsManager.cpp

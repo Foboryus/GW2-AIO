@@ -84,10 +84,78 @@ void RadialController::stop() {
   qInfo() << "RadialController: Stopped";
 }
 
+void RadialController::startHeadless() {
+  m_headless = true;
+  m_frameTimer.start();
+  m_lastFrameMs = m_frameTimer.elapsed();
+  qInfo() << "RadialController: Started (headless) for PID:" << m_targetPid;
+}
+
+bool RadialController::needsRendering() const {
+  return m_wheel->isActive() || m_fadeAlpha > 0.0f;
+}
+
+void RadialController::renderToTarget(D3D11Context *ctx, int cursorX, int cursorY,
+                                       int viewW, int viewH) {
+  if (!ctx || !ctx->isInitialized()) return;
+
+  // Lazy-init renderer
+  if (!m_renderer->isInitialized()) {
+    if (!m_renderer->initialize(ctx)) {
+      qCritical() << "RadialController: Renderer initialization failed";
+      return;
+    }
+    loadIconTextures(ctx);
+  }
+
+  // Calculate delta time
+  qint64 now = m_frameTimer.elapsed();
+  float deltaMs = static_cast<float>(now - m_lastFrameMs);
+  m_lastFrameMs = now;
+  if (deltaMs > 100.0f) deltaMs = 16.0f;
+
+  const bool isActive = m_wheel->isActive();
+
+  // Transition detection: active → inactive → begin fade-out
+  if (m_wasWheelActive && !isActive && m_fadeAlpha <= 0.0f) {
+    m_savedGlobalOpacity = m_wheel->globalOpacity();
+    m_fadeAlpha = 1.0f;
+    qInfo() << "[DIAG] RadialController: WHEEL_FADE_START (headless)";
+  }
+  m_wasWheelActive = isActive;
+
+  // Fade-out in progress
+  if (!isActive && m_fadeAlpha > 0.0f) {
+    float deltaSec = deltaMs / 1000.0f;
+    static constexpr float kFadeOutSpeed = 6.67f;
+    m_fadeAlpha -= deltaSec * kFadeOutSpeed;
+
+    if (m_fadeAlpha <= 0.0f) {
+      m_fadeAlpha = 0.0f;
+      m_wheel->setGlobalOpacity(m_savedGlobalOpacity);
+      qInfo() << "[DIAG] RadialController: WHEEL_FADE_COMPLETE (headless)";
+      return;  // Nothing to draw — fully faded
+    }
+
+    m_wheel->setGlobalOpacity(m_savedGlobalOpacity * m_fadeAlpha);
+  }
+
+  if (!isActive && m_fadeAlpha <= 0.0f) return;
+
+  // Tick wheel animations + hover detection
+  m_wheel->tick(deltaMs, cursorX, cursorY, viewW, viewH);
+
+  // Draw
+  m_renderer->drawWheel(ctx, m_wheel);
+  auto &visible = m_wheel->visibleElements();
+  for (int i = 0; i < visible.size(); ++i) {
+    m_renderer->drawElement(ctx, m_wheel, visible[i], i, visible.size());
+  }
+  m_renderer->drawCursor(ctx, cursorX, cursorY, viewW, viewH,
+                          m_wheel->animationTimer(), m_wheel->globalOpacity());
+}
+
 void RadialController::onSettingsReceived(const QJsonObject &settings) {
-  // IPC settings are now parsed by ChildRadial, which calls applySettings()
-  // directly. This method is kept for interface compliance but should not
-  // be called directly.
   Q_UNUSED(settings);
   qWarning() << "RadialController::onSettingsReceived called directly —"
              << "use applySettings() instead";
@@ -95,8 +163,6 @@ void RadialController::onSettingsReceived(const QJsonObject &settings) {
 
 void RadialController::applySettings(const RadialSettings &settings) {
   m_settings = settings;
-
-  // Update hotkey from settings
   m_triggerVK = m_settings.mountHotkey;
   m_triggerModifiers = m_settings.mountHotkeyModifiers;
   qInfo() << "RadialController: Settings applied — mountHotkey VK:"
@@ -106,24 +172,14 @@ void RadialController::applySettings(const RadialSettings &settings) {
           << "opacity:" << m_settings.opacity
           << "enabled mounts:" << m_settings.mounts.size();
 
-  // Apply display settings to wheel
   m_wheel->setCenterScale(m_settings.centerScale);
   m_wheel->setGlobalOpacity(m_settings.opacity);
   if (m_settings.animationTimeMs > 0) {
-    // Convert animation time to speed multiplier
-    // Default is 150ms, kWheelFadeSpeed=4.0 → scale proportionally
     float speedMultiplier = 150.0f / static_cast<float>(m_settings.animationTimeMs);
     m_wheel->setAnimationSpeed(speedMultiplier);
   }
-
-  // Apply wheel scale to renderer (base 0.72 * user scale factor)
-  // wheelScale=1.0 → 0.72 (default), wheelScale=1.5 → 1.08 (larger)
   m_renderer->setWheelScale(0.72f * m_settings.wheelScale);
-
-  // Rebuild elements from settings
   rebuildElements();
-
-  // Force icon reload on next render frame
   m_iconsLoaded = false;
 }
 
@@ -135,39 +191,35 @@ void RadialController::onFocusChanged(bool focused) {
           << "wheelActive:" << m_wheel->isActive()
           << "triggerVK:" << m_triggerVK;
 
-  // Focus loss while wheel is active or fading:
-  // Present a clear frame BEFORE disabling rendering to flush swap chain.
-  if (!focused && m_overlayWindow) {
-    bool needsClear = m_wheel->isActive() || m_fadeAlpha > 0.0f;
-
-    // Deactivate wheel logically
+  if (!focused) {
+    // Deactivate wheel on focus loss
     if (m_wheel->isActive()) {
       m_wheel->deactivate();
       m_wasKeyDown = false;
       qInfo() << "[DIAG] RadialController: WHEEL_DEACTIVATED (focus lost)";
     }
 
-    // Cancel any in-progress fade and restore opacity
+    // Cancel any in-progress fade
     if (m_fadeAlpha > 0.0f) {
       m_wheel->setGlobalOpacity(m_savedGlobalOpacity);
       m_fadeAlpha = 0.0f;
       m_wasWheelActive = false;
     }
 
-    // Present one transparent frame to clear the swap chain
-    if (needsClear) {
+    // In overlay mode: present clear frame
+    if (!m_headless && m_overlayWindow) {
       auto *ctx = m_overlayWindow->d3dContext();
       if (ctx && ctx->isInitialized()) {
-        ctx->beginFrame();  // Clears to transparent black
-        ctx->endFrame();    // Present → DWM composites transparent
-        qInfo() << "[DIAG] RadialController: FOCUS_LOSS_CLEAR_FRAME presented";
+        ctx->beginFrame();
+        ctx->endFrame();
       }
+      m_overlayWindow->setWheelNeedsRendering(false);
+      m_overlayWindow->setRenderingEnabled(false);
     }
-
-    m_overlayWindow->setWheelNeedsRendering(false);
-    m_overlayWindow->setRenderingEnabled(false);
-  } else if (focused && m_overlayWindow) {
-    m_overlayWindow->setRenderingEnabled(true);
+  } else {
+    if (!m_headless && m_overlayWindow) {
+      m_overlayWindow->setRenderingEnabled(true);
+    }
   }
 }
 

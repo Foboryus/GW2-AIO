@@ -4,15 +4,22 @@
  * @file ChildRadial.h
  * @brief Radial menu child process — D3D11 radial wheel rendering
  *
- * Owns: RadialController (which owns RadialOverlayWindow).
- * Receives per-profile radial settings via IPC and renders the
- * radial wheel overlay on the GW2 window.
+ * Owns: RadialController, D3D11Context (offscreen), SharedTextureProducer.
+ * Renders radial wheel to SharedTexture for compositor consumption.
+ * No OverlayWindow — hotkey polling via GetAsyncKeyState, cursor
+ * position via GetCursorPos + GW2 window rect.
  */
 
 #include "ChildProcess.h"
 
+// clang-format off
+#include <windows.h>
+// clang-format on
+
+class D3D11Context;
 class RadialController;
 class RadialSettingsManager;
+class SharedTextureProducer;
 
 class ChildRadial : public ChildProcess {
   Q_OBJECT
@@ -24,7 +31,7 @@ public:
               const QString &pipeName,
               const QString &profileName,
               QObject *parent = nullptr);
-  ~ChildRadial() override = default;
+  ~ChildRadial() override;
 
 protected:
   bool onInitialize() override;
@@ -35,6 +42,17 @@ protected:
   void onSettingsReceived(const QJsonObject &settings) override;
 
 private:
+  void onRenderTick();
+  void pollGW2WindowSize();
+  bool findGW2Window();
+
   RadialController *m_controller = nullptr;
   RadialSettingsManager *m_radialSettings = nullptr;
+
+  // --- Rendering pipeline ---
+  D3D11Context *m_d3dContext = nullptr;
+  SharedTextureProducer *m_sharedTexture = nullptr;
+  HWND m_gw2Hwnd = nullptr;
+  int m_gw2Width = 0;
+  int m_gw2Height = 0;
 };
