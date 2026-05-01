@@ -4,35 +4,38 @@
  * @file ChildMinimap.h
  * @brief Minimap child process — renders minimap markers + trails
  *
- * Owns: MinimapRenderer (QPainter 2D → QImage), D3D11Context (offscreen),
- *       SharedTextureProducer, MarkerManager, MarkerSettingsManager, ImageCache
+ * Owns: MinimapRenderer (QPainter 2D → QImage), SharedTextureProducer,
+ *       MarkerManager, MarkerSettingsManager, ImageCache
  *
  * Architecture: MinimapRenderer paints to a QImage via renderToImage().
  * The QImage is uploaded to a SharedTexture (D3D11) which the compositor
  * samples and composites into the overlay. No OverlayWindow needed.
  *
- * GW2 window dimensions are polled via FindWindow + GetClientRect
- * to size the QImage correctly for compass position calculation.
+ * GPU footprint: Uses a BARE D3D11 device (no blend states, no rasterizer,
+ * no render targets) — only enough for SharedTextureProducer + UpdateSubresource.
+ * This minimizes GPU memory to avoid D3D11CreateDevice E_OUTOFMEMORY when
+ * running 5 profiles with multiple children each.
  */
 
 #include "ChildProcess.h"
 
 // clang-format off
 #include <windows.h>
+#include <wrl/client.h>
 // clang-format on
 
 #include <d3d11_1.h>
-#include <wrl/client.h>
 
 #include <QImage>
 
-class D3D11Context;
 class ImageCache;
 class MarkerManager;
 class MarkerSettingsManager;
 class MinimapRenderer;
 class SharedTextureProducer;
 struct MarkerQueryContext;
+
+using Microsoft::WRL::ComPtr;
 
 class ChildMinimap : public ChildProcess {
   Q_OBJECT
@@ -64,8 +67,11 @@ private:
   HWND m_gw2Hwnd = nullptr;
   bool findGW2Window();
 
+  // --- Bare D3D11 device (no D3D11Context — saves GPU memory) ---
+  ComPtr<ID3D11Device> m_device;
+  ComPtr<ID3D11DeviceContext> m_deviceContext;
+
   // --- Rendering pipeline ---
-  D3D11Context *m_d3dContext = nullptr;
   SharedTextureProducer *m_sharedTexture = nullptr;
   QImage m_renderImage;  // QImage target for MinimapRenderer
   int m_gw2Width = 0;

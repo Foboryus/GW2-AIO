@@ -6,7 +6,6 @@
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "features/markers/MinimapRenderer.h"
-#include "rendering/D3D11Context.h"
 #include "rendering/SharedTexture.h"
 
 #include <QDir>
@@ -38,11 +37,13 @@ ChildMinimap::~ChildMinimap()
         m_sharedTexture = nullptr;
     }
 
-    if (m_d3dContext) {
-        m_d3dContext->shutdown();
-        delete m_d3dContext;
-        m_d3dContext = nullptr;
+    // Bare device cleanup (no D3D11Context)
+    if (m_deviceContext) {
+        m_deviceContext->ClearState();
+        m_deviceContext->Flush();
     }
+    m_deviceContext.Reset();
+    m_device.Reset();
 }
 
 // ============================================================================
@@ -80,24 +81,36 @@ bool ChildMinimap::onInitialize()
     m_minimapRenderer->setAttribute(Qt::WA_DontShowOnScreen);
     qInfo() << "ChildMinimap: MinimapRenderer created (offscreen)";
 
-    // 6. D3D11 offscreen context for SharedTexture
-    m_d3dContext = new D3D11Context();
-
-    // 7. Find GW2 window for dimensions
+    // 6. Find GW2 window for dimensions
     findGW2Window();
     int initW = m_gw2Width > 0 ? m_gw2Width : 800;
     int initH = m_gw2Height > 0 ? m_gw2Height : 600;
 
-    if (!m_d3dContext->initializeOffscreen(QSize(initW, initH))) {
-        qCritical() << "ChildMinimap: D3D11 offscreen init failed";
+    // 7. Create bare D3D11 device (no blend states, no rasterizer, no RT)
+    //    Minimap only needs UpdateSubresource — saves GPU memory vs D3D11Context
+    D3D_FEATURE_LEVEL featureLevel;
+    UINT flags = 0;
+#ifdef _DEBUG
+    flags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+    HRESULT hr = D3D11CreateDevice(
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
+        nullptr, 0, D3D11_SDK_VERSION,
+        m_device.GetAddressOf(), &featureLevel,
+        m_deviceContext.GetAddressOf());
+    if (FAILED(hr)) {
+        qCritical() << "ChildMinimap: D3D11 bare device creation failed:"
+                    << Qt::hex << hr;
         return false;
     }
-    qInfo() << "ChildMinimap: D3D11 offscreen context initialized";
+    qInfo() << "ChildMinimap: Bare D3D11 device created, feature level:"
+            << Qt::hex << featureLevel;
 
+    // 8. SharedTextureProducer (uses bare device)
     m_sharedTexture = new SharedTextureProducer();
     QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
     if (!m_sharedTexture->initialize(
-            m_d3dContext->device(), m_d3dContext->context(),
+            m_device.Get(), m_deviceContext.Get(),
             initW, initH, texName)) {
         qCritical() << "ChildMinimap: SharedTexture init failed";
         return false;
@@ -158,7 +171,7 @@ void ChildMinimap::onShutdown()
 
 void ChildMinimap::onRenderFrame()
 {
-    if (!m_minimapRenderer || !m_sharedTexture || !m_d3dContext) return;
+    if (!m_minimapRenderer || !m_sharedTexture || !m_device) return;
     if (!isFocused() || !isInGame()) return;
 
     // Frame guard: cap at ~30fps (33ms) — matches MinimapRenderer's own guard
@@ -191,7 +204,7 @@ void ChildMinimap::onRenderFrame()
 
     // Clear the shared texture to transparent
     float clearColor[4] = {0, 0, 0, 0};
-    m_d3dContext->context()->ClearRenderTargetView(rtv, clearColor);
+    m_deviceContext->ClearRenderTargetView(rtv, clearColor);
 
     // Upload QImage bits via UpdateSubresource
     // QImage::Format_ARGB32_Premultiplied = BGRA byte order = DXGI_FORMAT_B8G8R8A8_UNORM
@@ -203,7 +216,7 @@ void ChildMinimap::onRenderFrame()
     destBox.bottom = m_gw2Height;
     destBox.back = 1;
 
-    m_d3dContext->context()->UpdateSubresource(
+    m_deviceContext->UpdateSubresource(
         m_sharedTexture->texture(), 0, &destBox,
         m_renderImage.constBits(),
         static_cast<UINT>(m_renderImage.bytesPerLine()),

@@ -8,18 +8,26 @@
  * Renders radial wheel to SharedTexture for compositor consumption.
  * No OverlayWindow — hotkey polling via GetAsyncKeyState, cursor
  * position via GetCursorPos + GW2 window rect.
+ *
+ * Rendering pattern matches Child3DOverlay:
+ *   render to intermediate RT → CopyResource → SharedTexture
  */
 
 #include "ChildProcess.h"
 
 // clang-format off
 #include <windows.h>
+#include <wrl/client.h>
 // clang-format on
+
+#include <d3d11.h>
 
 class D3D11Context;
 class RadialController;
 class RadialSettingsManager;
 class SharedTextureProducer;
+
+using Microsoft::WRL::ComPtr;
 
 class ChildRadial : public ChildProcess {
   Q_OBJECT
@@ -45,6 +53,7 @@ private:
   void onRenderTick();
   void pollGW2WindowSize();
   bool findGW2Window();
+  bool createIntermediateRT(int width, int height);
 
   RadialController *m_controller = nullptr;
   RadialSettingsManager *m_radialSettings = nullptr;
@@ -52,6 +61,12 @@ private:
   // --- Rendering pipeline ---
   D3D11Context *m_d3dContext = nullptr;
   SharedTextureProducer *m_sharedTexture = nullptr;
+
+  // Intermediate render target (same pattern as Child3DOverlay)
+  // Render here first, then CopyResource → SharedTexture
+  ComPtr<ID3D11Texture2D> m_intermediateRT;
+  ComPtr<ID3D11RenderTargetView> m_intermediateRTV;
+
   HWND m_gw2Hwnd = nullptr;
   int m_gw2Width = 0;
   int m_gw2Height = 0;

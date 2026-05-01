@@ -159,8 +159,7 @@ add_executable(GW2AIO-minimap WIN32
     ${CHILD_FRAMEWORK_SOURCES}
     ChildMinimap.cpp ChildMinimap.h
 
-    # D3D11 offscreen context + SharedTexture (QPainter → QImage → D3D11 → compositor)
-    ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
+    # SharedTexture only (bare D3D11 device — no D3D11Context needed for QPainter path)
     ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
 
     # Marker system

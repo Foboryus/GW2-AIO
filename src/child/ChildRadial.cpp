@@ -5,6 +5,14 @@
  * Creates a RadialController that manages D3D11 radial wheel rendering.
  * Output goes to SharedTextureProducer instead of a swap chain overlay.
  * Hotkey polling runs on every MumbleLink tick via the controller.
+ *
+ * Rendering pattern (matches Child3DOverlay):
+ *   1. Acquire SharedTexture mutex
+ *   2. Set intermediate RT as external RTV
+ *   3. beginFrame() → sets blend state, rasterizer, viewport, clear
+ *   4. renderToTarget() → draws wheel, elements, cursor
+ *   5. CopyResource → intermediate RT to SharedTexture
+ *   6. Release mutex
  */
 
 #include "ChildRadial.h"
@@ -35,6 +43,9 @@ ChildRadial::~ChildRadial()
         delete m_controller;
         m_controller = nullptr;
     }
+
+    m_intermediateRTV.Reset();
+    m_intermediateRT.Reset();
 
     if (m_sharedTexture) {
         m_sharedTexture->shutdown();
@@ -79,7 +90,13 @@ bool ChildRadial::onInitialize()
     qInfo() << "ChildRadial: D3D11 offscreen context initialized"
             << initW << "x" << initH;
 
-    // 4. SharedTextureProducer
+    // 4. Create intermediate render target (render here, then CopyResource to shared texture)
+    if (!createIntermediateRT(initW, initH)) {
+        qCritical() << "ChildRadial: Intermediate RT creation failed";
+        return false;
+    }
+
+    // 5. SharedTextureProducer
     m_sharedTexture = new SharedTextureProducer();
     QString texName = QStringLiteral("GW2AIO_Tex_%1_radial").arg(profileId());
     if (!m_sharedTexture->initialize(
@@ -91,24 +108,25 @@ bool ChildRadial::onInitialize()
     qInfo() << "ChildRadial: SharedTexture created:" << texName
             << initW << "x" << initH;
 
-    // 5. Create controller (hotkey polling + wheel state + rendering)
+    // 6. Create controller (hotkey polling + wheel state + rendering)
     m_controller = new RadialController(
         mumbleLink(), static_cast<uint32_t>(gw2Pid()), this);
     m_controller->applySettings(m_radialSettings->settings());
 
-    // 6. Provide the D3D11 context to the controller for renderer init
+    // 7. Provide the D3D11 context to the controller for renderer init
     m_controller->setD3DContext(m_d3dContext);
 
-    // 7. Wire MumbleLink::dataUpdated → render tick (hotkey polling + rendering)
+    // 8. Wire MumbleLink::dataUpdated → render tick (hotkey polling + rendering)
     connect(mumbleLink(), &MumbleLink::dataUpdated,
             this, &ChildRadial::onRenderTick, Qt::UniqueConnection);
 
-    // 8. Start the controller (without overlay window)
+    // 9. Start the controller (without overlay window)
     m_controller->startHeadless();
 
     qInfo() << "[DEV][RADIAL] Init complete:"
             << "controller:" << (m_controller != nullptr)
             << "sharedTex:" << (m_sharedTexture != nullptr)
+            << "intermediateRT:" << (m_intermediateRT.Get() != nullptr)
             << "targetPid:" << gw2Pid()
             << "enabled:" << m_radialSettings->settings().radialEnabled
             << "mounts:" << m_radialSettings->settings().mounts.size();
@@ -129,6 +147,46 @@ void ChildRadial::onShutdown()
 }
 
 // ============================================================================
+// Intermediate Render Target
+// ============================================================================
+
+bool ChildRadial::createIntermediateRT(int width, int height)
+{
+    m_intermediateRTV.Reset();
+    m_intermediateRT.Reset();
+
+    D3D11_TEXTURE2D_DESC rtDesc = {};
+    rtDesc.Width = static_cast<UINT>(width);
+    rtDesc.Height = static_cast<UINT>(height);
+    rtDesc.MipLevels = 1;
+    rtDesc.ArraySize = 1;
+    rtDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    rtDesc.SampleDesc.Count = 1;
+    rtDesc.Usage = D3D11_USAGE_DEFAULT;
+    rtDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+    HRESULT hr = m_d3dContext->device()->CreateTexture2D(
+        &rtDesc, nullptr, m_intermediateRT.GetAddressOf());
+    if (FAILED(hr)) {
+        qCritical() << "[DEV][RADIAL] Intermediate RT creation failed:"
+                    << Qt::hex << hr;
+        return false;
+    }
+
+    hr = m_d3dContext->device()->CreateRenderTargetView(
+        m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
+    if (FAILED(hr)) {
+        qCritical() << "[DEV][RADIAL] Intermediate RTV creation failed:"
+                    << Qt::hex << hr;
+        m_intermediateRT.Reset();
+        return false;
+    }
+
+    qInfo() << "[DEV][RADIAL] Intermediate RT created:" << width << "x" << height;
+    return true;
+}
+
+// ============================================================================
 // Render Tick
 // ============================================================================
 
@@ -146,21 +204,24 @@ void ChildRadial::onRenderTick()
     pollGW2WindowSize();
     if (m_gw2Width <= 0 || m_gw2Height <= 0) return;
 
-    // Resize if needed
+    // Resize intermediate RT + shared texture if GW2 window changed
     if (m_sharedTexture->width() != m_gw2Width ||
         m_sharedTexture->height() != m_gw2Height) {
+        createIntermediateRT(m_gw2Width, m_gw2Height);
         m_sharedTexture->resize(m_gw2Width, m_gw2Height);
+        // Update D3D11Context dimensions so beginFrame viewport is correct
+        m_d3dContext->resize(QSize(m_gw2Width, m_gw2Height));
         qInfo() << "[DEV][RADIAL] Resized to" << m_gw2Width << "x" << m_gw2Height;
     }
 
-    // Acquire shared texture for writing
+    // Acquire shared texture for writing (keyed mutex)
     ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
-    if (!rtv) return;
+    if (!rtv) return;  // Mutex contention — skip frame
 
-    // Use setExternalRTV + beginFrame to set all required D3D11 state
-    // (blend state, rasterizer state, viewport, clear) — RadialRenderer
-    // depends on alpha blending being enabled by beginFrame()
-    m_d3dContext->setExternalRTV(rtv);
+    // Set intermediate RT as render target (same pattern as Child3DOverlay)
+    m_d3dContext->setExternalRTV(m_intermediateRTV.Get());
+
+    // beginFrame: sets blend state + rasterizer + viewport + clear
     m_d3dContext->beginFrame();
 
     // Get cursor position relative to GW2 window
@@ -170,12 +231,18 @@ void ChildRadial::onRenderTick()
         ScreenToClient(m_gw2Hwnd, &cursor);
     }
 
-    // Render the wheel
+    // Render the wheel to intermediate RT
     m_controller->renderToTarget(m_d3dContext, cursor.x, cursor.y,
                                   m_gw2Width, m_gw2Height);
 
-    // Flush and release
-    m_d3dContext->context()->Flush();
+    // CopyResource: intermediate RT → shared texture
+    m_d3dContext->context()->CopyResource(
+        m_sharedTexture->texture(), m_intermediateRT.Get());
+
+    // Clear external RTV reference before releasing
+    m_d3dContext->setExternalRTV(nullptr);
+
+    // Release shared texture (Flush + ReleaseSync inside)
     m_sharedTexture->releaseAfterWrite();
 }
 
