@@ -193,17 +193,15 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
     MarkerSettingsManager settings(markerStateDir);
     settings.loadForProfile(profileId);
 
-    // Main kill switch — if rendering is globally disabled, skip all children
-    if (!settings.renderingEnabled()) {
-        qInfo() << "ChildProcessManager: rendering disabled for" << profileId
-                << "— skipping all children";
-        return;
-    }
-
     // === Enqueue compositor FIRST (must be running before feature children) ===
     m_spawnQueue.append({profileId, mumbleName, gw2Pid, QStringLiteral("compositor")});
 
     // === Enqueue feature children (serialized — one at a time via READY signals) ===
+    // renderingEnabled is the main kill switch for FEATURE children only.
+    // Compositor and overlay are ALWAYS spawned — overlay provides the
+    // diamond menu icon so users can re-enable rendering if they disabled it.
+    bool mainOn = settings.renderingEnabled();
+
     struct FeatureToggle {
         QString key;
         bool enabled;
@@ -214,10 +212,10 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
     radialSettings.loadForProfile(profileId);
 
     const QList<FeatureToggle> features = {
-        {QStringLiteral("3d"),      settings.render3dEnabled()},
-        {QStringLiteral("minimap"), settings.renderMinimapEnabled()},
-        {QStringLiteral("bigmap"),  settings.renderBigMapEnabled()},
-        {QStringLiteral("radial"),  radialSettings.settings().radialEnabled},
+        {QStringLiteral("3d"),      mainOn && settings.render3dEnabled()},
+        {QStringLiteral("minimap"), mainOn && settings.renderMinimapEnabled()},
+        {QStringLiteral("bigmap"),  mainOn && settings.renderBigMapEnabled()},
+        {QStringLiteral("radial"),  mainOn && radialSettings.settings().radialEnabled},
         {QStringLiteral("overlay"), true},  // Always spawn — overlay HUD menu
     };
 
@@ -531,11 +529,11 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
     }
 
     // Only SPAWN children that are enabled but not running.
-    // Never kill running children — the SETTINGS relay above tells them
-    // to stop rendering. This avoids:
-    //   - 7+ second pack reload on respawn
-    //   - Focus race (new child starts unfocused → D3D11 deferred)
-    //   - SharedTexture destruction → compositor gap
+    // For DISABLE → running:
+    //   - 3D/minimap/bigmap: SETTINGS relay above tells them to stop rendering
+    //     internally (<1 frame latency, no pack reload cost).
+    //   - Radial: has its own settings manager (RadialSettingsManager) — the
+    //     SETTINGS relay above doesn't carry radialEnabled. Must terminate.
     for (const auto &feat : featureToggles) {
         bool isRunning = runningFeatures.contains(feat.key);
 
@@ -544,9 +542,15 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
             qInfo() << "ChildProcessManager: feature" << feat.key
                     << "re-enabled for" << profileId << "— spawning child";
             spawnChild(profileId, mumbleName, gw2Pid, feat.key);
+        } else if (!feat.enabled && isRunning && feat.key == QLatin1String("radial")) {
+            // Radial disabled but still running → terminate
+            // (radial doesn't handle pause via SETTINGS relay)
+            qInfo() << "ChildProcessManager: radial disabled for"
+                    << profileId << "— terminating child";
+            terminateChild(profileId, feat.key);
         }
-        // NOTE: Disabled-but-running is handled by the SETTINGS relay above.
-        // The child pauses rendering internally (<1 frame latency).
+        // NOTE: 3D/minimap/bigmap disabled-but-running is handled by the
+        // SETTINGS relay above. They pause rendering internally.
     }
 }
 
@@ -877,6 +881,39 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
     } else if (message.startsWith("READY")) {
         qInfo() << "ChildProcessManager: Child" << featureKey << "READY for"
                 << profileId;
+
+        // B10 fix: Give instant focus if GW2 is currently foreground.
+        // Children start at IDLE_POLL_MS (5000ms) and detect focus via
+        // GetForegroundWindow polling. Without this, a newly spawned child
+        // waits up to 5 seconds before it detects focus and creates D3D11.
+        qint64 gw2Pid = m_profilePids.value(profileId, 0);
+        if (gw2Pid > 0) {
+            HWND fgWnd = GetForegroundWindow();
+            DWORD fgPid = 0;
+            if (fgWnd) {
+                GetWindowThreadProcessId(fgWnd, &fgPid);
+            }
+            if (fgPid == static_cast<DWORD>(gw2Pid)) {
+                // GW2 is foreground — send FOCUS 1 to the child that just sent READY
+                if (m_children.contains(profileId)) {
+                    for (auto &child : m_children[profileId]) {
+                        if (child.featureKey == featureKey &&
+                            child.pipeHandle != INVALID_HANDLE_VALUE) {
+                            QByteArray focusCmd = "FOCUS 1\n";
+                            DWORD written = 0;
+                            WriteFile(child.pipeHandle, focusCmd.constData(),
+                                      static_cast<DWORD>(focusCmd.size()),
+                                      &written, nullptr);
+                            qInfo() << "ChildProcessManager: Sent FOCUS 1 to"
+                                    << featureKey << "for" << profileId
+                                    << "(GW2 is foreground)";
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         // Spawn queue: child is ready — spawn the next one
         processSpawnQueue();
     } else if (message.startsWith("MAP ")) {

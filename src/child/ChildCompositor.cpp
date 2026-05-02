@@ -983,16 +983,20 @@ void CALLBACK ChildCompositor::foregroundProc(
     ShowWindow(self->m_hwnd, SW_SHOWNOACTIVATE);
     self->updatePosition();
     qInfo() << "[DEV][COMPOSITOR] GW2 FOREGROUND_GAINED — showing window";
-  } else if (!isOurGW2 && self->m_contentVisible) {
-    // Check if another AIO compositor got focus — don't hide
-    DWORD fgPid = 0;
-    GetWindowThreadProcessId(hwnd, &fgPid);
-    if (fgPid != self->m_gw2ProcessId) {
-      self->m_contentVisible = false;
-      ShowWindow(self->m_hwnd, SW_HIDE);
-      qInfo() << "[DEV][COMPOSITOR] GW2 FOREGROUND_LOST — hiding window";
-    }
   }
+  // NOTE: FOREGROUND_LOST is NOT handled here — it's handled by the
+  // debounced onFocusChanged(false) in the ChildProcess base class.
+  //
+  // Previous bug: child process spawns (radial, 3D, etc.) create windows
+  // that briefly steal foreground, triggering EVENT_SYSTEM_FOREGROUND.
+  // The old code instantly set m_contentVisible=false, hiding the compositor.
+  // But Layer 1 (GetForegroundWindow polling) never detected focus loss
+  // because GW2 immediately regained foreground, so onFocusChanged(true)
+  // never fired, and the compositor stayed hidden permanently.
+  //
+  // Now: only Layer 1's debounced focus loss triggers the hide. Transient
+  // foreground changes (child spawns, system processes) are absorbed by
+  // the FOCUS_LOSS_DEBOUNCE_MS (500ms) in ChildProcess::onMumbleDataUpdated.
 }
 
 // ============================================================================
