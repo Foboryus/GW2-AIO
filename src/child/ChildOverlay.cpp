@@ -2,10 +2,12 @@
 
 #include "core/AppConfig.h"
 #include "core/MumbleLink.h"
+#include "core/RadialSettingsManager.h"
 #include "features/markers/ImageCache.h"
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "ui/OverlayWindow.h"
+#include "ui/OverlayMenuWidget.h"
 #include "core/OverlayZOrder.h"
 
 #include <QDir>
@@ -63,6 +65,19 @@ bool ChildOverlay::onInitialize()
     m_overlayWindow->startTracking();
     qInfo() << "ChildOverlay: OverlayWindow tracking started";
 
+    // 5b. Load radial settings and pass to overlay menu
+    {
+        const QString radialConfigDir = AppConfig::instance().radialConfigDir();
+        RadialSettingsManager radialMgr(radialConfigDir);
+        radialMgr.loadForProfile(profileId());
+        m_radialEnabled = radialMgr.settings().radialEnabled;
+
+        // Pass to the overlay menu widget
+        if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
+            m_overlayWindow->overlayMenu()->setRadialEnabled(m_radialEnabled);
+        }
+    }
+
     // 6. Wire settings changes to upstream IPC
     // When user changes settings in the overlay menu, push them to grandfather
     // for relay to sibling children (3d, minimap)
@@ -97,6 +112,33 @@ bool ChildOverlay::onInitialize()
         QByteArray payload = "SETTING_CHANGED\n" + doc.toJson(QJsonDocument::Compact);
         sendToGrandfather(payload);
     });
+
+    // 6b. Wire radial toggle from overlay menu → upstream IPC
+    if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
+        connect(m_overlayWindow->overlayMenu(), &OverlayMenuWidget::radialToggleChanged,
+                this, [this](bool enabled) {
+            m_radialEnabled = enabled;
+
+            // Save to radial settings file
+            const QString radialConfigDir = AppConfig::instance().radialConfigDir();
+            RadialSettingsManager radialMgr(radialConfigDir);
+            radialMgr.loadForProfile(profileId());
+            RadialSettings rs = radialMgr.settings();
+            rs.radialEnabled = enabled;
+            radialMgr.setSettings(rs);
+            radialMgr.saveForProfile(profileId());
+
+            // Send upstream so grandfather calls syncFeatureToggles
+            QJsonObject msg;
+            msg["radialEnabled"] = enabled;
+            QJsonDocument doc(msg);
+            QByteArray payload = "RADIAL_TOGGLE\n" + doc.toJson(QJsonDocument::Compact);
+            sendToGrandfather(payload);
+
+            qInfo() << "ChildOverlay: Radial toggle →" << enabled
+                    << "— saved + sent upstream";
+        });
+    }
 
     // 7. When pack/category data is saved to disk (debounced 2s), tell
     //    grandfather so siblings can reload from disk
@@ -188,5 +230,13 @@ void ChildOverlay::onSettingsReceived(const QJsonObject &settings)
     if (settings.contains("renderingEnabled")) {
         m_markerSettings->setRenderingEnabled(
             settings["renderingEnabled"].toBool(true));
+    }
+
+    // Radial enabled state (from sibling SETTING_CHANGED relay)
+    if (settings.contains("radialEnabled")) {
+        m_radialEnabled = settings["radialEnabled"].toBool(true);
+        if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
+            m_overlayWindow->overlayMenu()->setRadialEnabled(m_radialEnabled);
+        }
     }
 }

@@ -72,6 +72,12 @@ void OverlayMenuWidget::setMarkerSettings(MarkerSettingsManager *settings) {
   }
 }
 
+void OverlayMenuWidget::setRadialEnabled(bool enabled) {
+  if (m_radialEnabled == enabled) return;
+  m_radialEnabled = enabled;
+  update();
+}
+
 void OverlayMenuWidget::setShouldBeVisible(bool visible) {
   if (m_shouldBeVisible == visible) {
     return;
@@ -505,10 +511,12 @@ void OverlayMenuWidget::drawSettingsPage(QPainter &painter,
       drawToggleRow("  3D World", show3d, m_3dRenderToggleRect);
       drawToggleRow("  Minimap", showMinimap, m_minimapRenderToggleRect);
       drawToggleRow("  Big Map (M)", showBigMap, m_bigMapRenderToggleRect);
+      drawToggleRow("  Radial Menu", m_radialEnabled, m_radialToggleRect);
     } else {
       m_3dRenderToggleRect = QRectF();
       m_minimapRenderToggleRect = QRectF();
       m_bigMapRenderToggleRect = QRectF();
+      m_radialToggleRect = QRectF();
     }
   }
 
@@ -1188,6 +1196,13 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
           m_markerSettings->setRenderBigMapEnabled(
               !m_markerSettings->renderBigMapEnabled());
         }
+        update();
+        return;
+      }
+      if (m_radialToggleRect.isValid() &&
+          m_radialToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
+        m_radialEnabled = !m_radialEnabled;
+        emit radialToggleChanged(m_radialEnabled);
         update();
         return;
       }

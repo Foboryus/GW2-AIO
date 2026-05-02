@@ -35,6 +35,7 @@
 #include <wrl/client.h>
 
 #include <QHash>
+#include <QImage>
 #include <QList>
 #include <QRect>
 #include <QTimer>
@@ -86,6 +87,11 @@ private:
   void renderLayers();
   bool initializeQuadPipeline();
   void tryOpenConsumers();
+
+  // --- Loading bar ---
+  void renderLoadingBar();
+  bool ensureLoadingBarTexture();
+  void updateLoadingBarImage(float progress);
 
   // --- GW2 window tracking ---
   void installEventHook();
@@ -159,4 +165,16 @@ private:
 
   // Content visibility (hide when GW2 not focused)
   bool m_contentVisible = false;
+
+  // --- Loading bar ---
+  static constexpr int kBarWidth  = 320;
+  static constexpr int kBarHeight = 56;
+  static constexpr int kBarDurationMs = 3400;
+  bool m_loadingBarActive = false;
+  qint64 m_loadingBarStartMs = 0;
+  QImage m_loadingBarImage;
+  ComPtr<ID3D11Texture2D> m_loadingBarTex;
+  ComPtr<ID3D11ShaderResourceView> m_loadingBarSRV;
+  // Blend state for premultiplied alpha (loading bar quad)
+  ComPtr<ID3D11BlendState> m_premulBlend;
 };

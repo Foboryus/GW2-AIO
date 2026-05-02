@@ -96,6 +96,7 @@ private:
   // State
   bool m_packsLoaded = false;
   bool m_contentVisible = true;
+  bool m_lastWroteContent = false;  ///< Tracks if we need to clear shared texture on hide
   bool m_renderingEnabled = true;
 
   // Loading screen detection

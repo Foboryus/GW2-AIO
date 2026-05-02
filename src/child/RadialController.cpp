@@ -240,6 +240,27 @@ void RadialController::onFocusChanged(bool focused) {
   }
 }
 
+void RadialController::setLoadingScreen(bool loading) {
+  if (m_loadingScreen == loading) return;
+  m_loadingScreen = loading;
+
+  if (loading) {
+    // Deactivate wheel instantly on loading screen
+    if (m_wheel && m_wheel->isActive()) {
+      m_wheel->deactivate();
+      m_wasKeyDown = false;
+      qInfo() << "RadialController: WHEEL_DEACTIVATED (loading screen)";
+    }
+
+    // Cancel any in-progress fade
+    if (m_fadeAlpha > 0.0f) {
+      m_wheel->setGlobalOpacity(m_savedGlobalOpacity);
+      m_fadeAlpha = 0.0f;
+      m_wasWheelActive = false;
+    }
+  }
+}
+
 // ============================================================================
 // Element Rebuilding (from RadialSettings)
 // ============================================================================
@@ -341,8 +362,8 @@ void RadialController::loadIconTextures(D3D11Context *ctx) {
 // ============================================================================
 
 void RadialController::pollHotkey() {
-  if (!m_isFocused || m_triggerVK == 0) {
-    return; // Not focused or no hotkey configured
+  if (!m_isFocused || m_triggerVK == 0 || m_loadingScreen) {
+    return; // Not focused, no hotkey configured, or loading screen
   }
 
   // Check modifier keys match before accepting the trigger key

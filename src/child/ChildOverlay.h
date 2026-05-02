@@ -54,4 +54,5 @@ private:
   OverlayWindow *m_overlayWindow = nullptr;
 
   bool m_packsLoaded = false;
+  bool m_radialEnabled = true;  // Cached radial enabled state for IPC
 };

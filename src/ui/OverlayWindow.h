@@ -78,6 +78,12 @@ public:
   void setMarkerSettings(MarkerSettingsManager *settings);
 
   /**
+   * @brief Get the overlay menu widget (for signal wiring by ChildOverlay)
+   * Returns nullptr in headless mode.
+   */
+  OverlayMenuWidget *overlayMenu() const { return m_menuWidget; }
+
+  /**
    * @brief Set the per-instance MinimapRenderer for resize tracking
    * Called by OverlayInstance after reparenting the renderer.
    */
@@ -165,7 +171,7 @@ private:
   bool m_contentVisible = true;  // Whether overlay content is drawn
   uint32_t m_lastUiTick = 0;     // Last seen uiTick value
   qint64 m_lastTickChangeMs = 0; // Wall-clock ms when uiTick last changed
-  static constexpr qint64 kStallMs = 333; // TacO threshold: 333ms stale → hide
+  static constexpr qint64 kStallMs = 100; // 100ms stale → instant hide
 
   void updateHudVisibility();
 

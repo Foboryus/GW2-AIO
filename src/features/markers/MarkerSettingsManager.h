@@ -220,6 +220,18 @@ public:
   void setPredefinedOverride(const QString &name, const ExclusionZone &zone);
   void resetPredefinedOverride(const QString &name);
 
+  /**
+   * @brief Apply rendering toggle fields from an IPC JSON payload
+   *
+   * Selectively applies rendering layer toggles from a JSON object
+   * received via child process IPC (SETTING_CHANGED). Only processes
+   * renderingEnabled, render3dEnabled, renderMinimapEnabled,
+   * renderBigMapEnabled. Other fields are ignored.
+   *
+   * Triggers settingsChanged if any value changed (via individual setters).
+   */
+  void applyDisplayJson(const QJsonObject &obj);
+
 signals:
   void settingsChanged();
   void packEnabledChanged(const QString &packId, bool enabled);

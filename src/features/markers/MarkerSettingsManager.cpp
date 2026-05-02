@@ -635,6 +635,24 @@ void MarkerSettingsManager::resetPredefinedOverride(const QString &name) {
   }
 }
 
+void MarkerSettingsManager::applyDisplayJson(const QJsonObject &obj) {
+  // Selectively apply rendering toggle fields from IPC payload.
+  // Uses individual setters — each is a no-op if value unchanged,
+  // and emits settingsChanged + schedules save if changed.
+  if (obj.contains("renderingEnabled")) {
+    setRenderingEnabled(obj["renderingEnabled"].toBool(true));
+  }
+  if (obj.contains("render3dEnabled")) {
+    setRender3dEnabled(obj["render3dEnabled"].toBool(true));
+  }
+  if (obj.contains("renderMinimapEnabled")) {
+    setRenderMinimapEnabled(obj["renderMinimapEnabled"].toBool(true));
+  }
+  if (obj.contains("renderBigMapEnabled")) {
+    setRenderBigMapEnabled(obj["renderBigMapEnabled"].toBool(true));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Private — file paths
 // ---------------------------------------------------------------------------

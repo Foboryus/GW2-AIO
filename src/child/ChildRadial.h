@@ -74,4 +74,9 @@ private:
   int m_gw2Height = 0;
   bool m_d3dInitialized = false;  ///< True after ensureD3D11() succeeds
   bool m_lastWroteContent = false;  ///< True after writing radial content — triggers clear frame on deactivation
+
+  // --- Loading screen detection (Phase 5.8) ---
+  uint32_t m_lastUiTick = 0;
+  qint64 m_lastTickChangeMs = 0;
+  static constexpr qint64 kStallMs = 100;  // 100ms stall → loading screen (instant)
 };

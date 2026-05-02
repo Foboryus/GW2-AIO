@@ -170,6 +170,42 @@ void ChildMinimap::onRenderFrame()
     if ((now - s_lastFrameMs) < 33) return;
     s_lastFrameMs = now;
 
+    // Phase 5.8: Loading screen detection via uiTick stall
+    if (mumbleLink() && mumbleLink()->isConnected()) {
+        uint32_t currentTick = mumbleLink()->uiTick();
+
+        if (currentTick != m_lastUiTick) {
+            m_lastUiTick = currentTick;
+            m_lastTickChangeMs = now;
+        }
+
+        bool hasValidMap = mumbleLink()->mapId() > 0;
+        bool longStall = (now - m_lastTickChangeMs) >= kStallMs;
+
+        bool wasVisible = m_contentVisible;
+        m_contentVisible = hasValidMap && !longStall;
+
+        // Drive MinimapRenderer visibility (instant hide/fade-in)
+        if (wasVisible && !m_contentVisible) {
+            m_minimapRenderer->setShouldBeVisible(false);
+            // Clear shared texture to transparent so compositor doesn't
+            // show a frozen last frame during loading/character select
+            if (m_sharedTexture && m_sharedTexture->isInitialized() && m_deviceContext) {
+                ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
+                if (rtv) {
+                    float clearColor[4] = {0, 0, 0, 0};
+                    m_deviceContext->ClearRenderTargetView(rtv, clearColor);
+                    m_sharedTexture->releaseAfterWrite();
+                    qInfo() << "[DEV][MINIMAP] Content hidden — cleared shared texture";
+                }
+            }
+        } else if (!wasVisible && m_contentVisible) {
+            m_minimapRenderer->setShouldBeVisible(true);
+        }
+    }
+
+    if (!m_contentVisible) return;
+
     // Poll GW2 window size (may have changed)
     pollGW2WindowSize();
     if (m_gw2Width <= 0 || m_gw2Height <= 0) return;

@@ -254,6 +254,10 @@ add_executable(GW2AIO-overlay WIN32
     ${CMAKE_SOURCE_DIR}/src/core/ThemeManager.cpp
     ${CMAKE_SOURCE_DIR}/src/core/ThemeData.cpp
 
+    # Radial settings (for overlay menu toggle — read/write radialEnabled)
+    ${CMAKE_SOURCE_DIR}/src/core/RadialSettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/RadialSettingsManager.cpp
+
     ${CHILD_QRC_SOURCES}
     ${CMAKE_SOURCE_DIR}/resources/child.rc
 )

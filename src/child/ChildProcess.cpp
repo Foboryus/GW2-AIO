@@ -45,6 +45,22 @@ bool ChildProcess::start()
             this, &ChildProcess::onMumbleDataUpdated);
     connect(m_mumbleLink, &MumbleLink::mapChanged,
             this, &ChildProcess::onMapChanged);
+    // Handle character select / loading screen transitions.
+    // MumbleLink suppresses mapChanged during invalid states (mapType==1,
+    // mapId==0, position zero), but DOES emit connectionChanged(false).
+    // Without this, m_inGame stays true during character select and
+    // children continue rendering stale content.
+    connect(m_mumbleLink, &MumbleLink::connectionChanged,
+            this, [this](bool connected) {
+        if (!connected && m_inGame) {
+            qInfo() << "ChildProcess: MumbleLink disconnected"
+                    << "(char select / loading) — unloading map for"
+                    << m_profileName;
+            onMapLeft();
+            m_inGame = false;
+            m_currentMapId = 0;
+        }
+    });
 
     // Start MumbleLink polling at IDLE rate — children start unfocused
     // (m_focused = false). Will switch to focused rate on first focus gain.

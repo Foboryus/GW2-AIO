@@ -128,7 +128,7 @@ private:
   bool m_shouldBeVisible = true;
   qreal m_fadeOpacity = 1.0;
   static constexpr qreal kFadeInStep = 0.03;     // ~600ms at 50Hz (loading)
-  static constexpr qreal kFadeOutStep = 0.05;    // ~400ms at 50Hz (loading)
+  static constexpr qreal kFadeOutStep = 1.0;     // Instant hide on loading/char-select (Phase 5.8)
   static constexpr qreal kMapFadeInStep = 0.15;  // ~130ms at 50Hz (map toggle)
   static constexpr qreal kMapFadeOutStep = 0.12; // ~170ms at 50Hz (map toggle)
   bool m_mapFading = false; // True during map open/close transition

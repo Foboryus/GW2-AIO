@@ -61,6 +61,12 @@ public:
   void setMarkerManager(MarkerManager *manager);
   void setMarkerSettings(MarkerSettingsManager *settings);
 
+  /**
+   * @brief Set the radial menu enabled state (from radial settings)
+   * Called by ChildOverlay when settings are received from grandfather.
+   */
+  void setRadialEnabled(bool enabled);
+
   // Fade visibility (called by OverlayWindow based on game state)
   void setShouldBeVisible(bool visible);
   void setCombatHidden(bool hidden);
@@ -103,6 +109,12 @@ signals:
    * @brief Emitted when user toggles the Details Tracker button
    */
   void detailsTrackerToggled(bool visible);
+
+  /**
+   * @brief Emitted when user toggles the radial menu on/off in overlay
+   * ChildOverlay wires this to send upstream IPC to grandfather.
+   */
+  void radialToggleChanged(bool enabled);
 
 protected:
   void paintEvent(QPaintEvent *event) override;
@@ -193,6 +205,10 @@ private:
   QRectF m_3dRenderToggleRect;
   QRectF m_minimapRenderToggleRect;
   QRectF m_bigMapRenderToggleRect;
+  QRectF m_radialToggleRect;  // Radial menu toggle hit area
+
+  // --- Radial state (not in MarkerSettingsManager — separate feature) ---
+  bool m_radialEnabled = true;
 
   // --- Geometry (computed in paintEvent) ---
   QRectF m_iconRect;        // Corner icon hit area

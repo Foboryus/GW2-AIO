@@ -441,27 +441,52 @@ void ChildProcessManager::pushSettings(const QString &profileId,
 
 void ChildProcessManager::syncFeatureToggles(const QString &profileId)
 {
-    // Load current toggle state from disk
-    const QString markerStateDir = AppConfig::instance().markerStateDir();
-    MarkerSettingsManager settings(markerStateDir);
-    settings.loadForProfile(profileId);
+    // Read marker toggles from the LIVE parent instance (avoids disk race).
+    // The live instance is always up-to-date because applyDisplayJson() and
+    // Profile Editor setters update it directly. Disk may lag due to the
+    // 2-second debounced save, causing stale reads and spurious child kills.
+    bool renderingEnabled = true;
+    bool render3dEnabled = true;
+    bool renderMinimapEnabled = true;
+    bool renderBigMapEnabled = true;
+
+    if (m_overlayInstanceMgr) {
+        auto *inst = m_overlayInstanceMgr->instance(profileId);
+        if (inst && inst->markerSettings()) {
+            auto *ms = inst->markerSettings();
+            renderingEnabled     = ms->renderingEnabled();
+            render3dEnabled      = ms->render3dEnabled();
+            renderMinimapEnabled = ms->renderMinimapEnabled();
+            renderBigMapEnabled  = ms->renderBigMapEnabled();
+        }
+    } else {
+        // Fallback: no live instance yet — read from disk
+        const QString markerStateDir = AppConfig::instance().markerStateDir();
+        MarkerSettingsManager settings(markerStateDir);
+        settings.loadForProfile(profileId);
+        renderingEnabled     = settings.renderingEnabled();
+        render3dEnabled      = settings.render3dEnabled();
+        renderMinimapEnabled = settings.renderMinimapEnabled();
+        renderBigMapEnabled  = settings.renderBigMapEnabled();
+    }
 
     // Build desired state map
     struct FeatureToggle {
         QString key;
         bool enabled;
     };
-    // Load radial toggle from per-profile radial settings
+    // Load radial toggle from per-profile radial settings (on disk — no live
+    // radial instance in the parent; child saves synchronously before IPC)
     const QString radialConfigDir = AppConfig::instance().radialConfigDir();
     RadialSettingsManager radialSettings(radialConfigDir);
     radialSettings.loadForProfile(profileId);
 
     const QList<FeatureToggle> featureToggles = {
         {QStringLiteral("compositor"), true},  // Compositor — always on
-        {QStringLiteral("3d"),      settings.renderingEnabled() && settings.render3dEnabled()},
-        {QStringLiteral("minimap"), settings.renderingEnabled() && settings.renderMinimapEnabled()},
-        {QStringLiteral("bigmap"),  settings.renderingEnabled() && settings.renderBigMapEnabled()},
-        {QStringLiteral("radial"),  settings.renderingEnabled() && radialSettings.settings().radialEnabled},
+        {QStringLiteral("3d"),      renderingEnabled && render3dEnabled},
+        {QStringLiteral("minimap"), renderingEnabled && renderMinimapEnabled},
+        {QStringLiteral("bigmap"),  renderingEnabled && renderBigMapEnabled},
+        {QStringLiteral("radial"),  renderingEnabled && radialSettings.settings().radialEnabled},
         // Overlay is ALWAYS ON — it's the control panel. Never kill it.
         // Users need it to re-enable rendering if they disabled it.
         {QStringLiteral("overlay"), true},
@@ -481,6 +506,36 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
         mumbleName = QStringLiteral("MumbleLink");
     }
 
+    // ---------------------------------------------------------------
+    // Relay current toggle state to ALL running children via SETTINGS.
+    // This covers both the overlay-IPC path (redundant but harmless)
+    // and the Profile Editor path (no prior IPC relay — essential).
+    // Children handle pause/resume internally via onSettingsReceived().
+    // ---------------------------------------------------------------
+    QJsonObject togglePayload;
+    togglePayload[QStringLiteral("renderingEnabled")]     = renderingEnabled;
+    togglePayload[QStringLiteral("render3dEnabled")]      = render3dEnabled;
+    togglePayload[QStringLiteral("renderMinimapEnabled")] = renderMinimapEnabled;
+    togglePayload[QStringLiteral("renderBigMapEnabled")]  = renderBigMapEnabled;
+
+    QJsonDocument doc(togglePayload);
+    QByteArray relay = "SETTINGS\n" + doc.toJson(QJsonDocument::Compact);
+
+    if (m_children.contains(profileId)) {
+        for (auto &child : m_children[profileId]) {
+            if (child.pipeHandle == INVALID_HANDLE_VALUE) continue;
+            DWORD written = 0;
+            WriteFile(child.pipeHandle, relay.constData(),
+                      static_cast<DWORD>(relay.size()), &written, nullptr);
+        }
+    }
+
+    // Only SPAWN children that are enabled but not running.
+    // Never kill running children — the SETTINGS relay above tells them
+    // to stop rendering. This avoids:
+    //   - 7+ second pack reload on respawn
+    //   - Focus race (new child starts unfocused → D3D11 deferred)
+    //   - SharedTexture destruction → compositor gap
     for (const auto &feat : featureToggles) {
         bool isRunning = runningFeatures.contains(feat.key);
 
@@ -489,12 +544,9 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
             qInfo() << "ChildProcessManager: feature" << feat.key
                     << "re-enabled for" << profileId << "— spawning child";
             spawnChild(profileId, mumbleName, gw2Pid, feat.key);
-        } else if (!feat.enabled && isRunning) {
-            // Feature disabled but child running → terminate
-            qInfo() << "ChildProcessManager: feature" << feat.key
-                    << "disabled for" << profileId << "— terminating child";
-            terminateChild(profileId, feat.key);
         }
+        // NOTE: Disabled-but-running is handled by the SETTINGS relay above.
+        // The child pauses rendering internally (<1 frame latency).
     }
 }
 
@@ -803,10 +855,24 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
             }
         }
 
-        // Relay done. Do NOT call syncFeatureToggles here!
-        // In-game overlay toggles control pack/category visibility,
-        // NOT child process lifecycle. Child lifecycle is managed
-        // only from the profile editor's rendering toggle switches.
+        // Phase 5.7: Apply settings to parent's MarkerSettingsManager.
+        // This triggers the existing settingsChanged → syncFeatureToggles
+        // signal chain (wired in setOverlayInstanceManager), enabling
+        // in-game overlay toggles to kill/spawn child processes.
+        if (m_overlayInstanceMgr) {
+            auto *inst = m_overlayInstanceMgr->instance(profileId);
+            if (inst && inst->markerSettings()) {
+                QJsonObject obj = doc.object();
+                // Apply display settings if present (rendering toggles live here)
+                if (obj.contains("renderingEnabled") || obj.contains("render3dEnabled") ||
+                    obj.contains("renderMinimapEnabled") || obj.contains("renderBigMapEnabled")) {
+                    inst->markerSettings()->applyDisplayJson(obj);
+                    qInfo() << "ChildProcessManager: Applied display settings from"
+                            << featureKey << "to parent MarkerSettingsManager for"
+                            << profileId;
+                }
+            }
+        }
 
     } else if (message.startsWith("READY")) {
         qInfo() << "ChildProcessManager: Child" << featureKey << "READY for"
@@ -835,6 +901,13 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
                           static_cast<DWORD>(relay.size()), &written, nullptr);
             }
         }
+    } else if (message.startsWith("RADIAL_TOGGLE")) {
+        // Overlay child toggled radial menu on/off
+        // The child already saved to disk — just call syncFeatureToggles
+        qInfo() << "ChildProcessManager: RADIAL_TOGGLE from" << featureKey
+                << "for" << profileId;
+        syncFeatureToggles(profileId);
+
     } else if (message.startsWith("COMPOSITOR_READY")) {
         // Compositor window is up and rendering — log dimensions
         // Format: COMPOSITOR_READY:<width>:<height>

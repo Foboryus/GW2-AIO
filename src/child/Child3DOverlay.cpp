@@ -544,7 +544,10 @@ void Child3DOverlay::onRenderFrame()
         bool hasValidPosition = (mumbleLink()->playerX() != 0.0f ||
                                  mumbleLink()->playerY() != 0.0f ||
                                  mumbleLink()->playerZ() != 0.0f);
-        bool longStall = (now - m_lastTickChangeMs) >= 2000;
+        // 100ms stall threshold — near-instant loading screen detection.
+        // uiTick freezes the moment a loading screen starts, so 100ms is
+        // safe (6 frames at 60Hz) while feeling instant to the user.
+        bool longStall = (now - m_lastTickChangeMs) >= 100;
 
         m_contentVisible = hasValidMap && hasValidPosition && !longStall;
     }
@@ -569,7 +572,27 @@ void Child3DOverlay::onRenderFrame()
     static uint64_t s_writeFail = 0;
     static uint64_t s_contentHidden = 0;
 
+    // Clear shared texture when content becomes hidden (loading screen,
+    // character select, or stall). Without this, the compositor keeps
+    // showing the last rendered frame as a frozen image.
     if (!m_contentVisible) {
+        if (m_lastWroteContent && m_sharedTexture && m_sharedTexture->isInitialized()) {
+            ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
+            if (rtv) {
+                float clearColor[4] = {0, 0, 0, 0};
+                m_d3dContext->context()->ClearRenderTargetView(rtv, clearColor);
+                // Copy cleared intermediate → shared texture
+                if (m_intermediateRTV) {
+                    m_d3dContext->context()->ClearRenderTargetView(
+                        m_intermediateRTV.Get(), clearColor);
+                    m_d3dContext->context()->CopyResource(
+                        m_sharedTexture->texture(), m_intermediateRT.Get());
+                }
+                m_sharedTexture->releaseAfterWrite();
+                m_lastWroteContent = false;
+                qInfo() << "[DEV][3D] Content hidden — cleared shared texture";
+            }
+        }
         ++s_contentHidden;
         return;
     }
@@ -612,6 +635,7 @@ void Child3DOverlay::onRenderFrame()
 
     // Release shared texture (Flush + ReleaseSync inside)
     m_sharedTexture->releaseAfterWrite();
+    m_lastWroteContent = true;
 }
 
 void Child3DOverlay::render()

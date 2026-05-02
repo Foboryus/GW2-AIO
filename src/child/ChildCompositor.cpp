@@ -15,9 +15,14 @@
 #include <windowsx.h>  // GET_X_LPARAM, GET_Y_LPARAM
 
 #include <QDebug>
+#include <QDateTime>
+#include <QFont>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPainter>
+#include <QPainterPath>
+#include <QSvgRenderer>
 
 #pragma comment(lib, "dcomp.lib")
 
@@ -151,7 +156,15 @@ void ChildCompositor::onFocusChanged(bool focused)
 
       ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
       updatePosition();
+
+      // Start loading bar only if player is in-game (not loading/char select)
+      if (mumbleLink() && mumbleLink()->isConnected() &&
+          mumbleLink()->mapId() > 0) {
+        m_loadingBarActive = true;
+        m_loadingBarStartMs = QDateTime::currentMSecsSinceEpoch();
+      }
     } else {
+      m_loadingBarActive = false;
       ShowWindow(m_hwnd, SW_HIDE);
     }
   }
@@ -256,10 +269,12 @@ bool ChildCompositor::createCompositorWindow()
     }
   }
 
-  // Same window flags as D3D11OverlayWindow but WITHOUT WS_EX_TRANSPARENT
-  // initially — we handle click-through via WM_NCHITTEST (hybrid approach)
+  // WS_EX_TRANSPARENT: REQUIRED for click-through with WS_EX_NOREDIRECTIONBITMAP.
+  // DComp windows have no per-pixel alpha surface, so without WS_EX_TRANSPARENT
+  // Windows treats the entire window as opaque for hit testing — blocking all
+  // clicks underneath. WM_NCHITTEST → HTTRANSPARENT is NOT sufficient.
   DWORD exStyle = WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP |
-                  WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+                  WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT;
 
   std::wstring title = OverlayZOrder::buildTitle(
       OverlayZOrder::kLayerCompositor, L"Compositor");
@@ -510,9 +525,13 @@ void ChildCompositor::onRenderFrame()
 
   m_d3dContext->beginFrame();
 
-  // [TEMP DIAGNOSTIC] Draw shared texture content as-is
-  // Also add a subtle green border to confirm compositor draws work
+  // Composite shared texture layers from feature children
   renderLayers();
+
+  // Loading bar overlay (renders on top of everything)
+  if (m_loadingBarActive) {
+    renderLoadingBar();
+  }
 
   m_d3dContext->endFrame();
 }
@@ -611,6 +630,238 @@ void ChildCompositor::tryOpenConsumers()
     }
     // Failure is expected — producer may not exist yet. Will retry.
   }
+}
+
+// ============================================================================
+// Loading Bar
+// ============================================================================
+
+bool ChildCompositor::ensureLoadingBarTexture()
+{
+  if (!m_d3dContext || !m_d3dContext->device()) return false;
+
+  int screenW = m_d3dContext->width();
+  int screenH = m_d3dContext->height();
+
+  // Recreate if screen size changed
+  if (m_loadingBarTex) {
+    D3D11_TEXTURE2D_DESC existing = {};
+    m_loadingBarTex->GetDesc(&existing);
+    if (static_cast<int>(existing.Width) == screenW &&
+        static_cast<int>(existing.Height) == screenH) {
+      return true;  // Same size — reuse
+    }
+    // Screen resized — recreate
+    m_loadingBarSRV.Reset();
+    m_loadingBarTex.Reset();
+  }
+
+  // Create a fullscreen texture (same size as compositor render target).
+  // The existing PS shader uses pos.xy/screenSize for UV sampling, so
+  // the texture must match the screen dimensions exactly.
+  D3D11_TEXTURE2D_DESC desc = {};
+  desc.Width = static_cast<UINT>(screenW);
+  desc.Height = static_cast<UINT>(screenH);
+  desc.MipLevels = 1;
+  desc.ArraySize = 1;
+  desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;  // QImage ARGB32_Premultiplied
+  desc.SampleDesc.Count = 1;
+  desc.Usage = D3D11_USAGE_DEFAULT;
+  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+
+  HRESULT hr = m_d3dContext->device()->CreateTexture2D(
+      &desc, nullptr, m_loadingBarTex.GetAddressOf());
+  if (FAILED(hr)) {
+    qWarning() << "[DEV][COMPOSITOR] Loading bar texture creation failed:" << hr;
+    return false;
+  }
+
+  hr = m_d3dContext->device()->CreateShaderResourceView(
+      m_loadingBarTex.Get(), nullptr, m_loadingBarSRV.GetAddressOf());
+  if (FAILED(hr)) {
+    m_loadingBarTex.Reset();
+    return false;
+  }
+
+  // Premultiplied alpha blend state for the loading bar quad
+  if (!m_premulBlend) {
+    D3D11_BLEND_DESC blendDesc = {};
+    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    m_d3dContext->device()->CreateBlendState(
+        &blendDesc, m_premulBlend.GetAddressOf());
+  }
+
+  // Pre-allocate QImage at bar size (NOT fullscreen — saves ~8MB per frame)
+  // We upload only the bar region via D3D11_BOX targeting the centered position.
+  m_loadingBarImage = QImage(kBarWidth, kBarHeight,
+                             QImage::Format_ARGB32_Premultiplied);
+
+  // Clear the fullscreen texture to transparent once (avoids per-frame clear).
+  // Need a temporary RTV for ClearRenderTargetView.
+  ComPtr<ID3D11RenderTargetView> tempRTV;
+  hr = m_d3dContext->device()->CreateRenderTargetView(
+      m_loadingBarTex.Get(), nullptr, tempRTV.GetAddressOf());
+  if (SUCCEEDED(hr) && m_d3dContext->context()) {
+    float clear[4] = {0, 0, 0, 0};
+    m_d3dContext->context()->ClearRenderTargetView(tempRTV.Get(), clear);
+  }
+
+  qInfo() << "[DEV][COMPOSITOR] Loading bar texture created"
+          << screenW << "x" << screenH;
+  return true;
+}
+
+void ChildCompositor::updateLoadingBarImage(float progress)
+{
+  m_loadingBarImage.fill(Qt::transparent);
+  QPainter p(&m_loadingBarImage);
+  p.setRenderHint(QPainter::Antialiasing, true);
+  p.setRenderHint(QPainter::TextAntialiasing, true);
+
+  // --- Theme colors ---
+  const QColor bgColor(0x1E, 0x1E, 0x1E, 230);  // Dark, slightly transparent
+  const QColor borderColor(0xC0, 0x9C, 0x57);     // AIO gold
+  const QColor barBg(0x3A, 0x3A, 0x3A);           // Progress track
+  const QColor barFill(0xC0, 0x9C, 0x57);         // Gold fill
+  const QColor textColor(0xE0, 0xD0, 0xB0);       // Warm white
+
+  const int pad = 4;
+  const QRectF outer(0.5, 0.5, kBarWidth - 1, kBarHeight - 1);
+  const int cornerR = 8;
+
+  // Background + border
+  p.setPen(QPen(borderColor, 1.5));
+  p.setBrush(bgColor);
+  p.drawRoundedRect(outer, cornerR, cornerR);
+
+  // AIO icon (left side)
+  const int iconSize = 32;
+  const int iconX = pad + 6;
+  const int iconY = (kBarHeight - iconSize) / 2;
+  {
+    QSvgRenderer svg(QString(":/icons/app-icon.svg"));
+    if (svg.isValid()) {
+      svg.render(&p, QRectF(iconX, iconY, iconSize, iconSize));
+    }
+  }
+
+  // "Loading AIO" text
+  const int textX = iconX + iconSize + 8;
+  const int textY = pad + 2;
+  const int textH = 20;
+  QFont font("Segoe UI", 10, QFont::DemiBold);
+  p.setFont(font);
+  p.setPen(textColor);
+  p.drawText(QRectF(textX, textY, kBarWidth - textX - pad, textH),
+             Qt::AlignLeft | Qt::AlignVCenter, "Loading AIO");
+
+  // Progress bar track
+  const int barX = textX;
+  const int barY = textY + textH + 4;
+  const int barW = kBarWidth - barX - pad - 8;
+  const int barH = 10;
+  const int barR = 5;
+
+  p.setPen(Qt::NoPen);
+  p.setBrush(barBg);
+  p.drawRoundedRect(QRectF(barX, barY, barW, barH), barR, barR);
+
+  // Progress fill
+  int fillW = static_cast<int>(barW * qBound(0.0f, progress, 1.0f));
+  if (fillW > 0) {
+    QPainterPath clip;
+    clip.addRoundedRect(QRectF(barX, barY, barW, barH), barR, barR);
+    p.setClipPath(clip);
+    p.setBrush(barFill);
+    p.drawRect(QRectF(barX, barY, fillW, barH));
+    p.setClipping(false);
+  }
+
+  p.end();
+}
+
+void ChildCompositor::renderLoadingBar()
+{
+  if (!ensureLoadingBarTexture()) return;
+
+  auto *ctx = m_d3dContext->context();
+  if (!ctx) return;
+
+  // Calculate progress (0.0 → 1.0 over kBarDurationMs)
+  qint64 now = QDateTime::currentMSecsSinceEpoch();
+  qint64 elapsed = now - m_loadingBarStartMs;
+  float progress = static_cast<float>(elapsed) / static_cast<float>(kBarDurationMs);
+
+  if (progress >= 1.0f) {
+    m_loadingBarActive = false;
+    return;
+  }
+
+  // Render bar to bar-sized QImage (320×56)
+  updateLoadingBarImage(progress);
+
+  // Upload bar QImage into the top-center region of the fullscreen texture.
+  int screenW = m_d3dContext->width();
+  int destX = (screenW - kBarWidth) / 2;
+  int destY = 15;  // 15px from top border
+
+  D3D11_BOX box = {};
+  box.left = static_cast<UINT>(destX);
+  box.top = static_cast<UINT>(destY);
+  box.front = 0;
+  box.right = static_cast<UINT>(destX + kBarWidth);
+  box.bottom = static_cast<UINT>(destY + kBarHeight);
+  box.back = 1;
+  ctx->UpdateSubresource(
+      m_loadingBarTex.Get(), 0, &box,
+      m_loadingBarImage.constBits(),
+      static_cast<UINT>(m_loadingBarImage.bytesPerLine()),
+      0);
+
+  // Enable premultiplied alpha blending
+  float blendFactor[4] = {0, 0, 0, 0};
+  ctx->OMSetBlendState(m_premulBlend.Get(), blendFactor, 0xFFFFFFFF);
+
+  // Reuse the existing fullscreen-triangle pipeline (SV_VertexID + SV_Position UV).
+  // The bar texture is screen-sized with the bar centered — transparent pixels
+  // outside the bar area composite as no-op.
+  ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  ctx->IASetInputLayout(nullptr);
+  ctx->VSSetShader(m_quadVS.Get(), nullptr, 0);
+  ctx->PSSetShader(m_quadPS.Get(), nullptr, 0);
+
+  // screenSize CB (already set by renderLayers, but update in case)
+  if (m_screenSizeCB) {
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    if (SUCCEEDED(ctx->Map(m_screenSizeCB.Get(), 0,
+                           D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+      float cbData[4] = {
+        static_cast<float>(m_d3dContext->width()),
+        static_cast<float>(m_d3dContext->height()),
+        0.0f, 0.0f
+      };
+      memcpy(mapped.pData, cbData, sizeof(cbData));
+      ctx->Unmap(m_screenSizeCB.Get(), 0);
+    }
+    ID3D11Buffer *cbs[] = {m_screenSizeCB.Get()};
+    ctx->PSSetConstantBuffers(0, 1, cbs);
+  }
+
+  ID3D11SamplerState *samplers[] = {m_linearSampler.Get()};
+  ctx->PSSetSamplers(0, 1, samplers);
+
+  ctx->PSSetShaderResources(0, 1, m_loadingBarSRV.GetAddressOf());
+  ctx->Draw(3, 0);
+
+  // Restore default blend state
+  ctx->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFF);
 }
 
 // ============================================================================

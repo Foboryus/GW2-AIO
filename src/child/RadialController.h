@@ -110,6 +110,12 @@ public:
    */
   void pollHotkey();
 
+  /**
+   * @brief Set loading screen state (Phase 5.8)
+   * When true, deactivates active wheel and blocks new activations.
+   */
+  void setLoadingScreen(bool loading);
+
 private:
   /**
    * @brief Render callback — called by RadialOverlayWindow each frame
@@ -154,4 +160,7 @@ private:
   bool m_wasWheelActive = false;     // Tracks active→inactive transition
   float m_fadeAlpha = 0.0f;          // 1.0→0.0 during fade-out
   float m_savedGlobalOpacity = 1.0f; // Restore after fade
+
+  // Phase 5.8: loading screen state — blocks hotkey activation
+  bool m_loadingScreen = false;
 };

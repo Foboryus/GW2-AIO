@@ -25,6 +25,7 @@
 #include "rendering/SharedTexture.h"
 
 #include <QJsonDocument>
+#include <QDateTime>
 
 ChildRadial::ChildRadial(const QString &profileId,
                          const QString &mumbleName,
@@ -199,6 +200,20 @@ bool ChildRadial::createIntermediateRT(int width, int height)
 void ChildRadial::onRenderTick()
 {
     if (!m_controller || !m_d3dContext || !m_sharedTexture) return;
+
+    // Phase 5.8: Loading screen detection via uiTick stall
+    if (mumbleLink() && mumbleLink()->isConnected()) {
+        uint32_t currentTick = mumbleLink()->uiTick();
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+        if (currentTick != m_lastUiTick) {
+            m_lastUiTick = currentTick;
+            m_lastTickChangeMs = now;
+        }
+
+        bool longStall = (now - m_lastTickChangeMs) >= kStallMs;
+        m_controller->setLoadingScreen(longStall);
+    }
 
     // Always poll hotkey (even when unfocused — controller gates internally)
     m_controller->pollHotkey();

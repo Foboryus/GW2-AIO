@@ -87,4 +87,10 @@ private:
 
   bool m_packsLoaded = false;
   bool m_d3dInitialized = false;  ///< True after ensureD3D11() succeeds
+
+  // --- Loading screen detection (Phase 5.8 — same pattern as Child3DOverlay) ---
+  bool m_contentVisible = true;
+  uint32_t m_lastUiTick = 0;
+  qint64 m_lastTickChangeMs = 0;
+  static constexpr qint64 kStallMs = 100;  // 100ms stall → loading screen (instant)
 };
