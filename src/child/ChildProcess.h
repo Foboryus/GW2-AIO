@@ -126,6 +126,15 @@ protected:
   virtual void onReloadPacks() {} // default no-op
 
   /**
+   * @brief Called when a sibling child was terminated for a specific layer.
+   * The compositor overrides this to close stale SharedTextureConsumer handles,
+   * allowing tryOpenConsumers to reconnect when a replacement child spawns.
+   * Default no-op — only meaningful for the compositor.
+   * @param layerKey Feature key whose consumer should be reset (e.g., "radial")
+   */
+  virtual void onLayerReset(const QString &layerKey) { Q_UNUSED(layerKey); }
+
+  /**
    * @brief Called during initialization to allow subclass-specific setup
    * @return true if initialization succeeded
    */

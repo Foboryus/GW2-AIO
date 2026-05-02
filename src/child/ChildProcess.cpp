@@ -564,6 +564,11 @@ void ChildProcess::processCommand(const QString &command)
     } else if (command.trimmed() == "RELOAD_PACKS") {
         qInfo() << "ChildProcess: Received RELOAD_PACKS — reloading pack data";
         onReloadPacks();
+    } else if (command.startsWith("LAYER_RESET ")) {
+        // Grandfather tells compositor to close a stale consumer for a layer
+        // whose child was terminated (so tryOpenConsumers can reopen it).
+        QString layerKey = command.mid(12).trimmed();
+        onLayerReset(layerKey);
     } else if (command.trimmed() == "STOP") {
         qInfo() << "ChildProcess: Received STOP command";
         stop();

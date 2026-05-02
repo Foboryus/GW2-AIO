@@ -395,6 +395,28 @@ void ChildProcessManager::terminateChild(const QString &profileId,
         emit childTerminated(profileId, featureKey);
         children.removeAt(i);
 
+        // Notify compositor to close its consumer for this layer.
+        // The old SharedTexture producer is dead — compositor's consumer
+        // still has isOpen()=true pointing at the stale handle. Without
+        // this, tryOpenConsumers skips the layer and the re-spawned child's
+        // new SharedTexture is never consumed.
+        if (m_children.contains(profileId)) {
+            QByteArray resetMsg = QStringLiteral("LAYER_RESET %1\n")
+                                      .arg(featureKey).toUtf8();
+            for (auto &sibling : m_children[profileId]) {
+                if (sibling.featureKey == QLatin1String("compositor") &&
+                    sibling.pipeHandle != INVALID_HANDLE_VALUE) {
+                    DWORD written = 0;
+                    WriteFile(sibling.pipeHandle, resetMsg.constData(),
+                              static_cast<DWORD>(resetMsg.size()),
+                              &written, nullptr);
+                    qInfo() << "ChildProcessManager: sent LAYER_RESET"
+                            << featureKey << "to compositor for" << profileId;
+                    break;
+                }
+            }
+        }
+
         // Remove profile entry if no children remain
         if (children.isEmpty()) {
             m_children.remove(profileId);
@@ -506,25 +528,28 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
 
     // ---------------------------------------------------------------
     // Relay current toggle state to ALL running children via SETTINGS.
-    // This covers both the overlay-IPC path (redundant but harmless)
-    // and the Profile Editor path (no prior IPC relay — essential).
+    // ONLY needed for the Profile Editor path (no prior IPC relay).
+    // When triggered by overlay-IPC (SETTING_CHANGED), the relay already
+    // happened in processChildMessage — skip to avoid dual-relay race.
     // Children handle pause/resume internally via onSettingsReceived().
     // ---------------------------------------------------------------
-    QJsonObject togglePayload;
-    togglePayload[QStringLiteral("renderingEnabled")]     = renderingEnabled;
-    togglePayload[QStringLiteral("render3dEnabled")]      = render3dEnabled;
-    togglePayload[QStringLiteral("renderMinimapEnabled")] = renderMinimapEnabled;
-    togglePayload[QStringLiteral("renderBigMapEnabled")]  = renderBigMapEnabled;
+    if (!m_suppressSettingsRelay) {
+        QJsonObject togglePayload;
+        togglePayload[QStringLiteral("renderingEnabled")]     = renderingEnabled;
+        togglePayload[QStringLiteral("render3dEnabled")]      = render3dEnabled;
+        togglePayload[QStringLiteral("renderMinimapEnabled")] = renderMinimapEnabled;
+        togglePayload[QStringLiteral("renderBigMapEnabled")]  = renderBigMapEnabled;
 
-    QJsonDocument doc(togglePayload);
-    QByteArray relay = "SETTINGS\n" + doc.toJson(QJsonDocument::Compact);
+        QJsonDocument doc(togglePayload);
+        QByteArray relay = "SETTINGS\n" + doc.toJson(QJsonDocument::Compact);
 
-    if (m_children.contains(profileId)) {
-        for (auto &child : m_children[profileId]) {
-            if (child.pipeHandle == INVALID_HANDLE_VALUE) continue;
-            DWORD written = 0;
-            WriteFile(child.pipeHandle, relay.constData(),
-                      static_cast<DWORD>(relay.size()), &written, nullptr);
+        if (m_children.contains(profileId)) {
+            for (auto &child : m_children[profileId]) {
+                if (child.pipeHandle == INVALID_HANDLE_VALUE) continue;
+                DWORD written = 0;
+                WriteFile(child.pipeHandle, relay.constData(),
+                          static_cast<DWORD>(relay.size()), &written, nullptr);
+            }
         }
     }
 
@@ -863,6 +888,11 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
         // This triggers the existing settingsChanged → syncFeatureToggles
         // signal chain (wired in setOverlayInstanceManager), enabling
         // in-game overlay toggles to kill/spawn child processes.
+        //
+        // 5.9.2 fix: Suppress the SETTINGS relay in syncFeatureToggles.
+        // The overlay path already relayed to siblings above (lines 846-860).
+        // Without suppression, two relays fire — the second can carry stale
+        // values when the user toggles features rapidly.
         if (m_overlayInstanceMgr) {
             auto *inst = m_overlayInstanceMgr->instance(profileId);
             if (inst && inst->markerSettings()) {
@@ -870,7 +900,9 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
                 // Apply display settings if present (rendering toggles live here)
                 if (obj.contains("renderingEnabled") || obj.contains("render3dEnabled") ||
                     obj.contains("renderMinimapEnabled") || obj.contains("renderBigMapEnabled")) {
+                    m_suppressSettingsRelay = true;
                     inst->markerSettings()->applyDisplayJson(obj);
+                    m_suppressSettingsRelay = false;
                     qInfo() << "ChildProcessManager: Applied display settings from"
                             << featureKey << "to parent MarkerSettingsManager for"
                             << profileId;

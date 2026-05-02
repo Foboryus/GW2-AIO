@@ -74,6 +74,7 @@ protected:
   void onFocusChanged(bool focused) override;
   void onSettingsReceived(const QJsonObject &settings) override;
   void onReloadPacks() override;
+  void onLayerReset(const QString &layerKey) override;
 
 private:
   // --- Window management ---

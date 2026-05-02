@@ -193,6 +193,19 @@ void ChildCompositor::onReloadPacks()
   // No-op for compositor
 }
 
+void ChildCompositor::onLayerReset(const QString &layerKey)
+{
+  // Grandfather notifies us that a child for this layer was terminated.
+  // Close the stale consumer so tryOpenConsumers() can reopen it when
+  // the replacement child spawns and creates a new SharedTexture.
+  auto *consumer = m_layers.value(layerKey, nullptr);
+  if (consumer && consumer->isOpen()) {
+    consumer->shutdown();
+    qInfo() << "[DEV][COMPOSITOR] LAYER_RESET: closed stale consumer for"
+            << layerKey << "— will reopen on next tryOpenConsumers cycle";
+  }
+}
+
 // ============================================================================
 // GW2 Window Finding
 // ============================================================================

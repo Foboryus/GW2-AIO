@@ -242,4 +242,11 @@ private:
   };
   QList<SpawnRequest> m_spawnQueue;
   bool m_spawnInProgress = false;  ///< True while waiting for READY from last spawn
+
+  /// Suppresses the SETTINGS relay in syncFeatureToggles when set.
+  /// The overlay IPC path (SETTING_CHANGED) already relays to siblings before
+  /// applyDisplayJson triggers settingsChanged → syncFeatureToggles. Without
+  /// this, two SETTINGS relays fire — the second can carry stale values when
+  /// the user toggles features rapidly.
+  bool m_suppressSettingsRelay = false;
 };
