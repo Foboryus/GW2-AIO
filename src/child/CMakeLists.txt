@@ -159,8 +159,10 @@ add_executable(GW2AIO-minimap WIN32
     ${CHILD_FRAMEWORK_SOURCES}
     ChildMinimap.cpp ChildMinimap.h
 
-    # SharedTexture only (bare D3D11 device — no D3D11Context needed for QPainter path)
+    # D3D11 rendering (Phase 5.9.1: TrailPipeline for minimap/bigmap GPU trails)
+    ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
     ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
+    ${CMAKE_SOURCE_DIR}/src/rendering/TrailPipeline.cpp
 
     # Marker system
     ${CHILD_MARKER_SOURCES}

@@ -6,7 +6,9 @@
 #include "features/markers/MarkerManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 #include "features/markers/MinimapRenderer.h"
+#include "rendering/D3D11Context.h"
 #include "rendering/SharedTexture.h"
+#include "rendering/TrailPipeline.h"
 
 #include <QDir>
 #include <QJsonDocument>
@@ -31,19 +33,8 @@ ChildMinimap::~ChildMinimap()
     delete m_queryContext;
     m_queryContext = nullptr;
 
-    if (m_sharedTexture) {
-        m_sharedTexture->shutdown();
-        delete m_sharedTexture;
-        m_sharedTexture = nullptr;
-    }
-
-    // Bare device cleanup (no D3D11Context)
-    if (m_deviceContext) {
-        m_deviceContext->ClearState();
-        m_deviceContext->Flush();
-    }
-    m_deviceContext.Reset();
-    m_device.Reset();
+    // GPU resources cleaned up by teardownD3D11()
+    teardownD3D11();
 }
 
 // ============================================================================
@@ -127,32 +118,50 @@ void ChildMinimap::onShutdown()
 }
 
 // ============================================================================
-// GPU Resource Teardown (Phase 5.5C — full device destruction on unfocus)
+// GPU Resource Teardown
 // ============================================================================
 
+// Full teardown — destroys ALL GPU resources (shutdown / process exit only)
 void ChildMinimap::teardownD3D11()
 {
     if (!m_d3dInitialized) return;
 
-    qInfo() << "[DEV][MINIMAP] Tearing down D3D11 for" << profileName();
+    qInfo() << "[DEV][MINIMAP] Full D3D11 teardown for" << profileName();
 
-    // Release shared texture (invalidates compositor consumer)
+    // Light teardown first (shared texture + intermediate RT)
+    teardownSharedResources();
+
+    // Destroy trail pipeline (holds compiled shaders)
+    delete m_trailPipeline;
+    m_trailPipeline = nullptr;
+
+    // Release D3D11 context (destructor calls shutdown())
+    if (m_d3dContext) {
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
+    }
+
+    m_d3dInitialized = false;
+    qInfo() << "[DEV][MINIMAP] Full D3D11 teardown complete — device freed";
+}
+
+// Light teardown — only shared texture + intermediate RT (fast, for unfocus)
+// D3D11Context and TrailPipeline persist across focus cycles to avoid
+// expensive shader recompilation (~150ms per focus gain).
+void ChildMinimap::teardownSharedResources()
+{
+    qInfo() << "[DEV][MINIMAP] Light teardown (shared resources) for" << profileName();
+
+    // Release intermediate RT
+    m_intermediateRTV.Reset();
+    m_intermediateRT.Reset();
+
+    // Release shared texture
     if (m_sharedTexture) {
         m_sharedTexture->shutdown();
         delete m_sharedTexture;
         m_sharedTexture = nullptr;
     }
-
-    // Release bare D3D11 device — frees the device object for other profiles
-    if (m_deviceContext) {
-        m_deviceContext->ClearState();
-        m_deviceContext->Flush();
-    }
-    m_deviceContext.Reset();
-    m_device.Reset();
-
-    m_d3dInitialized = false;
-    qInfo() << "[DEV][MINIMAP] D3D11 teardown complete — device freed";
 }
 
 // ============================================================================
@@ -161,7 +170,8 @@ void ChildMinimap::teardownD3D11()
 
 void ChildMinimap::onRenderFrame()
 {
-    if (!m_minimapRenderer || !m_sharedTexture || !m_device) return;
+    if (!m_minimapRenderer || !m_sharedTexture || !m_d3dContext) return;
+    if (!m_d3dContext->isInitialized()) return;
     if (!isFocused() || !isInGame()) return;
 
     // Frame guard: cap at ~30fps (33ms) — matches MinimapRenderer's own guard
@@ -190,11 +200,11 @@ void ChildMinimap::onRenderFrame()
             m_minimapRenderer->setShouldBeVisible(false);
             // Clear shared texture to transparent so compositor doesn't
             // show a frozen last frame during loading/character select
-            if (m_sharedTexture && m_sharedTexture->isInitialized() && m_deviceContext) {
+            if (m_sharedTexture && m_sharedTexture->isInitialized()) {
                 ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
                 if (rtv) {
                     float clearColor[4] = {0, 0, 0, 0};
-                    m_deviceContext->ClearRenderTargetView(rtv, clearColor);
+                    m_d3dContext->context()->ClearRenderTargetView(rtv, clearColor);
                     m_sharedTexture->releaseAfterWrite();
                     qInfo() << "[DEV][MINIMAP] Content hidden — cleared shared texture";
                 }
@@ -202,6 +212,9 @@ void ChildMinimap::onRenderFrame()
         } else if (!wasVisible && m_contentVisible) {
             m_minimapRenderer->setShouldBeVisible(true);
         }
+
+        // Feed combat state to MinimapRenderer (red border + player indicator)
+        m_minimapRenderer->setInCombat(mumbleLink()->isInCombat());
     }
 
     if (!m_contentVisible) return;
@@ -216,37 +229,98 @@ void ChildMinimap::onRenderFrame()
         m_renderImage = QImage(m_gw2Width, m_gw2Height,
                                QImage::Format_ARGB32_Premultiplied);
         m_sharedTexture->resize(m_gw2Width, m_gw2Height);
+        m_d3dContext->resize(QSize(m_gw2Width, m_gw2Height));
+
+        // Recreate intermediate RT at new size
+        m_intermediateRTV.Reset();
+        m_intermediateRT.Reset();
+        D3D11_TEXTURE2D_DESC rtDesc = {};
+        rtDesc.Width = static_cast<UINT>(m_gw2Width);
+        rtDesc.Height = static_cast<UINT>(m_gw2Height);
+        rtDesc.MipLevels = 1;
+        rtDesc.ArraySize = 1;
+        rtDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        rtDesc.SampleDesc.Count = 1;
+        rtDesc.Usage = D3D11_USAGE_DEFAULT;
+        rtDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        m_d3dContext->device()->CreateTexture2D(
+            &rtDesc, nullptr, m_intermediateRT.GetAddressOf());
+        if (m_intermediateRT) {
+            m_d3dContext->device()->CreateRenderTargetView(
+                m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
+        }
+
         qInfo() << "[DEV][MINIMAP] Resized to" << m_gw2Width << "x" << m_gw2Height;
     }
 
-    // Render minimap to QImage
-    if (!m_minimapRenderer->renderToImage(m_renderImage)) {
-        return;  // Nothing to render (not connected, faded out, etc.)
+    // --- Step 1: Render QPainter minimap markers to QImage ---
+    bool hasMarkerContent = m_minimapRenderer->renderToImage(m_renderImage);
+
+    // --- Step 2: Upload QImage to intermediate RT ---
+    if (m_intermediateRTV) {
+        float clearColor[4] = {0, 0, 0, 0};
+        m_d3dContext->context()->ClearRenderTargetView(
+            m_intermediateRTV.Get(), clearColor);
+
+        if (hasMarkerContent) {
+            // Upload QImage bits via UpdateSubresource
+            // QImage::Format_ARGB32_Premultiplied = BGRA = DXGI_FORMAT_B8G8R8A8_UNORM
+            D3D11_BOX destBox = {};
+            destBox.left = 0;
+            destBox.top = 0;
+            destBox.front = 0;
+            destBox.right = m_gw2Width;
+            destBox.bottom = m_gw2Height;
+            destBox.back = 1;
+
+            m_d3dContext->context()->UpdateSubresource(
+                m_intermediateRT.Get(), 0, &destBox,
+                m_renderImage.constBits(),
+                static_cast<UINT>(m_renderImage.bytesPerLine()),
+                0);
+        }
     }
 
-    // Upload QImage → SharedTexture
+    // --- Step 3: Render GPU minimap/bigmap trails on top of markers ---
+    if (m_trailPipeline && m_intermediateRTV) {
+        // Sync trail pipeline settings
+        bool mainOn = m_markerSettings ? m_markerSettings->renderingEnabled() : true;
+        bool showMinimap = mainOn && (m_markerSettings ? m_markerSettings->renderMinimapEnabled() : true);
+        bool showBigMap = mainOn && (m_markerSettings ? m_markerSettings->renderBigMapEnabled() : true);
+
+        m_trailPipeline->setShowMinimap(showMinimap);
+        m_trailPipeline->setShowBigMap(showBigMap);
+        if (m_markerSettings) {
+            m_trailPipeline->setMinimapTrailWidth(m_markerSettings->minimapTrailWidth());
+            m_trailPipeline->setMinimapOpacity(
+                static_cast<float>(m_markerSettings->minimapOpacity()));
+        }
+
+        // Set intermediate RT as the render target for trail pipeline
+        m_d3dContext->setExternalRTV(m_intermediateRTV.Get());
+
+        // Bind RT + blend state to pipeline (renderMinimap assumes RT is bound)
+        ID3D11RenderTargetView *trailRTV = m_intermediateRTV.Get();
+        m_d3dContext->context()->OMSetRenderTargets(1, &trailRTV, nullptr);
+
+        // Set alpha blend state for proper trail compositing
+        float blendFactor[4] = {0, 0, 0, 0};
+        m_d3dContext->context()->OMSetBlendState(
+            m_d3dContext->alphaBlendState(), blendFactor, 0xFFFFFFFF);
+
+        // Render minimap trails (composites on top of QPainter markers)
+        m_trailPipeline->preloadTextures();
+        m_trailPipeline->renderMinimap();
+    }
+
+    // --- Step 4: Copy intermediate RT → SharedTexture ---
     ID3D11RenderTargetView *rtv = m_sharedTexture->acquireForWrite(0);
     if (!rtv) return;  // Mutex contention
 
-    // Clear the shared texture to transparent
-    float clearColor[4] = {0, 0, 0, 0};
-    m_deviceContext->ClearRenderTargetView(rtv, clearColor);
-
-    // Upload QImage bits via UpdateSubresource
-    // QImage::Format_ARGB32_Premultiplied = BGRA byte order = DXGI_FORMAT_B8G8R8A8_UNORM
-    D3D11_BOX destBox = {};
-    destBox.left = 0;
-    destBox.top = 0;
-    destBox.front = 0;
-    destBox.right = m_gw2Width;
-    destBox.bottom = m_gw2Height;
-    destBox.back = 1;
-
-    m_deviceContext->UpdateSubresource(
-        m_sharedTexture->texture(), 0, &destBox,
-        m_renderImage.constBits(),
-        static_cast<UINT>(m_renderImage.bytesPerLine()),
-        0);
+    if (m_intermediateRT && m_sharedTexture->texture()) {
+        m_d3dContext->context()->CopyResource(
+            m_sharedTexture->texture(), m_intermediateRT.Get());
+    }
 
     m_sharedTexture->releaseAfterWrite();
 
@@ -254,7 +328,8 @@ void ChildMinimap::onRenderFrame()
     static uint64_t s_frameCount = 0;
     if (++s_frameCount % 500 == 0) {
         qInfo() << "[DEV][MINIMAP] Frame" << s_frameCount
-                << "size:" << m_gw2Width << "x" << m_gw2Height;
+                << "size:" << m_gw2Width << "x" << m_gw2Height
+                << "trails:" << (m_trailPipeline != nullptr);
     }
 }
 
@@ -365,13 +440,57 @@ void ChildMinimap::onMapEntered(uint32_t mapId)
 
 bool ChildMinimap::ensureD3D11()
 {
-    if (m_d3dInitialized) return true;
-
-    qInfo() << "[DEV][MINIMAP] Lazy D3D11 init starting for" << profileName();
+    if (m_d3dInitialized && m_sharedTexture) return true;
 
     findGW2Window();
     int initW = m_gw2Width > 0 ? m_gw2Width : 800;
     int initH = m_gw2Height > 0 ? m_gw2Height : 600;
+
+    // --- Fast path: device + pipeline exist, just recreate shared resources ---
+    if (m_d3dInitialized && m_d3dContext && !m_sharedTexture) {
+        qInfo() << "[DEV][MINIMAP] Fast D3D11 init (shared resources only) for" << profileName();
+
+        // SharedTextureProducer
+        m_sharedTexture = new SharedTextureProducer();
+        QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
+        if (!m_sharedTexture->initialize(
+                m_d3dContext->device(), m_d3dContext->context(),
+                initW, initH, texName)) {
+            qCritical() << "[DEV][MINIMAP] SharedTexture re-init FAILED";
+            delete m_sharedTexture;
+            m_sharedTexture = nullptr;
+            return false;
+        }
+
+        // Intermediate render target
+        D3D11_TEXTURE2D_DESC rtDesc = {};
+        rtDesc.Width = static_cast<UINT>(initW);
+        rtDesc.Height = static_cast<UINT>(initH);
+        rtDesc.MipLevels = 1;
+        rtDesc.ArraySize = 1;
+        rtDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        rtDesc.SampleDesc.Count = 1;
+        rtDesc.Usage = D3D11_USAGE_DEFAULT;
+        rtDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+        m_intermediateRTV.Reset();
+        m_intermediateRT.Reset();
+        HRESULT hr = m_d3dContext->device()->CreateTexture2D(
+            &rtDesc, nullptr, m_intermediateRT.GetAddressOf());
+        if (SUCCEEDED(hr)) {
+            m_d3dContext->device()->CreateRenderTargetView(
+                m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
+        }
+
+        qInfo() << "[DEV][MINIMAP] Fast D3D11 init COMPLETE:"
+                << "sharedTex:" << (m_sharedTexture != nullptr)
+                << "trailPipeline:" << (m_trailPipeline != nullptr)
+                << "size:" << initW << "x" << initH;
+        return true;
+    }
+
+    // --- Full path: first-time initialization ---
+    qInfo() << "[DEV][MINIMAP] Lazy D3D11 init starting for" << profileName();
 
     // Acquire global device creation mutex (B7 fix — serialize across all children)
     HANDLE hDeviceMutex = CreateMutexW(nullptr, FALSE, L"Global\\GW2AIO_DeviceInit");
@@ -380,43 +499,85 @@ bool ChildMinimap::ensureD3D11()
         WaitForSingleObject(hDeviceMutex, 30000);
     }
 
-    // Create bare D3D11 device (no blend states, no rasterizer, no RT)
-    D3D_FEATURE_LEVEL featureLevel;
-    UINT flags = 0;
-#ifdef _DEBUG
-    flags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
-    HRESULT hr = D3D11CreateDevice(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
-        nullptr, 0, D3D11_SDK_VERSION,
-        m_device.GetAddressOf(), &featureLevel,
-        m_deviceContext.GetAddressOf());
-    if (FAILED(hr)) {
-        qCritical() << "[DEV][MINIMAP] D3D11 bare device creation FAILED:"
-                    << Qt::hex << hr
-                    << "— will retry on next map entry";
+    // D3D11 offscreen context (full — blend states, rasterizer for TrailPipeline)
+    m_d3dContext = new D3D11Context();
+    if (!m_d3dContext->initializeOffscreen(QSize(initW, initH))) {
+        qCritical() << "[DEV][MINIMAP] D3D11 offscreen init FAILED (E_OUTOFMEMORY?)"
+                     << "— will retry on next map entry";
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
         if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
         return false;
     }
-    qInfo() << "[DEV][MINIMAP] Bare D3D11 device created, feature level:"
-            << Qt::hex << featureLevel;
+    qInfo() << "[DEV][MINIMAP] D3D11 offscreen device created:" << initW << "x" << initH;
 
     // SharedTextureProducer
     m_sharedTexture = new SharedTextureProducer();
     QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
     if (!m_sharedTexture->initialize(
-            m_device.Get(), m_deviceContext.Get(),
+            m_d3dContext->device(), m_d3dContext->context(),
             initW, initH, texName)) {
         qCritical() << "[DEV][MINIMAP] SharedTexture init FAILED";
         delete m_sharedTexture;
         m_sharedTexture = nullptr;
-        m_device.Reset();
-        m_deviceContext.Reset();
+        delete m_d3dContext;
+        m_d3dContext = nullptr;
         if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
         return false;
     }
     qInfo() << "[DEV][MINIMAP] SharedTexture created:" << texName
             << initW << "x" << initH;
+
+    // Intermediate render target (QPainter upload + GPU trail composite)
+    {
+        D3D11_TEXTURE2D_DESC rtDesc = {};
+        rtDesc.Width = static_cast<UINT>(initW);
+        rtDesc.Height = static_cast<UINT>(initH);
+        rtDesc.MipLevels = 1;
+        rtDesc.ArraySize = 1;
+        rtDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        rtDesc.SampleDesc.Count = 1;
+        rtDesc.Usage = D3D11_USAGE_DEFAULT;
+        rtDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+        HRESULT hr = m_d3dContext->device()->CreateTexture2D(
+            &rtDesc, nullptr, m_intermediateRT.GetAddressOf());
+        if (FAILED(hr)) {
+            qCritical() << "[DEV][MINIMAP] Intermediate RT creation FAILED:" << Qt::hex << hr;
+            delete m_sharedTexture; m_sharedTexture = nullptr;
+            delete m_d3dContext; m_d3dContext = nullptr;
+            if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+            return false;
+        }
+
+        hr = m_d3dContext->device()->CreateRenderTargetView(
+            m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
+        if (FAILED(hr)) {
+            qCritical() << "[DEV][MINIMAP] Intermediate RTV creation FAILED:" << Qt::hex << hr;
+            m_intermediateRT.Reset();
+            delete m_sharedTexture; m_sharedTexture = nullptr;
+            delete m_d3dContext; m_d3dContext = nullptr;
+            if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
+            return false;
+        }
+        qInfo() << "[DEV][MINIMAP] Intermediate RT created:" << initW << "x" << initH;
+    }
+
+    // TrailPipeline for minimap/bigmap GPU trails (Phase 5.9.1)
+    m_trailPipeline = new TrailPipeline(m_d3dContext, mumbleLink(),
+                                         m_markerManager, m_markerSettings,
+                                         m_imageCache);
+    if (!m_trailPipeline->initialize()) {
+        qWarning() << "[DEV][MINIMAP] TrailPipeline init failed — markers only";
+        delete m_trailPipeline;
+        m_trailPipeline = nullptr;
+    } else {
+        // Propagate query context to trail pipeline
+        if (m_queryContext) {
+            m_trailPipeline->setQueryContext(m_queryContext);
+        }
+        qInfo() << "[DEV][MINIMAP] TrailPipeline created for minimap/bigmap trails";
+    }
 
     // Allocate QImage render target
     m_renderImage = QImage(initW, initH, QImage::Format_ARGB32_Premultiplied);
@@ -432,6 +593,7 @@ bool ChildMinimap::ensureD3D11()
 
     qInfo() << "[DEV][MINIMAP] Lazy D3D11 init COMPLETE:"
             << "sharedTex:" << (m_sharedTexture != nullptr)
+            << "trailPipeline:" << (m_trailPipeline != nullptr)
             << "size:" << initW << "x" << initH;
     return true;
 }
@@ -465,17 +627,25 @@ void ChildMinimap::onFocusChanged(bool focused)
             << "renderingEnabled:" << shouldRender;
 
     if (focused) {
-        // Phase 5.5C: Recreate D3D11 device on focus gain
-        if (!m_d3dInitialized && isInGame()) {
-            qInfo() << "[DEV][MINIMAP] Focus gained — creating D3D11 device";
-            if (!ensureD3D11()) {
-                qWarning() << "[DEV][MINIMAP] D3D11 init failed on focus gain"
-                           << "— will retry on next focus gain";
+        // Recreate shared resources on focus gain
+        if (isInGame()) {
+            if (!m_d3dInitialized) {
+                // First time: full init (device + pipeline + shared resources)
+                qInfo() << "[DEV][MINIMAP] Focus gained — creating D3D11 device";
+                if (!ensureD3D11()) {
+                    qWarning() << "[DEV][MINIMAP] D3D11 init failed on focus gain"
+                               << "— will retry on next focus gain";
+                }
+            } else if (!m_sharedTexture) {
+                // Fast path: device + pipeline exist, just recreate shared resources
+                qInfo() << "[DEV][MINIMAP] Focus gained — recreating shared resources";
+                ensureD3D11();  // Will skip device/pipeline creation, only shared
             }
         }
     } else {
-        // Phase 5.5C: Full device destruction on unfocus
-        teardownD3D11();
+        // Light teardown: only shared texture + intermediate RT
+        // Device + TrailPipeline persist (avoid shader recompilation)
+        teardownSharedResources();
     }
 
     if (m_minimapRenderer) {

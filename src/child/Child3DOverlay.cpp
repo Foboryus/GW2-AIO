@@ -652,12 +652,9 @@ void Child3DOverlay::render()
     if (m_markerSettings) {
         float maxDist = static_cast<float>(m_markerSettings->maxRenderDistance());
         float overlayOpacity = static_cast<float>(m_markerSettings->overlayOpacity());
-        float minimapOpacity = static_cast<float>(m_markerSettings->minimapOpacity());
 
         bool mainOn = m_markerSettings->renderingEnabled();
         bool show3d = mainOn && m_markerSettings->render3dEnabled();
-        bool showMinimap = mainOn && m_markerSettings->renderMinimapEnabled();
-        bool showBigMap = mainOn && m_markerSettings->renderBigMapEnabled();
 
         if (m_markerPipeline) {
             m_markerPipeline->setShowMarkers(show3d);
@@ -676,12 +673,7 @@ void Child3DOverlay::render()
         }
         if (m_trailPipeline) {
             m_trailPipeline->setShowTrails(show3d);
-            m_trailPipeline->setShowMinimap(showMinimap);
-            m_trailPipeline->setShowBigMap(showBigMap);
-            m_trailPipeline->setMinimapTrailWidth(
-                m_markerSettings->minimapTrailWidth());
             m_trailPipeline->setOpacity(overlayOpacity);
-            m_trailPipeline->setMinimapOpacity(minimapOpacity);
         }
     }
 
@@ -700,10 +692,7 @@ void Child3DOverlay::render()
         m_markerPipeline->render();
     }
 
-    // 3. Minimap/bigmap trails
-    if (m_trailPipeline) {
-        m_trailPipeline->renderMinimap();
-    }
+    // Minimap/bigmap trails are rendered by ChildMinimap (Phase 5.9.1)
 
     m_d3dContext->endFrame();
 }

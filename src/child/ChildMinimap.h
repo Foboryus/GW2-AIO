@@ -4,17 +4,23 @@
  * @file ChildMinimap.h
  * @brief Minimap child process — renders minimap markers + trails
  *
- * Owns: MinimapRenderer (QPainter 2D → QImage), SharedTextureProducer,
- *       MarkerManager, MarkerSettingsManager, ImageCache
+ * Owns: MinimapRenderer (QPainter 2D → QImage), TrailPipeline (GPU minimap/
+ *       bigmap trails), SharedTextureProducer, MarkerManager,
+ *       MarkerSettingsManager, ImageCache
  *
- * Architecture: MinimapRenderer paints to a QImage via renderToImage().
- * The QImage is uploaded to a SharedTexture (D3D11) which the compositor
- * samples and composites into the overlay. No OverlayWindow needed.
+ * Architecture (Phase 5.9.1):
+ * 1. MinimapRenderer paints 2D markers/dots to a QImage via renderToImage()
+ * 2. QImage is uploaded to an intermediate D3D11 render target
+ * 3. TrailPipeline renders GPU minimap/bigmap trails on top of the markers
+ * 4. Intermediate RT is copied to SharedTexture for compositor sampling
  *
- * GPU footprint: Uses a BARE D3D11 device (no blend states, no rasterizer,
- * no render targets) — only enough for SharedTextureProducer + UpdateSubresource.
- * This minimizes GPU memory to avoid D3D11CreateDevice E_OUTOFMEMORY when
- * running 5 profiles with multiple children each.
+ * This child owns ALL minimap/bigmap rendering — both QPainter markers
+ * and GPU trails. The 3D child (Child3DOverlay) only handles 3D world
+ * rendering. This ensures minimap continues working when 3D is toggled off.
+ *
+ * GPU footprint: Uses D3D11Context::initializeOffscreen() (device + blend
+ * states + rasterizer, no swap chain). Heavier than the old bare device
+ * but necessary for TrailPipeline shader rendering.
  */
 
 #include "ChildProcess.h"
@@ -27,11 +33,13 @@
 #include <d3d11_1.h>
 #include <QImage>
 
+class D3D11Context;
 class ImageCache;
 class MarkerManager;
 class MarkerSettingsManager;
 class MinimapRenderer;
 class SharedTextureProducer;
+class TrailPipeline;
 struct MarkerQueryContext;
 
 using Microsoft::WRL::ComPtr;
@@ -66,14 +74,19 @@ private:
   HWND m_gw2Hwnd = nullptr;
   bool findGW2Window();
   bool ensureD3D11();  ///< Lazy device init — called on first map entry or focus gain
-  void teardownD3D11();  ///< Inverse of ensureD3D11 — destroys GPU resources on unfocus
+  void teardownD3D11();  ///< Full teardown — destroys ALL GPU resources (shutdown only)
+  void teardownSharedResources();  ///< Light teardown — shared texture + intermediate RT (unfocus)
 
-  // --- Bare D3D11 device (no D3D11Context — saves GPU memory) ---
-  ComPtr<ID3D11Device> m_device;
-  ComPtr<ID3D11DeviceContext> m_deviceContext;
+  // --- D3D11 context (offscreen — no window, no swap chain) ---
+  D3D11Context *m_d3dContext = nullptr;
+
+  // --- Intermediate render target (QPainter upload + GPU trail composite) ---
+  ComPtr<ID3D11Texture2D> m_intermediateRT;
+  ComPtr<ID3D11RenderTargetView> m_intermediateRTV;
 
   // --- Rendering pipeline ---
   SharedTextureProducer *m_sharedTexture = nullptr;
+  TrailPipeline *m_trailPipeline = nullptr;
   QImage m_renderImage;  // QImage target for MinimapRenderer
   int m_gw2Width = 0;
   int m_gw2Height = 0;
