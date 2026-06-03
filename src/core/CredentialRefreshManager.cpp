@@ -25,11 +25,11 @@ QList<AccountProfile> CredentialRefreshManager::getStaleProfiles(
     const QList<AccountProfile> &profiles, int thresholdHours) const {
   QList<AccountProfile> stale;
   for (const auto &p : profiles) {
-    // Only standalone profiles with autoLogin need .dat refresh
-    // Steam/Epic use platform auth — no .dat file involved
+    // Only standalone profiles with a saved Local.dat need refresh.
+    // Steam/Epic use platform auth — no .dat file involved.
     if (p.accountProvider != AccountProvider::Standalone)
       continue;
-    if (!p.autoLogin || p.localDatPath.isEmpty())
+    if (p.localDatPath.isEmpty())
       continue;
 
     // Use AIO-tracked lastLoginTime (set on character select)
@@ -69,31 +69,23 @@ void CredentialRefreshManager::refreshProfiles(
   // Save multibox state for restore in finishRefresh()
   m_prevMultiBoxState = m_launchManager->multiBoxEnabled();
 
-  // If GW2 is already running, we MUST keep multibox enabled so that
-  // -shareArchive is added. Without it, GW2 can't open Gw2.dat (the running
-  // instance holds an exclusive lock) and the refresh launch hangs forever.
-  if (m_launchManager->isGW2Running()) {
-    qInfo() << "CredentialRefresh: GW2 already running — keeping multibox"
-               " enabled for -shareArchive";
-    m_launchManager->setMultiBoxEnabled(true);
-    // Close mutex so the refresh instance can start
-    m_launchManager->closeMutexForMultiBox();
-  } else {
-    // No GW2 running — disable multibox for solo refresh
-    // (allows exclusive .dat access for fastest update)
-    m_launchManager->setMultiBoxEnabled(false);
-  }
+  // Disable multibox for solo refresh — no -shareArchive.
+  // GW2 needs exclusive write access to Local.dat for credential update.
+  // The caller (LauncherWidget) ensures no other GW2 instances are running.
+  m_launchManager->setMultiBoxEnabled(false);
 
   // Connect signals for refresh tracking
   connect(m_launchManager, &LaunchManager::profileLaunched, this,
           &CredentialRefreshManager::onProfileLaunched);
-  connect(m_launchManager, &LaunchManager::profileLoaded, this,
-          &CredentialRefreshManager::onProfileLoaded);
+  connect(m_launchManager, &LaunchManager::profileCharacterSelectReached,
+          this, &CredentialRefreshManager::onProfileLoaded);
   connect(m_launchManager, &LaunchManager::gw2Exited, this,
           &CredentialRefreshManager::onProcessExited);
 
   // Junction approach: each profile folder is activated individually
   // No global backup needed before launching
+  // Prevent LaunchManager from auto-deactivating junction mid-refresh
+  m_launchManager->setExternalJunctionOwner(true);
 
   refreshNext();
 }
@@ -140,13 +132,15 @@ void CredentialRefreshManager::onProfileLaunched(const QString &profileId,
   qInfo() << "Refresh: profile launched with PID:" << pid;
 }
 
-void CredentialRefreshManager::onProfileLoaded(const QString &gw2Path) {
-  Q_UNUSED(gw2Path);
+void CredentialRefreshManager::onProfileLoaded(const QString &profileId) {
   if (!m_refreshing || !m_waitingForLoaded || m_currentPid == 0)
     return;
+  // Verify this is OUR profile's signal — not another running instance
+  if (profileId != m_currentProfileId)
+    return;
 
-  qInfo() << "Refresh: LOADED received for PID:" << m_currentPid
-          << "— .dat file updated, terminating GW2";
+  qInfo() << "Refresh: character select reached for" << profileId
+          << "PID:" << m_currentPid << "— .dat file updated, terminating GW2";
 
   m_waitingForLoaded = false;
   m_timeoutTimer->stop();
@@ -217,10 +211,13 @@ void CredentialRefreshManager::finishRefresh() {
   // Disconnect signals
   disconnect(m_launchManager, &LaunchManager::profileLaunched, this,
              &CredentialRefreshManager::onProfileLaunched);
-  disconnect(m_launchManager, &LaunchManager::profileLoaded, this,
-             &CredentialRefreshManager::onProfileLoaded);
+  disconnect(m_launchManager, &LaunchManager::profileCharacterSelectReached,
+             this, &CredentialRefreshManager::onProfileLoaded);
   disconnect(m_launchManager, &LaunchManager::gw2Exited, this,
              &CredentialRefreshManager::onProcessExited);
+
+  // Release junction ownership back to LaunchManager
+  m_launchManager->setExternalJunctionOwner(false);
 
   // Deactivate junction to restore original AppData
   if (m_localDatManager->isJunctionActive()) {

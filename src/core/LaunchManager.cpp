@@ -882,8 +882,13 @@ void LaunchManager::onProcessFinished(int exitCode,
     // === Deactivate junction when all instances close ===
     if (m_runningProcesses.isEmpty() && m_localDatManager &&
         m_localDatManager->isJunctionActive()) {
-      qInfo() << "All GW2 instances closed — deactivating junction";
-      m_localDatManager->deactivateProfile();
+      if (m_externalJunctionOwner) {
+        qInfo() << "All GW2 instances closed — junction owned by external"
+                   " manager, skipping auto-deactivation";
+      } else {
+        qInfo() << "All GW2 instances closed — deactivating junction";
+        m_localDatManager->deactivateProfile();
+      }
     }
   }
 }

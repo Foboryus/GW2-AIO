@@ -153,6 +153,15 @@ private:
   bool m_toggleDirectlyClicked = false;
 
   // Multibox guard: returns true if launch should proceed, false to abort
+  /**
+   * @brief Check if GW2 is running and offer to close all instances.
+   * @param reason Human-readable reason shown in dialog (e.g., "build update",
+   * "credential refresh")
+   * @return true if no GW2 running (or user agreed to close), false if user
+   * declined
+   */
+  bool ensureNoGW2Running(const QString &reason);
+
   bool checkMultiboxGuard(int profileCount);
 
   // Pre-flight credential refresh: returns true if launch should proceed

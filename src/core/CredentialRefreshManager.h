@@ -54,7 +54,7 @@ signals:
 
 private slots:
   void onProfileLaunched(const QString &profileId, qint64 pid);
-  void onProfileLoaded(const QString &gw2Path);
+  void onProfileLoaded(const QString &profileId);
   void onProcessExited(qint64 pid, int exitCode);
   void onTimeout();
 

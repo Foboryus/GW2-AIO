@@ -171,6 +171,12 @@ public:
    */
   void setWindowTitle(qint64 pid, const QString &profileName);
 
+  /**
+   * @brief Set when an external manager (e.g., CredentialRefreshManager) owns
+   * the junction lifecycle. Prevents auto-deactivation in onProcessFinished.
+   */
+  void setExternalJunctionOwner(bool owned) { m_externalJunctionOwner = owned; }
+
 signals:
   void gw2PathChanged();
   void multiBoxEnabledChanged();
@@ -238,6 +244,7 @@ private:
   QMap<QProcess *, qint64> m_processPids; // Store actual PIDs
   QMap<qint64, HANDLE> m_processHandles; // Store process handles for monitoring
   bool m_multiBoxEnabled = true;
+  bool m_externalJunctionOwner = false; // When true, skip auto-deactivation
   int m_instanceCounter = 0;
 
   MutexManager *m_mutexManager = nullptr;

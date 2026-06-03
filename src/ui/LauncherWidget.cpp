@@ -1309,17 +1309,52 @@ void LauncherWidget::onLaunchSelected() {
   if (!checkMultiboxGuard(profilesToLaunch))
     return;
 
-  // --- Pre-flight credential refresh ---
-  if (m_multiBoxToggle->isChecked() && profilesToLaunch > 0) {
-    // Collect profiles being launched for staleness check
-    QList<AccountProfile> launchingProfiles;
-    for (const QString &id : selectedIds) {
-      AccountProfile *p = m_profileManager->profile(id);
-      if (p && !m_profileManager->isProfileRunning(id))
-        launchingProfiles.append(*p);
+  // Collect profiles being launched (reused by multiple phases)
+  QList<AccountProfile> launchingProfiles;
+  for (const QString &id : selectedIds) {
+    AccountProfile *p = m_profileManager->profile(id);
+    if (p && !m_profileManager->isProfileRunning(id))
+      launchingProfiles.append(*p);
+  }
+
+  // === PHASE 0: GW2 RUNNING CHECK ===
+  // Before any updates or refreshes, ensure no GW2 instances are running.
+  // Both build updates and credential refresh require exclusive file access.
+  {
+    bool needsUpdate = false;
+    bool needsRefresh = false;
+
+    // Check if any profile needs build update
+    auto *um = m_dataService->updateManager();
+    int remoteBuild = (um ? um->remoteBuildId() : 0);
+    if (remoteBuild > 0) {
+      for (const auto &p : launchingProfiles) {
+        if (p.accountProvider == AccountProvider::Standalone &&
+            p.lastVerifiedBuild != remoteBuild) {
+          needsUpdate = true;
+          break;
+        }
+      }
     }
-    if (!runPreFlightRefresh(launchingProfiles))
-      return;
+
+    // Check if any standalone profile needs credential refresh
+    if (m_credRefreshMgr && m_multiBoxToggle->isChecked()) {
+      auto stale = m_credRefreshMgr->getStaleProfiles(launchingProfiles);
+      needsRefresh = !stale.isEmpty();
+    }
+
+    if ((needsUpdate || needsRefresh) && m_launchManager->isGW2Running()) {
+      QString reason;
+      if (needsUpdate && needsRefresh)
+        reason = "build update and credential refresh";
+      else if (needsUpdate)
+        reason = "build update";
+      else
+        reason = "credential refresh";
+
+      if (!ensureNoGW2Running(reason))
+        return; // User declined — abort launch
+    }
   }
 
   // Collect all unique GW2 paths from selected profiles
@@ -1343,6 +1378,7 @@ void LauncherWidget::onLaunchSelected() {
     uniquePaths.insert(effectivePath);
   }
 
+  // === PHASE 1: BUILD UPDATES (highest priority) ===
   // Pre-launch GW2 build check for EACH unique path
   QWidget *parentWindow = window();
   if (parentWindow) {
@@ -1359,17 +1395,21 @@ void LauncherWidget::onLaunchSelected() {
     }
   }
 
-  // --- Pre-launch batch build update ---
-  // All profiles needing build updates are refreshed BEFORE any launches.
-  // Phase 1 (-image) deduped by path, Phase 2 (Local.dat refresh) per profile.
+  // Batch build update — all profiles needing updates are refreshed BEFORE
+  // any launches. Phase 1 (-image) deduped by path, Phase 2 (Local.dat
+  // refresh) per profile.
   {
-    QList<AccountProfile> batchProfiles;
-    for (const QString &id : selectedIds) {
-      AccountProfile *p = m_profileManager->profile(id);
-      if (p && !m_profileManager->isProfileRunning(id))
-        batchProfiles.append(*p);
-    }
+    QList<AccountProfile> batchProfiles = launchingProfiles;
     if (!runBatchBuildUpdate(batchProfiles))
+      return;
+  }
+
+  // === PHASE 2: CREDENTIAL REFRESH (after updates) ===
+  // If ANY standalone profile is stale, refresh ALL standalone profiles
+  // in the launch set. This prevents the gap where some launch with
+  // -shareArchive before being refreshed.
+  if (m_multiBoxToggle->isChecked() && profilesToLaunch > 0) {
+    if (!runPreFlightRefresh(launchingProfiles))
       return;
   }
 
@@ -1651,15 +1691,47 @@ void LauncherWidget::onLaunchAll() {
   if (!checkMultiboxGuard(profilesToLaunch))
     return;
 
-  // --- Pre-flight credential refresh ---
-  if (m_multiBoxToggle->isChecked() && profilesToLaunch > 0) {
-    QList<AccountProfile> launchingProfiles;
-    for (const AccountProfile &p : profiles) {
-      if (!m_profileManager->isProfileRunning(p.id))
-        launchingProfiles.append(p);
+  // Collect profiles being launched (reused by multiple phases)
+  QList<AccountProfile> launchingProfiles;
+  for (const AccountProfile &p : profiles) {
+    if (!m_profileManager->isProfileRunning(p.id))
+      launchingProfiles.append(p);
+  }
+
+  // === PHASE 0: GW2 RUNNING CHECK ===
+  {
+    bool needsUpdate = false;
+    bool needsRefresh = false;
+
+    auto *um = m_dataService->updateManager();
+    int remoteBuild = (um ? um->remoteBuildId() : 0);
+    if (remoteBuild > 0) {
+      for (const auto &p : launchingProfiles) {
+        if (p.accountProvider == AccountProvider::Standalone &&
+            p.lastVerifiedBuild != remoteBuild) {
+          needsUpdate = true;
+          break;
+        }
+      }
     }
-    if (!runPreFlightRefresh(launchingProfiles))
-      return;
+
+    if (m_credRefreshMgr && m_multiBoxToggle->isChecked()) {
+      auto stale = m_credRefreshMgr->getStaleProfiles(launchingProfiles);
+      needsRefresh = !stale.isEmpty();
+    }
+
+    if ((needsUpdate || needsRefresh) && m_launchManager->isGW2Running()) {
+      QString reason;
+      if (needsUpdate && needsRefresh)
+        reason = "build update and credential refresh";
+      else if (needsUpdate)
+        reason = "build update";
+      else
+        reason = "credential refresh";
+
+      if (!ensureNoGW2Running(reason))
+        return;
+    }
   }
 
   // Collect all unique GW2 paths from ALL profiles
@@ -1676,6 +1748,7 @@ void LauncherWidget::onLaunchAll() {
     uniquePaths.insert(effectivePath);
   }
 
+  // === PHASE 1: BUILD UPDATES (highest priority) ===
   // Pre-launch GW2 build check for EACH unique path
   QWidget *parentWindow = window();
   if (parentWindow) {
@@ -1693,15 +1766,16 @@ void LauncherWidget::onLaunchAll() {
     }
   }
 
-  // --- Pre-launch batch build update ---
-  // All profiles needing build updates are refreshed BEFORE any launches.
+  // Batch build update — all profiles needing updates
   {
-    QList<AccountProfile> batchProfiles;
-    for (const AccountProfile &p : profiles) {
-      if (!m_profileManager->isProfileRunning(p.id))
-        batchProfiles.append(p);
-    }
+    QList<AccountProfile> batchProfiles = launchingProfiles;
     if (!runBatchBuildUpdate(batchProfiles))
+      return;
+  }
+
+  // === PHASE 2: CREDENTIAL REFRESH (after updates) ===
+  if (m_multiBoxToggle->isChecked() && profilesToLaunch > 0) {
+    if (!runPreFlightRefresh(launchingProfiles))
       return;
   }
 
@@ -2689,6 +2763,94 @@ void LauncherWidget::onImportProfile() {
   }
 }
 
+bool LauncherWidget::ensureNoGW2Running(const QString &reason) {
+  if (!m_launchManager->isGW2Running())
+    return true; // No GW2 running — proceed
+
+  qInfo() << "ensureNoGW2Running: GW2 is running — asking user to close"
+          << "(reason:" << reason << ")";
+
+  auto *dlg = UIHelpers::createStyledDialog(this, 440);
+  auto *ol = new QVBoxLayout(dlg);
+  ol->setContentsMargins(0, 0, 0, 0);
+  auto *bg = new QWidget();
+  UIHelpers::applyPopupBackgroundRole(bg);
+  ol->addWidget(bg);
+  auto *ly = new QVBoxLayout(bg);
+  ly->setContentsMargins(20, 16, 20, 20);
+
+  auto *title = UIHelpers::createTitleBar(
+      bg, "GW2 Must Be Closed", "alert-yellow",
+      [dlg]() { dlg->reject(); });
+  ly->addWidget(title);
+
+  auto *ct = UIHelpers::createMessageContainer(bg);
+  auto *cl = qobject_cast<QVBoxLayout *>(ct->layout());
+  auto *msg = UIHelpers::createLabel(
+      ct,
+      QString("A %1 is required before launching.\n\n"
+              "All running GW2 instances must be closed first.\n"
+              "AIO will close them automatically.")
+          .arg(reason));
+  msg->setAlignment(Qt::AlignCenter);
+  msg->setWordWrap(true);
+  cl->addWidget(msg);
+  ly->addWidget(ct);
+
+  ly->addSpacing(8);
+
+  auto *btnLay = new QHBoxLayout();
+  auto *skipBtn = new QPushButton("Skip " + reason);
+  skipBtn->setMinimumHeight(36);
+  UIHelpers::applyCancelStyle(skipBtn);
+  connect(skipBtn, &QPushButton::clicked, dlg, &QDialog::reject);
+  btnLay->addWidget(skipBtn);
+
+  auto *closeBtn = new QPushButton("Close GW2 && Continue");
+  closeBtn->setMinimumHeight(36);
+  UIHelpers::applyConfirmStyle(closeBtn);
+  connect(closeBtn, &QPushButton::clicked, dlg, &QDialog::accept);
+  btnLay->addWidget(closeBtn);
+  ly->addLayout(btnLay);
+
+  UIHelpers::centerDialog(dlg);
+  int result = dlg->exec();
+  dlg->deleteLater();
+
+  if (result != QDialog::Accepted) {
+    qInfo() << "ensureNoGW2Running: user chose to skip" << reason;
+    return false;
+  }
+
+  // Terminate all running GW2 instances
+  qInfo() << "ensureNoGW2Running: user agreed — terminating all GW2 instances";
+  QList<qint64> pids = m_launchManager->getRunningGW2Pids();
+  for (qint64 pid : pids) {
+#ifdef Q_OS_WIN
+    HANDLE hProc =
+        OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE,
+                    static_cast<DWORD>(pid));
+    if (hProc) {
+      m_launchManager->markDeliberatelyKilled(pid);
+      TerminateProcess(hProc, 0);
+      WaitForSingleObject(hProc, 5000);
+      CloseHandle(hProc);
+      qInfo() << "ensureNoGW2Running: terminated PID:" << pid;
+    }
+#endif
+  }
+
+  // Brief pause for cleanup
+  QThread::msleep(1000);
+
+  if (m_launchManager->isGW2Running()) {
+    qWarning() << "ensureNoGW2Running: some instances still running after"
+                  " termination — proceeding anyway";
+  }
+
+  return true;
+}
+
 bool LauncherWidget::checkMultiboxGuard(int profileCount) {
   if (profileCount <= 1 || m_multiBoxToggle->isChecked())
     return true; // Single profile or multibox ON — OK to proceed
@@ -2759,36 +2921,28 @@ bool LauncherWidget::runPreFlightRefresh(
   if (stale.isEmpty())
     return true; // All fresh — proceed
 
-  qInfo() << "Pre-flight: detected" << stale.size()
-          << "stale profiles, starting refresh";
-
-  // Build check: ensure GW2 is up-to-date before refreshing credentials.
-  // Without this, GW2 launches into "pending download" error and wastes time.
-  QWidget *parentWindow = window();
-  if (parentWindow) {
-    QSet<QString> checkedPaths;
-    for (const auto &p : stale) {
-      QString effectivePath =
-          LaunchManager::getEffectiveGw2Path(p, m_gw2Path);
-      if (effectivePath.endsWith(".exe", Qt::CaseInsensitive)) {
-        QFileInfo fi(effectivePath);
-        effectivePath = fi.absolutePath();
-      }
-      if (checkedPaths.contains(effectivePath))
-        continue;
-      checkedPaths.insert(effectivePath);
-
-      bool okToProceed = true;
-      QMetaObject::invokeMethod(
-          parentWindow, "checkGW2BuildBeforeLaunch", Qt::DirectConnection,
-          Q_RETURN_ARG(bool, okToProceed), Q_ARG(QString, effectivePath));
-      if (!okToProceed) {
-        qInfo() << "Pre-flight refresh blocked - update needed for"
-                << effectivePath;
-        return false;
-      }
+  // If ANY standalone profile is stale, refresh ALL standalone profiles
+  // in the launch set. This prevents the scenario where Profile A gets
+  // refreshed but Profile B (barely under threshold) launches with
+  // -shareArchive and stale credentials.
+  QList<AccountProfile> toRefresh;
+  for (const auto &p : profiles) {
+    if (p.accountProvider == AccountProvider::Standalone &&
+        !p.localDatPath.isEmpty()) {
+      toRefresh.append(p);
     }
   }
+
+  if (toRefresh.isEmpty())
+    return true; // No standalone profiles to refresh
+
+  qInfo() << "Pre-flight: detected" << stale.size()
+          << "stale profiles — refreshing ALL" << toRefresh.size()
+          << "standalone profiles";
+
+  // GW2 close check is handled by ensureNoGW2Running() in Phase 0.
+  // Build check is handled by Phase 1 (batch build update).
+  // At this point, GW2 should already be closed and builds up-to-date.
 
   // Create progress dialog
   auto *d = UIHelpers::createStyledDialog(this, 420);
@@ -2861,7 +3015,7 @@ bool LauncherWidget::runPreFlightRefresh(
   UIHelpers::centerDialog(d);
 
   // Start refresh
-  m_credRefreshMgr->refreshProfiles(stale);
+  m_credRefreshMgr->refreshProfiles(toRefresh);
 
   // Block until refresh completes or is cancelled
   int result = d->exec();
