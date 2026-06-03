@@ -77,19 +77,41 @@ int main(int argc, char *argv[]) {
 #ifdef Q_OS_WIN
   HANDLE hMutex = CreateMutexW(nullptr, TRUE, L"GW2AIO_SingleInstance_Mutex");
   if (GetLastError() == ERROR_ALREADY_EXISTS) {
-    // Another instance is running - try to bring it to foreground
+    // Mutex exists — either a live instance or a stale mutex from a
+    // force-killed process. Try to find the existing window first.
     HWND existingWindow = FindWindowW(nullptr, L"GW2 AIO Manager");
     if (existingWindow) {
-      // Restore minimized/hidden window and bring to front
+      // Live instance found — bring it to foreground
       ShowWindow(existingWindow, SW_SHOW);
       ShowWindow(existingWindow, SW_RESTORE);
       SetForegroundWindow(existingWindow);
-      // Force repaint to avoid white window
       InvalidateRect(existingWindow, nullptr, TRUE);
       UpdateWindow(existingWindow);
+      CloseHandle(hMutex);
+      return 0;
     }
-    CloseHandle(hMutex);
-    return 0;
+
+    // No window found — likely a stale mutex from a killed process.
+    // Use WaitForSingleObject: the OS signals WAIT_ABANDONED the instant
+    // the dead process's mutex is cleaned up. Event-driven, no polling.
+    DWORD waitResult = WaitForSingleObject(hMutex, 3000);
+    if (waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED) {
+      // Mutex acquired — previous owner exited (WAIT_ABANDONED) or
+      // released normally (WAIT_OBJECT_0). Proceed with startup.
+    } else {
+      // WAIT_TIMEOUT or WAIT_FAILED — genuinely locked or error.
+      // Check one more time for a window that appeared during wait.
+      existingWindow = FindWindowW(nullptr, L"GW2 AIO Manager");
+      if (existingWindow) {
+        ShowWindow(existingWindow, SW_SHOW);
+        ShowWindow(existingWindow, SW_RESTORE);
+        SetForegroundWindow(existingWindow);
+        InvalidateRect(existingWindow, nullptr, TRUE);
+        UpdateWindow(existingWindow);
+      }
+      CloseHandle(hMutex);
+      return 0;
+    }
   }
 #else
   // Cross-platform fallback using shared memory
