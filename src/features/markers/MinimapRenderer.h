@@ -63,7 +63,6 @@ public:
   void setMinimapMarkerScale(float scale);
   void setMinimapMarkerOpacity(float opacity);
   void setShouldBeVisible(bool visible);
-  void setInCombat(bool combat);
   void setRenderingEnabled(bool enabled);
 
   /// Per-instance query context (Phase 7a) — null = use shared state
@@ -136,14 +135,8 @@ private:
   // Map state tracking (for fade on M key)
   bool m_lastMapOpen = false;
 
-  // Combat state (red border indicator, not hide)
-  bool m_inCombat = false;
-
   // Frame guard: cap minimap repaints at ~60fps (16ms)
   qint64 m_lastPaintMs = 0;
-
-  // Smoothed facing angle for player indicator arrow (exponential lerp)
-  qreal m_smoothedFacingAngle = 0.0;
 
   // Per-instance query context (Phase 7a) — not owned
   const MarkerQueryContext *m_queryCtx = nullptr;

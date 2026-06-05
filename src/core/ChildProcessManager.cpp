@@ -14,6 +14,7 @@
 #include "core/OverlayInstance.h"
 #include "core/OverlayInstanceManager.h"
 #include "core/RadialSettingsManager.h"
+#include "core/ThemeManager.h"
 #include "features/markers/MarkerSettingsManager.h"
 
 #include <QCoreApplication>
@@ -48,6 +49,10 @@ ChildProcessManager::ChildProcessManager(LaunchManager *launchManager,
     // Spawn children when game reaches character select (LOADED signal)
     connect(m_launchManager, &LaunchManager::profileCharacterSelectReached,
             this, &ChildProcessManager::onProfileWindowConfirmed);
+
+    // Send theme to compositor(s) when theme changes
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, [this]() { sendThemeToCompositors(); });
 
     // Terminate children when GW2 exits
     connect(m_launchManager, &LaunchManager::profileExited,
@@ -213,8 +218,7 @@ void ChildProcessManager::spawnChildren(const QString &profileId,
 
     const QList<FeatureToggle> features = {
         {QStringLiteral("3d"),      mainOn && settings.render3dEnabled()},
-        {QStringLiteral("minimap"), mainOn && settings.renderMinimapEnabled()},
-        {QStringLiteral("bigmap"),  mainOn && settings.renderBigMapEnabled()},
+        {QStringLiteral("map"),     mainOn && settings.renderMapEnabled()},
         {QStringLiteral("radial"),  mainOn && radialSettings.settings().radialEnabled},
         {QStringLiteral("overlay"), true},  // Always spawn — overlay HUD menu
     };
@@ -467,6 +471,7 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
     // 2-second debounced save, causing stale reads and spurious child kills.
     bool renderingEnabled = true;
     bool render3dEnabled = true;
+    bool renderMapEnabled = true;
     bool renderMinimapEnabled = true;
     bool renderBigMapEnabled = true;
 
@@ -476,6 +481,7 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
             auto *ms = inst->markerSettings();
             renderingEnabled     = ms->renderingEnabled();
             render3dEnabled      = ms->render3dEnabled();
+            renderMapEnabled     = ms->renderMapEnabled();
             renderMinimapEnabled = ms->renderMinimapEnabled();
             renderBigMapEnabled  = ms->renderBigMapEnabled();
         }
@@ -486,6 +492,7 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
         settings.loadForProfile(profileId);
         renderingEnabled     = settings.renderingEnabled();
         render3dEnabled      = settings.render3dEnabled();
+        renderMapEnabled     = settings.renderMapEnabled();
         renderMinimapEnabled = settings.renderMinimapEnabled();
         renderBigMapEnabled  = settings.renderBigMapEnabled();
     }
@@ -504,8 +511,7 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
     const QList<FeatureToggle> featureToggles = {
         {QStringLiteral("compositor"), true},  // Compositor — always on
         {QStringLiteral("3d"),      renderingEnabled && render3dEnabled},
-        {QStringLiteral("minimap"), renderingEnabled && renderMinimapEnabled},
-        {QStringLiteral("bigmap"),  renderingEnabled && renderBigMapEnabled},
+        {QStringLiteral("map"),     renderingEnabled && renderMapEnabled},
         {QStringLiteral("radial"),  renderingEnabled && radialSettings.settings().radialEnabled},
         // Overlay is ALWAYS ON — it's the control panel. Never kill it.
         // Users need it to re-enable rendering if they disabled it.
@@ -537,6 +543,7 @@ void ChildProcessManager::syncFeatureToggles(const QString &profileId)
         QJsonObject togglePayload;
         togglePayload[QStringLiteral("renderingEnabled")]     = renderingEnabled;
         togglePayload[QStringLiteral("render3dEnabled")]      = render3dEnabled;
+        togglePayload[QStringLiteral("renderMapEnabled")]     = renderMapEnabled;
         togglePayload[QStringLiteral("renderMinimapEnabled")] = renderMinimapEnabled;
         togglePayload[QStringLiteral("renderBigMapEnabled")]  = renderBigMapEnabled;
 
@@ -985,6 +992,10 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
         int h = parts.size() > 2 ? parts[2].toInt() : 0;
         qInfo() << "[COMPOSITOR_LIFECYCLE] Compositor READY for" << profileId
                 << "— size:" << w << "x" << h;
+
+        // Send initial theme to compositor so it can color borders + loading bar
+        sendThemeToChild(profileId, QStringLiteral("compositor"));
+
         // Spawn queue: compositor is ready — spawn the next feature child
         processSpawnQueue();
 
@@ -1156,4 +1167,62 @@ bool ChildProcessManager::spawnChild(const QString &profileId,
 
     emit childSpawned(profileId, featureKey);
     return true;
+}
+
+// ============================================================================
+// Theme IPC — send theme colors to compositor(s)
+// ============================================================================
+
+QJsonObject ChildProcessManager::buildThemeJson() const
+{
+    const auto &theme = ThemeManager::instance().activeTheme();
+    QJsonObject obj;
+    // Border colors (minimap/bigmap border, player indicator)
+    obj[QStringLiteral("panelBorder")] = theme.overlay.panelBorder;
+    obj[QStringLiteral("error")]       = theme.colors.error;
+    // Loading bar colors
+    obj[QStringLiteral("windowBg")]    = theme.colors.windowBg;
+    obj[QStringLiteral("windowSurface")] = theme.colors.windowSurface;
+    obj[QStringLiteral("textPrimary")] = theme.colors.textPrimary;
+    obj[QStringLiteral("iconColor")]   = theme.colors.iconColor;
+    return obj;
+}
+
+void ChildProcessManager::sendThemeToChild(const QString &profileId,
+                                            const QString &featureKey)
+{
+    if (!m_children.contains(profileId)) return;
+
+    QJsonDocument doc(buildThemeJson());
+    QByteArray msg = "THEME\n" + doc.toJson(QJsonDocument::Compact);
+
+    for (auto &child : m_children[profileId]) {
+        if (child.featureKey == featureKey &&
+            child.pipeHandle != INVALID_HANDLE_VALUE) {
+            DWORD written = 0;
+            WriteFile(child.pipeHandle, msg.constData(),
+                      static_cast<DWORD>(msg.size()), &written, nullptr);
+            qInfo() << "[THEME_IPC] Sent THEME to" << featureKey
+                    << "for" << profileId;
+        }
+    }
+}
+
+void ChildProcessManager::sendThemeToCompositors()
+{
+    QJsonDocument doc(buildThemeJson());
+    QByteArray msg = "THEME\n" + doc.toJson(QJsonDocument::Compact);
+
+    for (auto it = m_children.begin(); it != m_children.end(); ++it) {
+        for (auto &child : it.value()) {
+            if (child.featureKey == QLatin1String("compositor") &&
+                child.pipeHandle != INVALID_HANDLE_VALUE) {
+                DWORD written = 0;
+                WriteFile(child.pipeHandle, msg.constData(),
+                          static_cast<DWORD>(msg.size()), &written, nullptr);
+                qInfo() << "[THEME_IPC] Sent THEME to compositor for"
+                        << it.key();
+            }
+        }
+    }
 }

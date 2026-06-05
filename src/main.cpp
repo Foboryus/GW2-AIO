@@ -341,6 +341,13 @@ int main(int argc, char *argv[]) {
   // Reconnect: if GW2 is already running (AIO restarted), spawn children now
   childProcessManager.spawnForRunningProfiles();
 
+  // Wire Profile Editor radial settings → live push to running radial child.
+  // When the user imports keybinds or changes radial settings in the Profile
+  // Editor, this connection pushes the updated settings to the running child
+  // process so changes take effect immediately without restarting AIO/GW2.
+  QObject::connect(&dataService, &DataService::radialSettingsPushRequested,
+                   &childProcessManager, &ChildProcessManager::pushSettings);
+
   // Wire dynamic MumbleLink switching: non-overlay controllers switch their
   // data source instantly when a different GW2 instance gains focus.
   QObject::connect(&overlayManager, &OverlayInstanceManager::focusedMumbleLinkChanged,

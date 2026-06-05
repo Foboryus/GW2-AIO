@@ -9,13 +9,18 @@
 
 #include "RadialTabWidget.h"
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeySequenceEdit>
 #include <QLabel>
+#include <QPushButton>
 #include <QScrollArea>
+#include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
 #include <QTableWidget>
@@ -23,6 +28,7 @@
 
 #include "core/DataService.h"
 #include "core/ProfileManager.h" // For AccountProfile
+#include "core/Gw2KeybindParser.h"
 #include "core/RadialSettings.h"
 #include "core/RadialSettingsManager.h"
 #include "ui/ToggleSwitch.h"
@@ -39,24 +45,98 @@ RadialTabWidget::RadialTabWidget(AccountProfile &profile,
 // VK ↔ QKeySequence Conversion Helpers
 // ============================================================================
 
-// Convert VK code + modifier flags to a QKeySequence for display in UI.
-// For A-Z and 0-9, Qt::Key values equal Windows VK codes (0x41-0x5A, 0x30-0x39).
+// clang-format off
+// Windows VK code → Qt::Key mapping for keys that don't map directly.
+// A-Z (0x41-0x5A) and 0-9 (0x30-0x39) map 1:1 and are handled as fallthrough.
+static const QMap<int, int> &vkToQtKeyMap() {
+  static const QMap<int, int> map = {
+      // Numpad 0-9: VK 0x60-0x69 → Qt has no dedicated numpad keys,
+      // map to digit keys (Qt::Key_0 - Qt::Key_9) with KeypadModifier added
+      {0x60, Qt::Key_0}, {0x61, Qt::Key_1}, {0x62, Qt::Key_2},
+      {0x63, Qt::Key_3}, {0x64, Qt::Key_4}, {0x65, Qt::Key_5},
+      {0x66, Qt::Key_6}, {0x67, Qt::Key_7}, {0x68, Qt::Key_8},
+      {0x69, Qt::Key_9},
+      // F1-F12: VK 0x70-0x7B → Qt::Key_F1 = 0x01000030
+      {0x70, Qt::Key_F1},  {0x71, Qt::Key_F2},  {0x72, Qt::Key_F3},
+      {0x73, Qt::Key_F4},  {0x74, Qt::Key_F5},  {0x75, Qt::Key_F6},
+      {0x76, Qt::Key_F7},  {0x77, Qt::Key_F8},  {0x78, Qt::Key_F9},
+      {0x79, Qt::Key_F10}, {0x7A, Qt::Key_F11}, {0x7B, Qt::Key_F12},
+      // Navigation
+      {0x21, Qt::Key_PageUp},   {0x22, Qt::Key_PageDown},
+      {0x23, Qt::Key_End},      {0x24, Qt::Key_Home},
+      {0x25, Qt::Key_Left},     {0x26, Qt::Key_Up},
+      {0x27, Qt::Key_Right},    {0x28, Qt::Key_Down},
+      {0x2D, Qt::Key_Insert},   {0x2E, Qt::Key_Delete},
+      // Special
+      {0x08, Qt::Key_Backspace}, {0x09, Qt::Key_Tab},
+      {0x0D, Qt::Key_Return},   {0x1B, Qt::Key_Escape},
+      {0x20, Qt::Key_Space},    {0x14, Qt::Key_CapsLock},
+      {0x90, Qt::Key_NumLock},  {0x91, Qt::Key_ScrollLock},
+      {0x13, Qt::Key_Pause},    {0x2C, Qt::Key_Print},
+      // Numpad operators
+      {0x6A, Qt::Key_Asterisk}, {0x6B, Qt::Key_Plus},
+      {0x6D, Qt::Key_Minus},    {0x6E, Qt::Key_Period},
+      {0x6F, Qt::Key_Slash},
+      // OEM keys (US layout common)
+      {0xBA, Qt::Key_Semicolon}, {0xBB, Qt::Key_Equal},
+      {0xBC, Qt::Key_Comma},    {0xBD, Qt::Key_Minus},
+      {0xBE, Qt::Key_Period},   {0xBF, Qt::Key_Slash},
+      {0xC0, Qt::Key_QuoteLeft}, {0xDB, Qt::Key_BracketLeft},
+      {0xDC, Qt::Key_Backslash}, {0xDD, Qt::Key_BracketRight},
+      {0xDE, Qt::Key_Apostrophe},
+  };
+  return map;
+}
+
+// Reverse map: Qt::Key → VK code
+static const QMap<int, int> &qtKeyToVkMap() {
+  static QMap<int, int> map;
+  if (map.isEmpty()) {
+    const auto &fwd = vkToQtKeyMap();
+    for (auto it = fwd.begin(); it != fwd.end(); ++it) {
+      // For numpad digits, don't overwrite the digit→VK mapping
+      // (handled separately in keySequenceToVk via KeypadModifier)
+      if (it.key() >= 0x60 && it.key() <= 0x69)
+        continue;
+      map[it.value()] = it.key();
+    }
+  }
+  return map;
+}
+// clang-format on
+
+// Convert VK code + Qt modifier flags to a QKeySequence for display.
+// modifiers uses GW2 bitmask: 1=Alt, 2=Ctrl, 4=Shift
 static QKeySequence vkToKeySequence(int vk, int modifiers) {
   if (vk == 0) {
     return QKeySequence();
   }
-  int qtKey = vk; // Direct for A-Z, 0-9
+
   Qt::KeyboardModifiers qtMods;
-  if (modifiers & static_cast<int>(Qt::ControlModifier))
-    qtMods |= Qt::ControlModifier;
-  if (modifiers & static_cast<int>(Qt::ShiftModifier))
-    qtMods |= Qt::ShiftModifier;
-  if (modifiers & static_cast<int>(Qt::AltModifier))
+  if (modifiers & 1)
     qtMods |= Qt::AltModifier;
+  if (modifiers & 2)
+    qtMods |= Qt::ControlModifier;
+  if (modifiers & 4)
+    qtMods |= Qt::ShiftModifier;
+
+  int qtKey;
+  bool isNumpad = (vk >= 0x60 && vk <= 0x69);
+  if (vkToQtKeyMap().contains(vk)) {
+    qtKey = vkToQtKeyMap().value(vk);
+    if (isNumpad) {
+      qtMods |= Qt::KeypadModifier;
+    }
+  } else {
+    // Direct map for A-Z, 0-9
+    qtKey = vk;
+  }
+
   return QKeySequence(QKeyCombination(qtMods, static_cast<Qt::Key>(qtKey)));
 }
 
-// Convert a QKeySequence back to VK code + modifier flags.
+// Convert a QKeySequence back to VK code + GW2 modifier bitmask.
+// Output: outModifiers uses GW2 bitmask: 1=Alt, 2=Ctrl, 4=Shift
 static void keySequenceToVk(const QKeySequence &seq, int &outVk,
                             int &outModifiers) {
   if (seq.isEmpty()) {
@@ -65,8 +145,28 @@ static void keySequenceToVk(const QKeySequence &seq, int &outVk,
     return;
   }
   QKeyCombination combo = seq[0];
-  outVk = static_cast<int>(combo.key());
-  outModifiers = static_cast<int>(combo.keyboardModifiers());
+  int qtKey = static_cast<int>(combo.key());
+  Qt::KeyboardModifiers qtMods = combo.keyboardModifiers();
+
+  // Check if this is a numpad digit (KeypadModifier + Key_0..Key_9)
+  if ((qtMods & Qt::KeypadModifier) && qtKey >= Qt::Key_0 &&
+      qtKey <= Qt::Key_9) {
+    outVk = 0x60 + (qtKey - Qt::Key_0); // VK_NUMPAD0..9
+  } else if (qtKeyToVkMap().contains(qtKey)) {
+    outVk = qtKeyToVkMap().value(qtKey);
+  } else {
+    // Direct for A-Z, 0-9
+    outVk = qtKey;
+  }
+
+  // Convert Qt modifier flags → GW2 bitmask (1=Alt, 2=Ctrl, 4=Shift)
+  outModifiers = 0;
+  if (qtMods & Qt::AltModifier)
+    outModifiers |= 1;
+  if (qtMods & Qt::ControlModifier)
+    outModifiers |= 2;
+  if (qtMods & Qt::ShiftModifier)
+    outModifiers |= 4;
 }
 
 // ============================================================================
@@ -140,6 +240,30 @@ void RadialTabWidget::setupGeneralSection(QVBoxLayout *contentLayout) {
   styleRow->addStretch();
   layout->addLayout(styleRow);
 
+  // Detect GW2 Keybinds button row
+  auto *detectRow = new QHBoxLayout();
+  detectRow->setSpacing(8);
+  auto *detectBtn = new QPushButton("Detect GW2 Keybinds", group);
+  UIHelpers::applyRole(detectBtn, "primaryButton");
+  connect(detectBtn, &QPushButton::clicked, this,
+          &RadialTabWidget::detectGw2Keybinds);
+  detectRow->addWidget(detectBtn);
+
+  auto *browseBtn = new QPushButton("Browse...", group);
+  UIHelpers::applyRole(browseBtn, "neutralButton");
+  connect(browseBtn, &QPushButton::clicked, this,
+          &RadialTabWidget::browseGw2Keybinds);
+  detectRow->addWidget(browseBtn);
+
+  detectRow->addStretch();
+  layout->addLayout(detectRow);
+
+  // Status label for detect/browse results
+  m_detectStatusLabel = new QLabel("", group);
+  UIHelpers::applyRole(m_detectStatusLabel, "hintLabel");
+  m_detectStatusLabel->setWordWrap(true);
+  layout->addWidget(m_detectStatusLabel);
+
   contentLayout->addWidget(group);
 }
 
@@ -149,14 +273,17 @@ void RadialTabWidget::setupGeneralSection(QVBoxLayout *contentLayout) {
 
 QTableWidget *RadialTabWidget::createElementTable(
     const QMap<QString, QString> &labels) {
-  auto *table = new QTableWidget(labels.size(), 2);
-  table->setHorizontalHeaderLabels({"Element", "Enabled"});
+  auto *table = new QTableWidget(labels.size(), 3);
+  table->setHorizontalHeaderLabels({"Element", "GW2 Keybind", "Enabled"});
   table->horizontalHeader()->setStretchLastSection(false);
   table->horizontalHeader()->setSectionResizeMode(
       0, QHeaderView::Stretch);
   table->horizontalHeader()->setSectionResizeMode(
       1, QHeaderView::Fixed);
-  table->setColumnWidth(1, 80);
+  table->horizontalHeader()->setSectionResizeMode(
+      2, QHeaderView::Fixed);
+  table->setColumnWidth(1, 140);
+  table->setColumnWidth(2, 80);
   table->verticalHeader()->setVisible(false);
   table->setSelectionMode(QAbstractItemView::NoSelection);
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -171,24 +298,31 @@ QTableWidget *RadialTabWidget::createElementTable(
 
   int row = 0;
   for (auto it = labels.constBegin(); it != labels.constEnd(); ++it) {
-    // Name column
+    // Column 0: Name
     auto *nameItem = new QTableWidgetItem(it.value());
     nameItem->setData(Qt::UserRole, it.key()); // Store key for save
     table->setItem(row, 0, nameItem);
 
-    // Enabled column — ToggleSwitch for clear visual feedback
+    // Column 1: GW2 Keybind — QKeySequenceEdit captures one key
+    auto *keybindEdit = new QKeySequenceEdit();
+    keybindEdit->setMaximumSequenceLength(1);
+    UIHelpers::applyRole(keybindEdit, "input");
+    connect(keybindEdit, &QKeySequenceEdit::keySequenceChanged, this,
+            &RadialTabWidget::modified);
+    table->setCellWidget(row, 1, keybindEdit);
+
+    // Column 2: Enabled toggle
     auto *toggle = new ToggleSwitch();
     toggle->setChecked(true);
     connect(toggle, &ToggleSwitch::toggled, this,
             &RadialTabWidget::modified);
 
-    // Center the toggle in the cell
     auto *container = new QWidget();
     auto *hbox = new QHBoxLayout(container);
     hbox->setContentsMargins(0, 0, 0, 0);
     hbox->setAlignment(Qt::AlignCenter);
     hbox->addWidget(toggle);
-    table->setCellWidget(row, 1, container);
+    table->setCellWidget(row, 2, container);
 
     ++row;
   }
@@ -225,6 +359,15 @@ void RadialTabWidget::setupMountSection(QVBoxLayout *contentLayout) {
   mountHotkeyRow->addWidget(m_mountHotkeyEdit);
   mountHotkeyRow->addStretch();
   layout->addLayout(mountHotkeyRow);
+
+  // Hint: GW2 keybinds must match in-game settings
+  auto *keybindHint = new QLabel(
+      "Set each GW2 Keybind to match your in-game mount keybinds "
+      "(F11 \u2192 Control Options \u2192 Mounts).",
+      group);
+  UIHelpers::applyRole(keybindHint, "hintLabel");
+  keybindHint->setWordWrap(true);
+  layout->addWidget(keybindHint);
 
   // Mount element table
   QMap<QString, QString> mountLabels;
@@ -529,11 +672,22 @@ static void loadElementTable(QTableWidget *table,
       continue;
     QString key = nameItem->data(Qt::UserRole).toString();
     if (configs.contains(key)) {
-      auto *container = table->cellWidget(row, 1);
+      const auto &cfg = configs[key];
+
+      // Column 1: GW2 Keybind
+      auto *keybindEdit =
+          qobject_cast<QKeySequenceEdit *>(table->cellWidget(row, 1));
+      if (keybindEdit) {
+        keybindEdit->setKeySequence(
+            vkToKeySequence(cfg.scanCode, cfg.modifiers));
+      }
+
+      // Column 2: Enabled toggle
+      auto *container = table->cellWidget(row, 2);
       if (container) {
         auto *toggle = container->findChild<ToggleSwitch *>();
         if (toggle)
-          toggle->setChecked(configs[key].enabled);
+          toggle->setChecked(cfg.enabled);
       }
     }
   }
@@ -549,7 +703,18 @@ static QMap<QString, RadialElementConfig> saveElementTable(
       continue;
     QString key = nameItem->data(Qt::UserRole).toString();
     if (result.contains(key)) {
-      auto *container = table->cellWidget(row, 1);
+      // Column 1: GW2 Keybind
+      auto *keybindEdit =
+          qobject_cast<QKeySequenceEdit *>(table->cellWidget(row, 1));
+      if (keybindEdit) {
+        int vk = 0, mods = 0;
+        keySequenceToVk(keybindEdit->keySequence(), vk, mods);
+        result[key].scanCode = vk;
+        result[key].modifiers = mods;
+      }
+
+      // Column 2: Enabled toggle
+      auto *container = table->cellWidget(row, 2);
       if (container) {
         auto *toggle = container->findChild<ToggleSwitch *>();
         result[key].enabled = toggle ? toggle->isChecked() : true;
@@ -564,6 +729,10 @@ void RadialTabWidget::load() {
   if (!m_radialSettings) {
     return;
   }
+
+  // Show setup guide on first visit (deferred so profile editor is visible)
+  QMetaObject::invokeMethod(this, &RadialTabWidget::showFirstTimeSetupGuide,
+                            Qt::QueuedConnection);
 
   m_radialSettings->loadForProfile(m_profile.id);
   RadialSettings s = m_radialSettings->settings();
@@ -667,4 +836,173 @@ void RadialTabWidget::save() {
     qWarning() << "RadialTabWidget: Failed to save radial settings for"
                << m_profile.id;
   }
+
+  // Push updated settings to the running radial child process (if any)
+  // so changes take effect immediately without requiring a restart.
+  if (m_dataService) {
+    m_dataService->pushRadialSettingsToChildren(m_profile.id);
+  }
+}
+
+// ============================================================================
+// Detect GW2 Keybinds
+// ============================================================================
+
+// Apply parsed keybinds to a table's QKeySequenceEdit widgets
+static int applyKeybindsToTable(
+    QTableWidget *table,
+    const QMap<QString, Gw2Keybind> &keybinds) {
+  int applied = 0;
+  for (int row = 0; row < table->rowCount(); ++row) {
+    auto *nameItem = table->item(row, 0);
+    if (!nameItem)
+      continue;
+    QString key = nameItem->data(Qt::UserRole).toString();
+
+    if (keybinds.contains(key)) {
+      const auto &kb = keybinds[key];
+      auto *keybindEdit =
+          qobject_cast<QKeySequenceEdit *>(table->cellWidget(row, 1));
+      if (keybindEdit) {
+        // vkToKeySequence accepts GW2 bitmask (1=Alt, 2=Ctrl, 4=Shift)
+        keybindEdit->setKeySequence(
+            vkToKeySequence(kb.virtualKey, kb.modifiers));
+        ++applied;
+      }
+    }
+  }
+  return applied;
+}
+
+void RadialTabWidget::applyKeybindsFromFile(const QString &xmlPath) {
+  // Parse the XML
+  QMap<QString, Gw2Keybind> keybinds =
+      Gw2KeybindParser::parseFile(xmlPath);
+  if (keybinds.isEmpty()) {
+    m_detectStatusLabel->setText(
+        "No matching keybinds found in this file.");
+    UIHelpers::applyRole(m_detectStatusLabel, "warningLabel");
+    return;
+  }
+
+  // Apply to all element tables
+  int total = 0;
+  total += applyKeybindsToTable(m_mountTable, keybinds);
+  total += applyKeybindsToTable(m_noveltyTable, keybinds);
+  total += applyKeybindsToTable(m_markerTable, keybinds);
+
+  // Show result
+  QString fileName = QFileInfo(xmlPath).fileName();
+  m_detectStatusLabel->setText(
+      QString("Detected %1 keybinds from \"%2\". Click Save to apply.")
+          .arg(total)
+          .arg(fileName));
+  UIHelpers::applyRole(m_detectStatusLabel, "hintLabel");
+
+  // Auto-save so keybinds take effect immediately
+  if (total > 0) {
+    save();
+    emit modified();
+  }
+}
+
+void RadialTabWidget::detectGw2Keybinds() {
+  // Find the newest XML export
+  QString xmlPath = Gw2KeybindParser::findNewestExportFile();
+  if (xmlPath.isEmpty()) {
+    m_detectStatusLabel->setText(
+        "No keybind export found. In GW2, press F11 \u2192 Control Options "
+        "\u2192 scroll down \u2192 click Export.");
+    UIHelpers::applyRole(m_detectStatusLabel, "warningLabel");
+    return;
+  }
+
+  applyKeybindsFromFile(xmlPath);
+}
+
+void RadialTabWidget::browseGw2Keybinds() {
+  // Default to the GW2 InputBinds directory
+  QString docsPath =
+      QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+  QString defaultDir =
+      QDir(docsPath).filePath("Guild Wars 2/InputBinds");
+
+  // Fall back to Documents if InputBinds doesn't exist yet
+  if (!QDir(defaultDir).exists()) {
+    defaultDir = docsPath;
+  }
+
+  QString xmlPath = QFileDialog::getOpenFileName(
+      this, "Select GW2 Keybind Export", defaultDir,
+      "GW2 Keybind Files (*.xml);;All Files (*)");
+
+  if (xmlPath.isEmpty()) {
+    return; // User cancelled
+  }
+
+  applyKeybindsFromFile(xmlPath);
+}
+
+void RadialTabWidget::showFirstTimeSetupGuide() {
+  // Check if already dismissed
+  QSettings settings;
+  if (settings.value("ui/radialSetupGuideDismissed", false).toBool()) {
+    return;
+  }
+
+  // Build styled popup
+  auto *d = UIHelpers::createStyledDialog(this, 480);
+  auto *ol = new QVBoxLayout(d);
+  ol->setContentsMargins(0, 0, 0, 0);
+  auto *bg = new QWidget();
+  UIHelpers::applyPopupBackgroundRole(bg);
+  ol->addWidget(bg);
+  auto *ly = new QVBoxLayout(bg);
+  ly->setContentsMargins(20, 20, 20, 20);
+  ly->setSpacing(12);
+
+  // Title
+  auto *title = new QLabel("Radial Menu Setup");
+  UIHelpers::applyGoldTitleRole(title);
+  title->setAlignment(Qt::AlignCenter);
+  ly->addWidget(title);
+
+  // Instructions
+  auto *instructions = new QLabel(
+      "To use the Radial Menu, you need to tell AIO which keys "
+      "your GW2 mounts are bound to.\n\n"
+      "Quick setup:\n"
+      "1. In GW2, open Options (F11) \u2192 Control Options \u2192 Mounts\n"
+      "2. Make sure each mount has a keybind assigned\n"
+      "3. Scroll down and click Export to save your keybinds\n"
+      "4. Back in AIO, click Detect GW2 Keybinds to auto-import\n"
+      "5. Set a Trigger Hotkey for the Mount Wheel\n"
+      "6. Save your profile\n\n"
+      "For multiboxing: if each account uses different keybinds, "
+      "use Browse to select the correct export file per profile.");
+  UIHelpers::applyPopupLabelRole(instructions);
+  instructions->setWordWrap(true);
+  ly->addWidget(instructions);
+
+  // Don't show again checkbox
+  auto *dontShowCheck = new QCheckBox("Don't show this again");
+  UIHelpers::applyRole(dontShowCheck, "checkBox");
+  ly->addWidget(dontShowCheck);
+
+  // OK button
+  auto *okBtn = new QPushButton("Got it");
+  okBtn->setMinimumHeight(36);
+  UIHelpers::applyPrimaryStyle(okBtn);
+  connect(okBtn, &QPushButton::clicked, d, &QDialog::accept);
+  ly->addWidget(okBtn);
+
+  UIHelpers::centerDialog(d);
+  d->exec();
+
+  // Save preference
+  if (dontShowCheck->isChecked()) {
+    settings.setValue("ui/radialSetupGuideDismissed", true);
+  }
+
+  d->deleteLater();
 }

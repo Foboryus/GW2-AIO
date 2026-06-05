@@ -421,3 +421,26 @@ RadialSettingsManager *DataService::radialSettings2() {
 
 // UpdateManager is accessed directly via updateManager() accessor.
 // No wrappers needed — callers use the full UpdateManager API.
+
+// =========================================================================
+// RADIAL SETTINGS — Live push to running child processes
+// =========================================================================
+
+void DataService::pushRadialSettingsToChildren(const QString &profileId) {
+  if (profileId.isEmpty()) {
+    return;
+  }
+
+  // Read the latest saved settings from the manager
+  m_radialSettings2->loadForProfile(profileId);
+  RadialSettings current = m_radialSettings2->settings();
+
+  // Build the payload in the format ChildRadial::onSettingsReceived() expects:
+  //   { "radialSettings": { ... full RadialSettings JSON ... } }
+  QJsonObject payload;
+  payload[QStringLiteral("radialSettings")] = current.toJson();
+
+  qInfo() << "DataService: Requesting radial settings push for profile"
+          << profileId;
+  emit radialSettingsPushRequested(profileId, payload);
+}

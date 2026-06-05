@@ -17,6 +17,7 @@
  */
 
 #include <QDateTime>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QVariant>
@@ -218,6 +219,17 @@ signals:
 
   // --- Settings signals ---
   void settingChanged(const QString &key, const QVariant &value);
+
+  /// @brief Request radial settings push to running child processes.
+  /// Connected to ChildProcessManager in main.cpp.
+  void radialSettingsPushRequested(const QString &profileId,
+                                   const QJsonObject &settingsPayload);
+
+public:
+  /// @brief Push current radial settings to running child processes via IPC.
+  /// Call this after saving radial settings in the Profile Editor so the
+  /// running radial child picks up changes immediately.
+  void pushRadialSettingsToChildren(const QString &profileId);
 
 private:
   StorageBackend *m_storageBackend;

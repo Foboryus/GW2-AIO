@@ -26,6 +26,7 @@
 // clang-format on
 
 #include <QHash>
+#include <QJsonObject>
 #include <QObject>
 #include <QSet>
 #include <QString>
@@ -208,6 +209,23 @@ private:
    * Spawns the next child in the queue one at a time.
    */
   void processSpawnQueue();
+
+  // --- Theme IPC ---
+
+  /**
+   * @brief Build a JSON object with theme colors needed by the compositor
+   */
+  QJsonObject buildThemeJson() const;
+
+  /**
+   * @brief Send current theme to a specific child
+   */
+  void sendThemeToChild(const QString &profileId, const QString &featureKey);
+
+  /**
+   * @brief Send current theme to all compositor children (called on themeChanged)
+   */
+  void sendThemeToCompositors();
 
   // --- Members ---
   LaunchManager *m_launchManager = nullptr;

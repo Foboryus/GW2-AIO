@@ -2,6 +2,7 @@
 
 /**
  * @file ChildBigMap.h
+ * @deprecated Replaced by ChildMapRenderer.h (Phase 5.11). Kept for history.
  * @brief Big map child process — renders full-screen map markers + trails
  *
  * Active only when MumbleLink::isMapOpen() is true.

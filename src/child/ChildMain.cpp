@@ -30,11 +30,8 @@
 #ifdef CHILD_FEATURE_3D
 #include "Child3DOverlay.h"
 #endif
-#ifdef CHILD_FEATURE_MINIMAP
-#include "ChildMinimap.h"
-#endif
-#ifdef CHILD_FEATURE_BIGMAP
-#include "ChildBigMap.h"
+#ifdef CHILD_FEATURE_MAP
+#include "ChildMapRenderer.h"
 #endif
 #ifdef CHILD_FEATURE_RADIAL
 #include "ChildRadial.h"
@@ -98,10 +95,8 @@ int main(int argc, char *argv[])
     QString featureType;
 #ifdef CHILD_FEATURE_3D
     featureType = QStringLiteral("3d");
-#elif defined(CHILD_FEATURE_MINIMAP)
-    featureType = QStringLiteral("minimap");
-#elif defined(CHILD_FEATURE_BIGMAP)
-    featureType = QStringLiteral("bigmap");
+#elif defined(CHILD_FEATURE_MAP)
+    featureType = QStringLiteral("map");
 #elif defined(CHILD_FEATURE_RADIAL)
     featureType = QStringLiteral("radial");
 #elif defined(CHILD_FEATURE_OVERLAY)
@@ -138,14 +133,10 @@ int main(int argc, char *argv[])
     child = new Child3DOverlay(profileId, mumbleName, gw2Pid,
                                pipeName, profileName);
     qInfo() << "Feature: 3D Overlay";
-#elif defined(CHILD_FEATURE_MINIMAP)
-    child = new ChildMinimap(profileId, mumbleName, gw2Pid,
-                             pipeName, profileName);
-    qInfo() << "Feature: Minimap";
-#elif defined(CHILD_FEATURE_BIGMAP)
-    child = new ChildBigMap(profileId, mumbleName, gw2Pid,
-                            pipeName, profileName);
-    qInfo() << "Feature: Big Map";
+#elif defined(CHILD_FEATURE_MAP)
+    child = new ChildMapRenderer(profileId, mumbleName, gw2Pid,
+                                 pipeName, profileName);
+    qInfo() << "Feature: Map Renderer";
 #elif defined(CHILD_FEATURE_RADIAL)
     child = new ChildRadial(profileId, mumbleName, gw2Pid,
                             pipeName, profileName);

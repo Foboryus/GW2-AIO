@@ -162,6 +162,77 @@ RadialRenderer::loadIconTexture(D3D11Context *ctx, const QString &qrcPath) {
   return srv;
 }
 
+// TEMPORARY: Debug version that burns a text label onto the icon texture.
+ComPtr<ID3D11ShaderResourceView>
+RadialRenderer::loadIconTextureWithLabel(D3D11Context *ctx,
+                                          const QString &qrcPath,
+                                          const QString &label) {
+  constexpr int kIconSize = 128;
+  QImage rgba(kIconSize, kIconSize, QImage::Format_RGBA8888);
+  rgba.fill(Qt::transparent);
+
+  if (qrcPath.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) {
+    QSvgRenderer svgRenderer(qrcPath);
+    if (!svgRenderer.isValid()) {
+      qWarning() << "RadialRenderer: Invalid SVG:" << qrcPath;
+      return nullptr;
+    }
+    QPainter painter(&rgba);
+    painter.setRenderHints(QPainter::Antialiasing |
+                           QPainter::SmoothPixmapTransform);
+    svgRenderer.render(&painter);
+    painter.end();
+  } else {
+    QImage source(qrcPath);
+    if (source.isNull()) {
+      qWarning() << "RadialRenderer: Failed to load icon:" << qrcPath;
+      return nullptr;
+    }
+    rgba = source
+               .scaled(kIconSize, kIconSize, Qt::KeepAspectRatio,
+                       Qt::SmoothTransformation)
+               .convertToFormat(QImage::Format_RGBA8888);
+  }
+
+  // Paint debug label onto the icon
+  if (!label.isEmpty()) {
+    QPainter painter(&rgba);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QFont font(QStringLiteral("Arial"), 10, QFont::Bold);
+    painter.setFont(font);
+
+    // Draw text centered, with black outline for readability
+    QRect textRect = rgba.rect();
+    // Draw outline (black text shifted in 4 directions)
+    painter.setPen(QPen(Qt::black, 2));
+    for (int dx = -1; dx <= 1; ++dx) {
+      for (int dy = -1; dy <= 1; ++dy) {
+        if (dx == 0 && dy == 0) continue;
+        QRect offsetRect = textRect.translated(dx, dy);
+        painter.drawText(offsetRect,
+                         Qt::AlignCenter | Qt::TextWordWrap, label);
+      }
+    }
+    // Draw white text on top
+    painter.setPen(Qt::white);
+    painter.drawText(textRect, Qt::AlignCenter | Qt::TextWordWrap, label);
+    painter.end();
+  }
+
+  auto srv = ctx->createTextureFromRGBA(rgba.width(), rgba.height(),
+                                         rgba.constBits());
+  if (!srv) {
+    qWarning() << "RadialRenderer: Failed to create labeled texture for:"
+               << qrcPath;
+    return nullptr;
+  }
+
+  qInfo() << "RadialRenderer: Loaded icon with label" << qrcPath
+          << "label:" << label;
+  return srv;
+}
+
 // ============================================================================
 // Shader Compilation
 // ============================================================================
@@ -463,6 +534,142 @@ void RadialRenderer::drawWheel(D3D11Context *ctx, RadialWheel *wheel) {
 
   ID3D11RenderTargetView *rtv = ctx->renderTargetView();
   dc->OMSetRenderTargets(1, &rtv, nullptr);
+
+  dc->Draw(4, 0);
+}
+
+// TEMPORARY: Debug visualization — colored transparent sectors
+void RadialRenderer::drawDebugSectors(D3D11Context *ctx, int elementCount,
+                                       int hoveredIndex) {
+  if (!m_initialized || !ctx->isInitialized() || elementCount <= 0) {
+    return;
+  }
+
+  auto *dc = ctx->context();
+  float screenW = static_cast<float>(ctx->width());
+  float screenH = static_cast<float>(ctx->height());
+
+  // Regenerate texture if element count changed
+  if (!m_debugSectorSRV || m_debugSectorCount != elementCount) {
+    constexpr int kTexSize = 512;
+    QImage img(kTexSize, kTexSize, QImage::Format_RGBA8888_Premultiplied);
+    img.fill(Qt::transparent);
+
+    // Unique colors for each sector (10 distinct colors)
+    static const QColor kSectorColors[] = {
+        QColor(255, 60, 60, 60),    // Red
+        QColor(60, 180, 255, 60),   // Blue
+        QColor(60, 255, 60, 60),    // Green
+        QColor(255, 200, 40, 60),   // Yellow
+        QColor(200, 60, 255, 60),   // Purple
+        QColor(255, 140, 40, 60),   // Orange
+        QColor(40, 255, 200, 60),   // Cyan
+        QColor(255, 60, 180, 60),   // Pink
+        QColor(180, 255, 60, 60),   // Lime
+        QColor(100, 100, 255, 60),  // Indigo
+    };
+    constexpr int kNumColors = 10;
+
+    QPainter painter(&img);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // Pie chart: each sector spans 360/elementCount degrees
+    // Qt drawPie uses 1/16th degree units
+    // Element 0 is at top (12 o'clock = -90 degrees)
+    // Sectors are offset by half a sector so element centers align
+    float sectorDeg = 360.0f / static_cast<float>(elementCount);
+
+    for (int i = 0; i < elementCount; ++i) {
+      // Start angle: element i is at (i * sectorDeg - 90 - sectorDeg/2)
+      // Qt measures angles counter-clockwise from 3 o'clock
+      // Our wheel measures clockwise from 12 o'clock
+      // Qt angle for top (12 o'clock) = 90 degrees
+      // Sector i center in wheel coords = i * sectorDeg (from top, clockwise)
+      // In Qt coords: 90 - i * sectorDeg - sectorDeg/2 (counter-clockwise)
+      float startDeg = 90.0f - static_cast<float>(i) * sectorDeg -
+                       sectorDeg * 0.5f;
+
+      QColor color = kSectorColors[i % kNumColors];
+      painter.setBrush(color);
+      painter.setPen(QPen(color.lighter(150), 2));
+
+      // Draw pie slice covering the full texture
+      int startAngle16 = static_cast<int>(startDeg * 16.0f);
+      int spanAngle16 = static_cast<int>(sectorDeg * 16.0f);
+      painter.drawPie(img.rect(), startAngle16, spanAngle16);
+    }
+
+    // Draw sector boundary lines
+    painter.setPen(QPen(QColor(255, 255, 255, 120), 2));
+    float cx = kTexSize / 2.0f;
+    float cy = kTexSize / 2.0f;
+    float radius = kTexSize * 0.7f;
+    for (int i = 0; i < elementCount; ++i) {
+      // Boundary angle in Qt coords
+      float boundaryDeg = 90.0f - static_cast<float>(i) * sectorDeg -
+                          sectorDeg * 0.5f;
+      float rad = boundaryDeg * 3.14159265f / 180.0f;
+      painter.drawLine(
+          QPointF(cx, cy),
+          QPointF(cx + radius * qCos(rad), cy - radius * qSin(rad)));
+    }
+
+    painter.end();
+
+    m_debugSectorSRV =
+        ctx->createTextureFromRGBA(img.width(), img.height(), img.constBits());
+    m_debugSectorCount = elementCount;
+
+    qInfo() << "RadialRenderer: Created debug sector texture for"
+            << elementCount << "elements";
+  }
+
+  if (!m_debugSectorSRV) return;
+
+  // Draw as full-screen quad using the element shader
+  updateQuadCB(ctx, 0.5f, 0.5f, 0.5f, 0.5f, false, 0, 0,
+               static_cast<int>(screenW), static_cast<int>(screenH));
+
+  // Set wheel CB for passthrough (the texture already has alpha)
+  {
+    WheelCBData cbData = {};
+    cbData.wheelFadeIn = 1.0f;
+    cbData.globalOpacity = 1.0f;
+    cbData.elementCount = elementCount;
+    dc->UpdateSubresource(m_wheelCB.Get(), 0, nullptr, &cbData, 0, 0);
+  }
+
+  // Element CB: full color, no desaturation
+  {
+    ElementCBData cbData = {};
+    cbData.adjustedColor[0] = 1.0f;
+    cbData.adjustedColor[1] = 1.0f;
+    cbData.adjustedColor[2] = 1.0f;
+    cbData.adjustedColor[3] = 1.0f;
+    cbData.elementHoverFadeIn = 1.0f;
+    cbData.premultiplyAlpha = 1;
+    dc->UpdateSubresource(m_elemCB.Get(), 0, nullptr, &cbData, 0, 0);
+  }
+
+  dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+  dc->IASetInputLayout(nullptr);
+  dc->VSSetShader(m_radialVS.Get(), nullptr, 0);
+  dc->PSSetShader(m_elementPS.Get(), nullptr, 0);
+
+  ID3D11Buffer *vsCBs[] = {m_quadCB.Get()};
+  dc->VSSetConstantBuffers(0, 1, vsCBs);
+
+  ID3D11Buffer *psCBs[] = {m_wheelCB.Get(), m_elemCB.Get()};
+  dc->PSSetConstantBuffers(0, 2, psCBs);
+
+  ID3D11ShaderResourceView *srvs[] = {nullptr, m_debugSectorSRV.Get()};
+  dc->PSSetShaderResources(0, 2, srvs);
+
+  ID3D11SamplerState *samplers[] = {m_sampler.Get(), m_sampler.Get()};
+  dc->PSSetSamplers(0, 2, samplers);
+
+  float blendFactor[4] = {0, 0, 0, 0};
+  dc->OMSetBlendState(ctx->alphaBlendState(), blendFactor, 0xFFFFFFFF);
 
   dc->Draw(4, 0);
 }

@@ -17,6 +17,7 @@
 class QComboBox;
 class QKeySequenceEdit;
 class QLabel;
+class QPushButton;
 class QSlider;
 class QSpinBox;
 class QTableWidget;
@@ -57,6 +58,26 @@ private:
   void setupInteractionSection(QVBoxLayout *contentLayout);
 
   /**
+   * @brief Detect GW2 keybinds from newest exported InputBinds XML
+   */
+  void detectGw2Keybinds();
+
+  /**
+   * @brief Browse for a specific GW2 InputBinds XML file
+   */
+  void browseGw2Keybinds();
+
+  /**
+   * @brief Apply keybinds from a parsed XML file to element tables
+   */
+  void applyKeybindsFromFile(const QString &xmlPath);
+
+  /**
+   * @brief Show first-time radial setup guide popup
+   */
+  void showFirstTimeSetupGuide();
+
+  /**
    * @brief Create a wheel element table with enable toggles
    * @param elements Map of element key → config
    * @param labels Map of element key → display name
@@ -72,6 +93,7 @@ private:
   // --- General ---
   LabeledToggle *m_masterToggle = nullptr;
   QComboBox *m_iconStyleCombo = nullptr;
+  QLabel *m_detectStatusLabel = nullptr;
 
   // --- Wheels ---
   LabeledToggle *m_mountWheelToggle = nullptr;

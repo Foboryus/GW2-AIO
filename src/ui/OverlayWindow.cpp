@@ -4,7 +4,6 @@
 #include "core/ThemeManager.h"
 #include "core/OverlayZOrder.h"
 #include "features/markers/MarkerSettingsManager.h"
-#include "features/markers/MinimapRenderer.h"
 #include <QDateTime>
 #include <QDebug>
 #include <QPainter>
@@ -609,9 +608,6 @@ void OverlayWindow::setMarkerManager(MarkerManager *manager) {
   // The shared MarkerController::minimapRenderer() is no longer used here.
 }
 
-void OverlayWindow::setMinimapRenderer(MinimapRenderer *renderer) {
-  m_minimapRenderer = renderer;
-}
 
 void OverlayWindow::setMarkerSettings(MarkerSettingsManager *settings) {
   m_markerSettings = settings;
@@ -631,9 +627,6 @@ void OverlayWindow::resizeEvent(QResizeEvent *event) {
   }
   if (m_zoneEditor && m_zoneEditor->isVisible()) {
     m_zoneEditor->setGeometry(0, 0, width(), height());
-  }
-  if (m_minimapRenderer) {
-    m_minimapRenderer->setGeometry(0, 0, width(), height());
   }
 }
 
@@ -737,13 +730,6 @@ void OverlayWindow::updateHudVisibility() {
     if (m_menuWidget) {
       m_menuWidget->setShouldBeVisible(shouldShow);
     }
-    // Propagate stall state to MinimapRenderer (loading/char select → hide).
-    // Use !tickStalled (not shouldShow) because MinimapRenderer handles
-    // both minimap AND big map rendering — hiding when map is open would
-    // kill big map markers.
-    if (m_minimapRenderer) {
-      m_minimapRenderer->setShouldBeVisible(!tickStalled);
-    }
   }
 
   // Combat hide: only affects the panel, diamond stays visible
@@ -754,14 +740,6 @@ void OverlayWindow::updateHudVisibility() {
     m_menuWidget->setCombatHidden(hideForCombat);
   }
 
-  // Minimap auto-hide: stall (loading/char-select) triggers fade.
-  // NOTE: mapOpen is NOT a hide condition — MinimapRenderer already
-  // switches to big-map mode in paintEvent() (TacO approach).
-  // Combat does NOT hide — instead MinimapRenderer draws a red border.
-  if (m_minimapRenderer) {
-    m_minimapRenderer->setShouldBeVisible(!tickStalled);
-    m_minimapRenderer->setInCombat(m_mumbleLink->isInCombat());
-  }
 }
 
 void OverlayWindow::ensureZOrder() {

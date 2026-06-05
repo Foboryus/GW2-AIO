@@ -65,16 +65,18 @@ bool ChildOverlay::onInitialize()
     m_overlayWindow->startTracking();
     qInfo() << "ChildOverlay: OverlayWindow tracking started";
 
-    // 5b. Load radial settings and pass to overlay menu
+    // 5b. Persistent RadialSettingsManager — used for live settings sync
     {
         const QString radialConfigDir = AppConfig::instance().radialConfigDir();
-        RadialSettingsManager radialMgr(radialConfigDir);
-        radialMgr.loadForProfile(profileId());
-        m_radialEnabled = radialMgr.settings().radialEnabled;
+        m_radialSettingsManager = new RadialSettingsManager(radialConfigDir, this);
+        m_radialSettingsManager->loadForProfile(profileId());
+        m_radialEnabled = m_radialSettingsManager->settings().radialEnabled;
 
-        // Pass to the overlay menu widget
+        // Pass full settings to overlay menu
         if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
             m_overlayWindow->overlayMenu()->setRadialEnabled(m_radialEnabled);
+            m_overlayWindow->overlayMenu()->setRadialSettings(
+                m_radialSettingsManager->settings());
         }
     }
 
@@ -86,6 +88,7 @@ bool ChildOverlay::onInitialize()
         QJsonObject settings;
         settings["renderingEnabled"] = m_markerSettings->renderingEnabled();
         settings["render3dEnabled"] = m_markerSettings->render3dEnabled();
+        settings["renderMapEnabled"] = m_markerSettings->renderMapEnabled();
         settings["renderMinimapEnabled"] = m_markerSettings->renderMinimapEnabled();
         settings["renderBigMapEnabled"] = m_markerSettings->renderBigMapEnabled();
         settings["overlayOpacity"] = m_markerSettings->overlayOpacity();
@@ -113,20 +116,17 @@ bool ChildOverlay::onInitialize()
         sendToGrandfather(payload);
     });
 
-    // 6b. Wire radial toggle from overlay menu → upstream IPC
+    // 6b. Wire radial toggle from overlay menu → upstream IPC (spawn/kill path)
     if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
         connect(m_overlayWindow->overlayMenu(), &OverlayMenuWidget::radialToggleChanged,
                 this, [this](bool enabled) {
             m_radialEnabled = enabled;
 
-            // Save to radial settings file
-            const QString radialConfigDir = AppConfig::instance().radialConfigDir();
-            RadialSettingsManager radialMgr(radialConfigDir);
-            radialMgr.loadForProfile(profileId());
-            RadialSettings rs = radialMgr.settings();
+            // Save to persistent radial settings
+            RadialSettings rs = m_radialSettingsManager->settings();
             rs.radialEnabled = enabled;
-            radialMgr.setSettings(rs);
-            radialMgr.saveForProfile(profileId());
+            m_radialSettingsManager->setSettings(rs);
+            m_radialSettingsManager->saveForProfile(profileId());
 
             // Send upstream so grandfather calls syncFeatureToggles
             QJsonObject msg;
@@ -137,6 +137,24 @@ bool ChildOverlay::onInitialize()
 
             qInfo() << "ChildOverlay: Radial toggle →" << enabled
                     << "— saved + sent upstream";
+        });
+
+        // 6c. Wire live radial settings changes → save + relay to radial child
+        // ChildRadial::onSettingsReceived() already handles "radialSettings" key
+        connect(m_overlayWindow->overlayMenu(), &OverlayMenuWidget::radialSettingsChanged,
+                this, [this](const RadialSettings &newSettings) {
+            // Save to disk
+            m_radialSettingsManager->setSettings(newSettings);
+            m_radialSettingsManager->saveForProfile(profileId());
+
+            // Send as SETTING_CHANGED so grandfather relays to radial child
+            QJsonObject payload;
+            payload["radialSettings"] = newSettings.toJson();
+            QJsonDocument doc(payload);
+            QByteArray msg = "SETTING_CHANGED\n" + doc.toJson(QJsonDocument::Compact);
+            sendToGrandfather(msg);
+
+            qInfo() << "ChildOverlay: Radial settings changed — saved + relayed";
         });
     }
 
@@ -209,13 +227,17 @@ void ChildOverlay::onFocusChanged(bool focused)
             << "inGame:" << isInGame();
 
     if (m_overlayWindow) {
+        // Propagate authoritative focus state from grandfather IPC
+        // to OverlayWindow. The WinEvent hook handles ongoing changes,
+        // but on startup the hook may not be installed yet (GW2 window
+        // not found), so this ensures correct initial state.
+        m_overlayWindow->setGameFocused(focused);
+
         qInfo() << "[DEV][OVERLAY] Window state:"
                 << "visible:" << m_overlayWindow->isVisible()
                 << "size:" << m_overlayWindow->size()
                 << "pos:" << m_overlayWindow->pos();
     }
-    // OverlayWindow handles its own visibility via MumbleLink signals
-    // No additional action needed here
 }
 
 // ============================================================================

@@ -153,13 +153,14 @@ function(child_set_manifest TARGET_NAME)
 endfunction()
 
 # ============================================================================
-# GW2AIO-minimap: Minimap Overlay Child
+# GW2AIO-map: Unified Map Child (minimap + big map markers/trails)
+# Replaces GW2AIO-minimap + GW2AIO-bigmap (Phase 5.11)
 # ============================================================================
-add_executable(GW2AIO-minimap WIN32
+add_executable(GW2AIO-map WIN32
     ${CHILD_FRAMEWORK_SOURCES}
-    ChildMinimap.cpp ChildMinimap.h
+    ChildMapRenderer.cpp ChildMapRenderer.h
 
-    # D3D11 rendering (Phase 5.9.1: TrailPipeline for minimap/bigmap GPU trails)
+    # D3D11 rendering (TrailPipeline for minimap/bigmap GPU trails)
     ${CMAKE_SOURCE_DIR}/src/rendering/D3D11Context.cpp
     ${CMAKE_SOURCE_DIR}/src/rendering/SharedTexture.cpp
     ${CMAKE_SOURCE_DIR}/src/rendering/TrailPipeline.cpp
@@ -171,34 +172,13 @@ add_executable(GW2AIO-minimap WIN32
     # MinimapRenderer (QPainter 2D markers + trails on compass/big map)
     ${CMAKE_SOURCE_DIR}/src/features/markers/MinimapRenderer.cpp
 
-    # Theme system (required by MinimapRenderer for border/indicator colors)
-    ${CMAKE_SOURCE_DIR}/src/core/ThemeManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/ThemeData.cpp
-
     ${CHILD_QRC_SOURCES}
     ${CMAKE_SOURCE_DIR}/resources/child.rc
 )
-target_compile_definitions(GW2AIO-minimap PRIVATE CHILD_FEATURE_MINIMAP)
-target_include_directories(GW2AIO-minimap PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(GW2AIO-minimap PRIVATE ${CHILD_QT_LIBS} ${CHILD_D3D_LIBS})
-child_set_manifest(GW2AIO-minimap)
-
-# ============================================================================
-# GW2AIO-bigmap: Big Map Overlay Child
-# ============================================================================
-add_executable(GW2AIO-bigmap WIN32
-    ${CHILD_FRAMEWORK_SOURCES}
-    ChildBigMap.cpp ChildBigMap.h
-    ${CHILD_RENDERING_SOURCES}
-    ${CHILD_MARKER_SOURCES}
-    ${CHILD_CORE_SOURCES}
-    ${CHILD_QRC_SOURCES}
-    ${CMAKE_SOURCE_DIR}/resources/child.rc
-)
-target_compile_definitions(GW2AIO-bigmap PRIVATE CHILD_FEATURE_BIGMAP)
-target_include_directories(GW2AIO-bigmap PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(GW2AIO-bigmap PRIVATE ${CHILD_QT_LIBS} ${CHILD_D3D_LIBS})
-child_set_manifest(GW2AIO-bigmap)
+target_compile_definitions(GW2AIO-map PRIVATE CHILD_FEATURE_MAP)
+target_include_directories(GW2AIO-map PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(GW2AIO-map PRIVATE ${CHILD_QT_LIBS} ${CHILD_D3D_LIBS})
+child_set_manifest(GW2AIO-map)
 
 # ============================================================================
 # GW2AIO-radial: Radial Menu Child (D3D11 radial wheel rendering)
@@ -248,9 +228,6 @@ add_executable(GW2AIO-overlay WIN32
     ${CMAKE_SOURCE_DIR}/src/ui/OverlayWindow.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/OverlayMenuWidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/ExclusionZoneEditor.cpp
-
-    # MinimapRenderer (needed for OverlayWindow::updateHudVisibility linker)
-    ${CMAKE_SOURCE_DIR}/src/features/markers/MinimapRenderer.cpp
 
     # Theme system (required by OverlayMenuWidget)
     ${CMAKE_SOURCE_DIR}/src/core/ThemeManager.cpp

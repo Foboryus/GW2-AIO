@@ -168,6 +168,11 @@ public:
   bool render3dEnabled() const { return m_render3dEnabled; }
   void setRender3dEnabled(bool enabled);
 
+  /// Master gate for map child (minimap + big map). When OFF, map child is
+  /// killed. Sub-toggles (renderMinimap/BigMap) are independent within it.
+  bool renderMapEnabled() const { return m_renderMapEnabled; }
+  void setRenderMapEnabled(bool enabled);
+
   bool renderMinimapEnabled() const { return m_renderMinimapEnabled; }
   void setRenderMinimapEnabled(bool enabled);
 
@@ -225,8 +230,8 @@ public:
    *
    * Selectively applies rendering layer toggles from a JSON object
    * received via child process IPC (SETTING_CHANGED). Only processes
-   * renderingEnabled, render3dEnabled, renderMinimapEnabled,
-   * renderBigMapEnabled. Other fields are ignored.
+   * renderingEnabled, render3dEnabled, renderMapEnabled,
+   * renderMinimapEnabled, renderBigMapEnabled. Other fields are ignored.
    *
    * Triggers settingsChanged if any value changed (via individual setters).
    */
@@ -284,8 +289,9 @@ private:
   bool m_showInBigMap = true;        // Show overlay in big map even during combat
   bool m_renderingEnabled = true;    // Main kill switch (all rendering)
   bool m_render3dEnabled = true;     // 3D world markers/trails
-  bool m_renderMinimapEnabled = true; // Minimap markers/trails
-  bool m_renderBigMapEnabled = true;  // Big map (M key) markers/trails
+  bool m_renderMapEnabled = true;    // Master gate for map child (minimap + big map)
+  bool m_renderMinimapEnabled = true; // Minimap markers/trails (sub-toggle)
+  bool m_renderBigMapEnabled = true;  // Big map (M key) markers/trails (sub-toggle)
   bool m_heightFilterEnabled =
       true; // Height filter ON by default (pre-release)
   float m_heightFilterRange = 20.0f; // Filter range in meters

@@ -21,6 +21,8 @@
  * - Inline implementations (use OverlayMenuWidget.cpp)
  */
 
+#include "core/RadialSettings.h"
+
 #include <QList>
 #include <QPixmap>
 #include <QRectF>
@@ -66,6 +68,16 @@ public:
    * Called by ChildOverlay when settings are received from grandfather.
    */
   void setRadialEnabled(bool enabled);
+
+  /**
+   * @brief Set the full radial settings (from ChildOverlay on init or sync)
+   */
+  void setRadialSettings(const RadialSettings &settings);
+
+  /**
+   * @brief Get current radial settings (for Phase 2 overlay UI reads)
+   */
+  const RadialSettings &radialSettings() const { return m_radialSettings; }
 
   // Fade visibility (called by OverlayWindow based on game state)
   void setShouldBeVisible(bool visible);
@@ -116,6 +128,12 @@ signals:
    */
   void radialToggleChanged(bool enabled);
 
+  /**
+   * @brief Emitted when user changes radial settings in overlay Radial tab
+   * ChildOverlay wires this to save + relay via SETTING_CHANGED IPC.
+   */
+  void radialSettingsChanged(const RadialSettings &settings);
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
@@ -133,6 +151,7 @@ private:
                     int &yOffset, int visibleIndex);
   void drawToggleIndicator(QPainter &painter, const QRectF &rect, bool enabled);
   void drawSettingsPage(QPainter &painter, const QRectF &contentArea);
+  void drawRadialPage(QPainter &painter, const QRectF &contentArea);
   void drawSlider(QPainter &painter, const QRectF &sliderRect, qreal value,
                   const QString &label);
 
@@ -165,10 +184,11 @@ private:
   int m_settingsMaxScroll = 0;      // Settings tab max scroll
 
   // --- Tab state ---
-  enum class Tab { Packs, Settings };
+  enum class Tab { Packs, Settings, Radial };
   Tab m_activeTab = Tab::Packs;
   QRectF m_packsTabRect;
   QRectF m_settingsTabRect;
+  QRectF m_radialTabRect;
 
   // --- Slider drag state ---
   bool m_isDraggingSlider = false;
@@ -203,12 +223,25 @@ private:
   // Rendering layer toggle hit areas
   QRectF m_mainRenderToggleRect;
   QRectF m_3dRenderToggleRect;
+  QRectF m_mapRenderToggleRect;       // Map Markers parent toggle
   QRectF m_minimapRenderToggleRect;
   QRectF m_bigMapRenderToggleRect;
   QRectF m_radialToggleRect;  // Radial menu toggle hit area
 
-  // --- Radial state (not in MarkerSettingsManager — separate feature) ---
+  // --- Radial tab hit areas ---
+  QRectF m_mountWheelToggleRect;       // Mount wheel master toggle
+  QVector<QRectF> m_mountToggleRects;  // Per-mount toggle hit areas
+  QRectF m_radialScaleSliderRect;      // Wheel scale slider
+  QRectF m_radialOpacitySliderRect;    // Opacity slider
+  QRectF m_radialAnimSliderRect;       // Animation time slider
+  QRectF m_noHoldToggleRect;           // No-hold mode toggle
+  QRectF m_resetCursorToggleRect;      // Reset cursor toggle
+
+  // --- Radial state (full settings for Radial tab) ---
   bool m_radialEnabled = true;
+  RadialSettings m_radialSettings;  // Full settings for overlay Radial tab
+  int m_radialScrollOffset = 0;     // Radial tab scroll offset
+  int m_radialMaxScroll = 0;        // Radial tab max scroll
 
   // --- Geometry (computed in paintEvent) ---
   QRectF m_iconRect;        // Corner icon hit area
@@ -253,5 +286,5 @@ private:
   bool m_combatHidden = false;
 
   // --- Focus state (multibox: unfocused shows paused icon) ---
-  bool m_gameFocused = true;
+  bool m_gameFocused = false;
 };

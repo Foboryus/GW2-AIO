@@ -15,6 +15,8 @@
 
 #include "RadialController.h"
 
+#include "RadialInputSender.h"
+
 #include <QDebug>
 #include <QJsonObject>
 
@@ -180,10 +182,20 @@ void RadialController::onSettingsReceived(const QJsonObject &settings) {
 
 void RadialController::applySettings(const RadialSettings &settings) {
   m_settings = settings;
-  m_triggerVK = m_settings.mountHotkey;
-  m_triggerModifiers = m_settings.mountHotkeyModifiers;
-  qInfo() << "RadialController: Settings applied — mountHotkey VK:"
-          << m_triggerVK
+
+  // Gate trigger VK on mountWheelEnabled — when disabled, triggerVK=0
+  // which causes pollHotkey() to early-return (no input polling)
+  if (m_settings.mountWheelEnabled) {
+    m_triggerVK = m_settings.mountHotkey;
+    m_triggerModifiers = m_settings.mountHotkeyModifiers;
+  } else {
+    m_triggerVK = 0;
+    m_triggerModifiers = 0;
+  }
+
+  qInfo() << "RadialController: Settings applied"
+          << "mountWheelEnabled:" << m_settings.mountWheelEnabled
+          << "mountHotkey VK:" << m_triggerVK
           << "modifiers:" << m_triggerModifiers
           << "wheelScale:" << m_settings.wheelScale
           << "opacity:" << m_settings.opacity
@@ -266,7 +278,7 @@ void RadialController::setLoadingScreen(bool loading) {
 // ============================================================================
 
 // Static mapping: settings key → SVG icon filename
-static const QMap<QString, QString> kMountIconMap = {
+static const QMap<QString, QString> kMountIconMapSvg = {
     {"raptor",    "mount_raptor.svg"},
     {"springer",  "mount_springer.svg"},
     {"skimmer",   "mount_skimmer.svg"},
@@ -279,9 +291,36 @@ static const QMap<QString, QString> kMountIconMap = {
     {"skiff",     "mount_skiff.svg"},
 };
 
+// Static mapping: settings key → Classic GW2 PNG icon filename
+static const QMap<QString, QString> kMountIconMapPng = {
+    {"raptor",    "mount_raptor.png"},
+    {"springer",  "mount_springer.png"},
+    {"skimmer",   "mount_skimmer.png"},
+    {"jackal",    "mount_jackal.png"},
+    {"griffon",   "mount_griffon.png"},
+    {"beetle",    "mount_rollerbeetle.png"},
+    {"warclaw",   "mount_warclaw.png"},
+    {"skyscale",  "mount_skyscale.png"},
+    {"turtle",    "mount_siegeturtle.png"},
+};
+
 void RadialController::rebuildElements() {
   auto &elements = m_wheel->elements();
   elements.clear();
+
+  // Skip if mount wheel is disabled
+  if (!m_settings.mountWheelEnabled) {
+    m_wheel->rebuildVisibleElements();
+    qInfo() << "RadialController: Mount wheel disabled — 0 elements";
+    return;
+  }
+
+  // Pick icon map and QRC prefix based on iconStyle setting
+  bool usePng = (m_settings.iconStyle == QStringLiteral("png_mit"));
+  const auto &iconMap = usePng ? kMountIconMapPng : kMountIconMapSvg;
+  const QString iconPrefix = usePng
+      ? QStringLiteral(":/radial/png/")
+      : QStringLiteral(":/radial/svg/");
 
   // Build elements from enabled mounts in settings, sorted by sortOrder
   struct SortEntry {
@@ -316,10 +355,10 @@ void RadialController::rebuildElements() {
     elem.colorB = 1.0f;
     elem.colorA = 1.0f;
 
-    // Map settings key → SVG icon path
-    QString iconFile = kMountIconMap.value(entry.key);
+    // Map settings key → icon path (SVG or PNG based on iconStyle)
+    QString iconFile = iconMap.value(entry.key);
     if (!iconFile.isEmpty()) {
-      elem.iconPath = QStringLiteral(":/radial/svg/") + iconFile;
+      elem.iconPath = iconPrefix + iconFile;
     }
 
     elements.append(elem);
@@ -327,12 +366,14 @@ void RadialController::rebuildElements() {
 
   m_wheel->rebuildVisibleElements();
   qInfo() << "RadialController: Rebuilt" << elements.size()
-          << "mount elements from settings";
+          << "mount elements, iconStyle:" << m_settings.iconStyle;
 }
 
 // ============================================================================
 // Icon Texture Loading (called once after renderer init)
 // ============================================================================
+
+
 
 void RadialController::loadIconTextures(D3D11Context *ctx) {
   if (m_iconsLoaded) {
@@ -346,6 +387,7 @@ void RadialController::loadIconTextures(D3D11Context *ctx) {
     if (elem.iconPath.isEmpty()) {
       continue;
     }
+
     elem.iconSRV = m_renderer->loadIconTexture(ctx, elem.iconPath);
     if (elem.iconSRV) {
       ++loaded;
@@ -355,6 +397,17 @@ void RadialController::loadIconTextures(D3D11Context *ctx) {
   m_iconsLoaded = true;
   qInfo() << "RadialController: Loaded" << loaded << "/" << elements.size()
           << "icon textures";
+
+  // Diagnostic: dump the element order and visual positions
+  auto &visible = m_wheel->visibleElements();
+  float step = 2.0f * 3.14159265f / static_cast<float>(visible.size());
+  for (int i = 0; i < visible.size(); ++i) {
+    float angle = i * step - 3.14159265f * 0.5f;
+    qInfo() << "  [" << i << "]" << visible[i]->id
+            << "icon:" << visible[i]->iconPath
+            << "angle:" << angle
+            << "hasIcon:" << (visible[i]->iconSRV != nullptr);
+  }
 }
 
 // ============================================================================
@@ -368,28 +421,49 @@ void RadialController::pollHotkey() {
 
   // Check modifier keys match before accepting the trigger key
   bool modifiersOk = true;
-  if (m_triggerModifiers & static_cast<int>(Qt::ControlModifier))
-    modifiersOk &= (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-  if (m_triggerModifiers & static_cast<int>(Qt::ShiftModifier))
-    modifiersOk &= (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-  if (m_triggerModifiers & static_cast<int>(Qt::AltModifier))
+  // GW2 bitmask: 1=Alt, 2=Ctrl, 4=Shift
+  if (m_triggerModifiers & 1)
     modifiersOk &= (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+  if (m_triggerModifiers & 2)
+    modifiersOk &= (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+  if (m_triggerModifiers & 4)
+    modifiersOk &= (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
 
   bool keyDown = modifiersOk && (GetAsyncKeyState(m_triggerVK) & 0x8000) != 0;
 
   if (keyDown && !m_wasKeyDown) {
-    // Key just pressed → activate wheel at screen center
+    // Key just pressed → activate wheel at screen center.
+    // The mouse is NOT touched — it stays wherever the user has it.
+    // The wheel only passively reads cursor position for hover detection.
     m_wheel->activate(0.5f, 0.5f);
     // Signal the overlay window that GPU rendering is needed
     if (m_overlayWindow) {
       m_overlayWindow->setWheelNeedsRendering(true);
     }
   } else if (!keyDown && m_wasKeyDown && m_wheel->isActive()) {
-    // Key released → deactivate and fire selection
+    // Key released → deactivate and fire selection.
+    // The mouse is NOT moved — it stays exactly where the user left it.
     QString selectedId = m_wheel->deactivate();
+
     if (!selectedId.isEmpty()) {
-      // Phase 2: send keybind to GW2 via SendInput
-      qInfo() << "RadialController: Element selected:" << selectedId;
+      // Extract settings key from element ID (e.g., "mount_raptor" → "raptor")
+      int underscorePos = selectedId.indexOf('_');
+      QString settingsKey =
+          (underscorePos >= 0) ? selectedId.mid(underscorePos + 1) : selectedId;
+
+      // Look up keybind from settings
+      auto it = m_settings.mounts.find(settingsKey);
+      if (it != m_settings.mounts.end() && it->scanCode != 0) {
+        qInfo() << "RadialController: Sending keybind for" << selectedId
+                << "VK:" << it->scanCode << "modifiers:" << it->modifiers;
+        // Pass trigger VK so it gets released before the mount keybind
+        RadialInputSender::sendKeybind(it->scanCode, it->modifiers,
+                                       m_triggerVK);
+      } else {
+        qWarning() << "RadialController: No keybind configured for"
+                    << selectedId
+                    << "(set matching GW2 keybinds in Radial Settings)";
+      }
     }
   }
 
@@ -497,7 +571,8 @@ bool RadialController::renderFrame(D3D11Context *ctx) {
   // ---- Wheel IS active — begin GPU frame and render ----
   ctx->beginFrame();
 
-  // Get current mouse position (screen → client coords)
+  // Passively read the real cursor position for hover detection.
+  // The radial never moves or restricts the cursor.
   POINT cursor = {};
   GetCursorPos(&cursor);
   if (m_overlayWindow && m_overlayWindow->hwnd()) {
@@ -507,11 +582,12 @@ bool RadialController::renderFrame(D3D11Context *ctx) {
   // Tick wheel animations + hover detection
   m_wheel->tick(deltaMs, cursor.x, cursor.y, ctx->width(), ctx->height());
 
+  auto &visible = m_wheel->visibleElements();
+
   // Draw the wheel
   m_renderer->drawWheel(ctx, m_wheel);
 
   // Draw each element
-  auto &visible = m_wheel->visibleElements();
   for (int i = 0; i < visible.size(); ++i) {
     m_renderer->drawElement(ctx, m_wheel, visible[i], i, visible.size());
   }

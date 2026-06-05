@@ -155,6 +155,16 @@ void RadialWheel::updateHover(int mouseX, int mouseY, int screenW,
                                 1) %
               static_cast<int>(m_visibleElements.size());
 
+  // Debug: log hover changes to diagnose icon-position mismatch
+  if (index != m_hoveredIndex) {
+    qInfo() << "RadialWheel: Hover index=" << index
+            << "id=" << (index >= 0 && index < m_visibleElements.size()
+                         ? m_visibleElements[index]->id : "NONE")
+            << "mouseAngle=" << mouseAngle
+            << "elementAngle=" << elementAngle
+            << "mx=" << mx << "my=" << my;
+  }
+
   m_hoveredIndex = index;
 }
 

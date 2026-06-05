@@ -34,9 +34,11 @@
 #include <dcomp.h>
 #include <wrl/client.h>
 
+#include <QColor>
 #include <QHash>
 #include <QImage>
 #include <QList>
+#include <QPixmap>
 #include <QRect>
 #include <QTimer>
 
@@ -93,6 +95,12 @@ private:
   void renderLoadingBar();
   bool ensureLoadingBarTexture();
   void updateLoadingBarImage(float progress);
+
+  // --- Decorations (border + player icon) ---
+  void renderDecorations();
+  bool ensureDecorTexture();
+  void paintDecorations(QPainter &p, int screenW, int screenH);
+  QRectF computeMinimapRect(int screenW, int screenH) const;
 
   // --- GW2 window tracking ---
   void installEventHook();
@@ -178,4 +186,23 @@ private:
   ComPtr<ID3D11ShaderResourceView> m_loadingBarSRV;
   // Blend state for premultiplied alpha (loading bar quad)
   ComPtr<ID3D11BlendState> m_premulBlend;
+
+  // --- Theme colors (received via THEME IPC) ---
+  QColor m_borderColor{0xC0, 0x9C, 0x5B};     // overlay.panelBorder (gold)
+  QColor m_combatColor{0xE7, 0x4C, 0x3C};     // colors.error (red)
+  QColor m_loadingBarBg{0x1E, 0x1E, 0x1E, 230}; // Dark slightly transparent
+  QColor m_loadingBarFill{0xC0, 0x9C, 0x57};    // Gold fill
+  QColor m_loadingBarText{0xE0, 0xD0, 0xB0};    // Warm white
+
+  // --- Decorations (border + player icon) ---
+  QImage m_decorImage;
+  ComPtr<ID3D11Texture2D> m_decorTex;
+  ComPtr<ID3D11ShaderResourceView> m_decorSRV;
+  QPixmap m_playerIcon;  // Cached player-indicator.svg
+  qreal m_smoothedFacingAngle = 0.0;
+
+  // --- uiTick stall detection (instant loading screen hide) ---
+  uint32_t m_lastUiTick = 0;
+  qint64 m_lastTickChangeMs = 0;
+  bool m_tickStalled = false;  // True when uiTick hasn't changed for 100ms
 };

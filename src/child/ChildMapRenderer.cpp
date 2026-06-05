@@ -1,4 +1,4 @@
-#include "ChildMinimap.h"
+#include "ChildMapRenderer.h"
 
 #include "core/AppConfig.h"
 #include "core/MumbleLink.h"
@@ -14,7 +14,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-ChildMinimap::ChildMinimap(const QString &profileId,
+ChildMapRenderer::ChildMapRenderer(const QString &profileId,
                            const QString &mumbleName,
                            qint64 gw2Pid,
                            const QString &pipeName,
@@ -24,7 +24,7 @@ ChildMinimap::ChildMinimap(const QString &profileId,
 {
 }
 
-ChildMinimap::~ChildMinimap()
+ChildMapRenderer::~ChildMapRenderer()
 {
     // MinimapRenderer is a QWidget with no parent — delete explicitly
     delete m_minimapRenderer;
@@ -41,15 +41,15 @@ ChildMinimap::~ChildMinimap()
 // Lifecycle
 // ============================================================================
 
-bool ChildMinimap::onInitialize()
+bool ChildMapRenderer::onInitialize()
 {
-    qInfo() << "ChildMinimap: Initializing for" << profileName();
+    qInfo() << "ChildMapRenderer: Initializing for" << profileName();
 
     // 1. Per-child MarkerSettingsManager
     const QString markerStateDir = AppConfig::instance().markerStateDir();
     m_markerSettings = new MarkerSettingsManager(markerStateDir, this);
     m_markerSettings->loadForProfile(profileId());
-    qInfo() << "ChildMinimap: MarkerSettings loaded for" << profileId();
+    qInfo() << "ChildMapRenderer: MarkerSettings loaded for" << profileId();
 
     // 2. Per-child ImageCache (marker icons)
     m_imageCache = new ImageCache(this);
@@ -70,7 +70,7 @@ bool ChildMinimap::onInitialize()
         m_markerManager, mumbleLink(), m_imageCache);
     m_minimapRenderer->setQueryContext(m_queryContext);
     m_minimapRenderer->setAttribute(Qt::WA_DontShowOnScreen);
-    qInfo() << "ChildMinimap: MinimapRenderer created (offscreen)";
+    qInfo() << "ChildMapRenderer: MinimapRenderer created (offscreen)";
 
     // 6. Find GW2 window for dimensions
     findGW2Window();
@@ -83,32 +83,32 @@ bool ChildMinimap::onInitialize()
             this, [this](bool connected) {
                 if (connected) {
                     m_minimapRenderer->start();
-                    qInfo() << "ChildMinimap: MinimapRenderer started";
+                    qInfo() << "ChildMapRenderer: MinimapRenderer started";
                 } else {
                     m_minimapRenderer->stop();
-                    qInfo() << "ChildMinimap: MinimapRenderer stopped";
+                    qInfo() << "ChildMapRenderer: MinimapRenderer stopped";
                 }
             });
 
     // 8. Wire settings changes
     connect(m_markerSettings, &MarkerSettingsManager::settingsChanged,
-            this, &ChildMinimap::syncMinimapSettings);
-    syncMinimapSettings();
+            this, &ChildMapRenderer::syncMapSettings);
+    syncMapSettings();
 
     // 9. Wire MumbleLink::dataUpdated → render frame
     connect(mumbleLink(), &MumbleLink::dataUpdated,
-            this, &ChildMinimap::onRenderFrame, Qt::UniqueConnection);
+            this, &ChildMapRenderer::onRenderFrame, Qt::UniqueConnection);
 
-    qInfo() << "[DEV][MINIMAP] Init complete (D3D11 DEFERRED):"
+    qInfo() << "[DEV][MAP] Init complete (D3D11 DEFERRED):"
             << "renderer:" << (m_minimapRenderer != nullptr)
             << "targetPid:" << gw2Pid();
 
     return true;
 }
 
-void ChildMinimap::onShutdown()
+void ChildMapRenderer::onShutdown()
 {
-    qInfo() << "ChildMinimap: Shutting down for" << profileName();
+    qInfo() << "ChildMapRenderer: Shutting down for" << profileName();
 
     if (m_minimapRenderer) {
         m_minimapRenderer->stop();
@@ -122,11 +122,11 @@ void ChildMinimap::onShutdown()
 // ============================================================================
 
 // Full teardown — destroys ALL GPU resources (shutdown / process exit only)
-void ChildMinimap::teardownD3D11()
+void ChildMapRenderer::teardownD3D11()
 {
     if (!m_d3dInitialized) return;
 
-    qInfo() << "[DEV][MINIMAP] Full D3D11 teardown for" << profileName();
+    qInfo() << "[DEV][MAP] Full D3D11 teardown for" << profileName();
 
     // Light teardown first (shared texture + intermediate RT)
     teardownSharedResources();
@@ -142,15 +142,15 @@ void ChildMinimap::teardownD3D11()
     }
 
     m_d3dInitialized = false;
-    qInfo() << "[DEV][MINIMAP] Full D3D11 teardown complete — device freed";
+    qInfo() << "[DEV][MAP] Full D3D11 teardown complete — device freed";
 }
 
 // Light teardown — only shared texture + intermediate RT (fast, for unfocus)
 // D3D11Context and TrailPipeline persist across focus cycles to avoid
 // expensive shader recompilation (~150ms per focus gain).
-void ChildMinimap::teardownSharedResources()
+void ChildMapRenderer::teardownSharedResources()
 {
-    qInfo() << "[DEV][MINIMAP] Light teardown (shared resources) for" << profileName();
+    qInfo() << "[DEV][MAP] Light teardown (shared resources) for" << profileName();
 
     // Release intermediate RT
     m_intermediateRTV.Reset();
@@ -168,17 +168,16 @@ void ChildMinimap::teardownSharedResources()
 // Rendering
 // ============================================================================
 
-void ChildMinimap::onRenderFrame()
+void ChildMapRenderer::onRenderFrame()
 {
     if (!m_minimapRenderer || !m_sharedTexture || !m_d3dContext) return;
     if (!m_d3dContext->isInitialized()) return;
     if (!isFocused() || !isInGame()) return;
 
-    // Frame guard: cap at ~30fps (33ms) — matches MinimapRenderer's own guard
-    static qint64 s_lastFrameMs = 0;
+    // Frame rate: render every MumbleLink tick (16ms focused).
+    // No artificial cap — tighter tracking reduces visible drift during
+    // map drag/zoom vs the old 33ms (30fps) cap.
     qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if ((now - s_lastFrameMs) < 33) return;
-    s_lastFrameMs = now;
 
     // Phase 5.8: Loading screen detection via uiTick stall
     if (mumbleLink() && mumbleLink()->isConnected()) {
@@ -206,7 +205,7 @@ void ChildMinimap::onRenderFrame()
                     float clearColor[4] = {0, 0, 0, 0};
                     m_d3dContext->context()->ClearRenderTargetView(rtv, clearColor);
                     m_sharedTexture->releaseAfterWrite();
-                    qInfo() << "[DEV][MINIMAP] Content hidden — cleared shared texture";
+                    qInfo() << "[DEV][MAP] Content hidden — cleared shared texture";
                 }
             }
         } else if (!wasVisible && m_contentVisible) {
@@ -247,7 +246,7 @@ void ChildMinimap::onRenderFrame()
                 m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
         }
 
-        qInfo() << "[DEV][MINIMAP] Resized to" << m_gw2Width << "x" << m_gw2Height;
+        qInfo() << "[DEV][MAP] Resized to" << m_gw2Width << "x" << m_gw2Height;
     }
 
     // --- Step 1: Render QPainter minimap markers to QImage ---
@@ -324,7 +323,7 @@ void ChildMinimap::onRenderFrame()
     // Dev log: emit frame count every 500 frames
     static uint64_t s_frameCount = 0;
     if (++s_frameCount % 500 == 0) {
-        qInfo() << "[DEV][MINIMAP] Frame" << s_frameCount
+        qInfo() << "[DEV][MAP] Frame" << s_frameCount
                 << "size:" << m_gw2Width << "x" << m_gw2Height
                 << "trails:" << (m_trailPipeline != nullptr);
     }
@@ -334,7 +333,7 @@ void ChildMinimap::onRenderFrame()
 // GW2 Window
 // ============================================================================
 
-bool ChildMinimap::findGW2Window()
+bool ChildMapRenderer::findGW2Window()
 {
     if (m_gw2Hwnd && IsWindow(m_gw2Hwnd)) return true;
 
@@ -362,14 +361,14 @@ bool ChildMinimap::findGW2Window()
     if (data.result) {
         m_gw2Hwnd = data.result;
         pollGW2WindowSize();
-        qInfo() << "[DEV][MINIMAP] Found GW2 HWND:" << m_gw2Hwnd
+        qInfo() << "[DEV][MAP] Found GW2 HWND:" << m_gw2Hwnd
                 << "size:" << m_gw2Width << "x" << m_gw2Height;
         return true;
     }
     return false;
 }
 
-void ChildMinimap::pollGW2WindowSize()
+void ChildMapRenderer::pollGW2WindowSize()
 {
     if (!m_gw2Hwnd || !IsWindow(m_gw2Hwnd)) {
         m_gw2Hwnd = nullptr;
@@ -387,30 +386,30 @@ void ChildMinimap::pollGW2WindowSize()
 // Map lifecycle
 // ============================================================================
 
-void ChildMinimap::onMapEntered(uint32_t mapId)
+void ChildMapRenderer::onMapEntered(uint32_t mapId)
 {
-    qInfo() << "ChildMinimap: Map entered:" << mapId << "for" << profileName();
+    qInfo() << "ChildMapRenderer: Map entered:" << mapId << "for" << profileName();
 
     // Lazy D3D11 init — create device on first map entry (B7 fix)
     // Only init if focused — unfocused profiles defer to onFocusChanged(true)
     if (!m_d3dInitialized) {
         if (isFocused()) {
             if (!ensureD3D11()) {
-                qWarning() << "[DEV][MINIMAP] D3D11 lazy init failed on map entry"
+                qWarning() << "[DEV][MAP] D3D11 lazy init failed on map entry"
                            << "— will retry on focus gain";
             }
         } else {
-            qInfo() << "[DEV][MINIMAP] Deferring D3D11 init (unfocused)"
+            qInfo() << "[DEV][MAP] Deferring D3D11 init (unfocused)"
                     << "— will init on focus gain";
         }
     }
 
     if (!m_packsLoaded) {
-        qInfo() << "ChildMinimap: Loading marker packs...";
+        qInfo() << "ChildMapRenderer: Loading marker packs...";
         m_markerManager->loadPacksFromDirectory(
             AppConfig::instance().markerPacksDir());
         m_packsLoaded = true;
-        qInfo() << "ChildMinimap: Packs loaded, count:"
+        qInfo() << "ChildMapRenderer: Packs loaded, count:"
                 << m_markerManager->packs().size();
     }
 
@@ -421,7 +420,7 @@ void ChildMinimap::onMapEntered(uint32_t mapId)
     const bool shouldRender = isFocused() && isInGame();
     m_minimapRenderer->setRenderingEnabled(shouldRender);
 
-    qInfo() << "[DIAG] ChildMinimap: MAP_ENTERED"
+    qInfo() << "[DIAG] ChildMapRenderer: MAP_ENTERED"
             << profileName()
             << "mapId:" << mapId
             << "packsLoaded:" << m_packsLoaded
@@ -435,7 +434,7 @@ void ChildMinimap::onMapEntered(uint32_t mapId)
 // Lazy D3D11 Initialization (B7 fix)
 // ============================================================================
 
-bool ChildMinimap::ensureD3D11()
+bool ChildMapRenderer::ensureD3D11()
 {
     if (m_d3dInitialized && m_sharedTexture) return true;
 
@@ -445,15 +444,15 @@ bool ChildMinimap::ensureD3D11()
 
     // --- Fast path: device + pipeline exist, just recreate shared resources ---
     if (m_d3dInitialized && m_d3dContext && !m_sharedTexture) {
-        qInfo() << "[DEV][MINIMAP] Fast D3D11 init (shared resources only) for" << profileName();
+        qInfo() << "[DEV][MAP] Fast D3D11 init (shared resources only) for" << profileName();
 
         // SharedTextureProducer
         m_sharedTexture = new SharedTextureProducer();
-        QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
+        QString texName = QStringLiteral("GW2AIO_Tex_%1_map").arg(profileId());
         if (!m_sharedTexture->initialize(
                 m_d3dContext->device(), m_d3dContext->context(),
                 initW, initH, texName)) {
-            qCritical() << "[DEV][MINIMAP] SharedTexture re-init FAILED";
+            qCritical() << "[DEV][MAP] SharedTexture re-init FAILED";
             delete m_sharedTexture;
             m_sharedTexture = nullptr;
             return false;
@@ -479,7 +478,7 @@ bool ChildMinimap::ensureD3D11()
                 m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
         }
 
-        qInfo() << "[DEV][MINIMAP] Fast D3D11 init COMPLETE:"
+        qInfo() << "[DEV][MAP] Fast D3D11 init COMPLETE:"
                 << "sharedTex:" << (m_sharedTexture != nullptr)
                 << "trailPipeline:" << (m_trailPipeline != nullptr)
                 << "size:" << initW << "x" << initH;
@@ -487,34 +486,34 @@ bool ChildMinimap::ensureD3D11()
     }
 
     // --- Full path: first-time initialization ---
-    qInfo() << "[DEV][MINIMAP] Lazy D3D11 init starting for" << profileName();
+    qInfo() << "[DEV][MAP] Lazy D3D11 init starting for" << profileName();
 
     // Acquire global device creation mutex (B7 fix — serialize across all children)
     HANDLE hDeviceMutex = CreateMutexW(nullptr, FALSE, L"Global\\GW2AIO_DeviceInit");
     if (hDeviceMutex) {
-        qInfo() << "[DEV][MINIMAP] Waiting for device creation mutex...";
+        qInfo() << "[DEV][MAP] Waiting for device creation mutex...";
         WaitForSingleObject(hDeviceMutex, 30000);
     }
 
     // D3D11 offscreen context (full — blend states, rasterizer for TrailPipeline)
     m_d3dContext = new D3D11Context();
     if (!m_d3dContext->initializeOffscreen(QSize(initW, initH))) {
-        qCritical() << "[DEV][MINIMAP] D3D11 offscreen init FAILED (E_OUTOFMEMORY?)"
+        qCritical() << "[DEV][MAP] D3D11 offscreen init FAILED (E_OUTOFMEMORY?)"
                      << "— will retry on next map entry";
         delete m_d3dContext;
         m_d3dContext = nullptr;
         if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
         return false;
     }
-    qInfo() << "[DEV][MINIMAP] D3D11 offscreen device created:" << initW << "x" << initH;
+    qInfo() << "[DEV][MAP] D3D11 offscreen device created:" << initW << "x" << initH;
 
     // SharedTextureProducer
     m_sharedTexture = new SharedTextureProducer();
-    QString texName = QStringLiteral("GW2AIO_Tex_%1_minimap").arg(profileId());
+    QString texName = QStringLiteral("GW2AIO_Tex_%1_map").arg(profileId());
     if (!m_sharedTexture->initialize(
             m_d3dContext->device(), m_d3dContext->context(),
             initW, initH, texName)) {
-        qCritical() << "[DEV][MINIMAP] SharedTexture init FAILED";
+        qCritical() << "[DEV][MAP] SharedTexture init FAILED";
         delete m_sharedTexture;
         m_sharedTexture = nullptr;
         delete m_d3dContext;
@@ -522,7 +521,7 @@ bool ChildMinimap::ensureD3D11()
         if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
         return false;
     }
-    qInfo() << "[DEV][MINIMAP] SharedTexture created:" << texName
+    qInfo() << "[DEV][MAP] SharedTexture created:" << texName
             << initW << "x" << initH;
 
     // Intermediate render target (QPainter upload + GPU trail composite)
@@ -540,7 +539,7 @@ bool ChildMinimap::ensureD3D11()
         HRESULT hr = m_d3dContext->device()->CreateTexture2D(
             &rtDesc, nullptr, m_intermediateRT.GetAddressOf());
         if (FAILED(hr)) {
-            qCritical() << "[DEV][MINIMAP] Intermediate RT creation FAILED:" << Qt::hex << hr;
+            qCritical() << "[DEV][MAP] Intermediate RT creation FAILED:" << Qt::hex << hr;
             delete m_sharedTexture; m_sharedTexture = nullptr;
             delete m_d3dContext; m_d3dContext = nullptr;
             if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
@@ -550,14 +549,14 @@ bool ChildMinimap::ensureD3D11()
         hr = m_d3dContext->device()->CreateRenderTargetView(
             m_intermediateRT.Get(), nullptr, m_intermediateRTV.GetAddressOf());
         if (FAILED(hr)) {
-            qCritical() << "[DEV][MINIMAP] Intermediate RTV creation FAILED:" << Qt::hex << hr;
+            qCritical() << "[DEV][MAP] Intermediate RTV creation FAILED:" << Qt::hex << hr;
             m_intermediateRT.Reset();
             delete m_sharedTexture; m_sharedTexture = nullptr;
             delete m_d3dContext; m_d3dContext = nullptr;
             if (hDeviceMutex) { ReleaseMutex(hDeviceMutex); CloseHandle(hDeviceMutex); }
             return false;
         }
-        qInfo() << "[DEV][MINIMAP] Intermediate RT created:" << initW << "x" << initH;
+        qInfo() << "[DEV][MAP] Intermediate RT created:" << initW << "x" << initH;
     }
 
     // TrailPipeline for minimap/bigmap GPU trails (Phase 5.9.1)
@@ -565,7 +564,7 @@ bool ChildMinimap::ensureD3D11()
                                          m_markerManager, m_markerSettings,
                                          m_imageCache);
     if (!m_trailPipeline->initialize()) {
-        qWarning() << "[DEV][MINIMAP] TrailPipeline init failed — markers only";
+        qWarning() << "[DEV][MAP] TrailPipeline init failed — markers only";
         delete m_trailPipeline;
         m_trailPipeline = nullptr;
     } else {
@@ -573,7 +572,7 @@ bool ChildMinimap::ensureD3D11()
         if (m_queryContext) {
             m_trailPipeline->setQueryContext(m_queryContext);
         }
-        qInfo() << "[DEV][MINIMAP] TrailPipeline created for minimap/bigmap trails";
+        qInfo() << "[DEV][MAP] TrailPipeline created for minimap/bigmap trails";
     }
 
     // Allocate QImage render target
@@ -588,16 +587,16 @@ bool ChildMinimap::ensureD3D11()
         CloseHandle(hDeviceMutex);
     }
 
-    qInfo() << "[DEV][MINIMAP] Lazy D3D11 init COMPLETE:"
+    qInfo() << "[DEV][MAP] Lazy D3D11 init COMPLETE:"
             << "sharedTex:" << (m_sharedTexture != nullptr)
             << "trailPipeline:" << (m_trailPipeline != nullptr)
             << "size:" << initW << "x" << initH;
     return true;
 }
 
-void ChildMinimap::onMapLeft()
+void ChildMapRenderer::onMapLeft()
 {
-    qInfo() << "ChildMinimap: Map left for" << profileName();
+    qInfo() << "ChildMapRenderer: Map left for" << profileName();
 
     uint32_t oldMapId = m_queryContext->mapId;
     m_queryContext->mapId = 0;
@@ -614,10 +613,10 @@ void ChildMinimap::onMapLeft()
 // Focus
 // ============================================================================
 
-void ChildMinimap::onFocusChanged(bool focused)
+void ChildMapRenderer::onFocusChanged(bool focused)
 {
     const bool shouldRender = focused && isInGame();
-    qInfo() << "[DIAG] ChildMinimap: FOCUS_CHANGED"
+    qInfo() << "[DIAG] ChildMapRenderer: FOCUS_CHANGED"
             << profileName()
             << "focused:" << focused
             << "inGame:" << isInGame()
@@ -628,14 +627,14 @@ void ChildMinimap::onFocusChanged(bool focused)
         if (isInGame()) {
             if (!m_d3dInitialized) {
                 // First time: full init (device + pipeline + shared resources)
-                qInfo() << "[DEV][MINIMAP] Focus gained — creating D3D11 device";
+                qInfo() << "[DEV][MAP] Focus gained — creating D3D11 device";
                 if (!ensureD3D11()) {
-                    qWarning() << "[DEV][MINIMAP] D3D11 init failed on focus gain"
+                    qWarning() << "[DEV][MAP] D3D11 init failed on focus gain"
                                << "— will retry on next focus gain";
                 }
             } else if (!m_sharedTexture) {
                 // Fast path: device + pipeline exist, just recreate shared resources
-                qInfo() << "[DEV][MINIMAP] Focus gained — recreating shared resources";
+                qInfo() << "[DEV][MAP] Focus gained — recreating shared resources";
                 ensureD3D11();  // Will skip device/pipeline creation, only shared
             }
         }
@@ -654,9 +653,9 @@ void ChildMinimap::onFocusChanged(bool focused)
 // Settings
 // ============================================================================
 
-void ChildMinimap::onSettingsReceived(const QJsonObject &settings)
+void ChildMapRenderer::onSettingsReceived(const QJsonObject &settings)
 {
-    qInfo() << "ChildMinimap: Settings received";
+    qInfo() << "ChildMapRenderer: Settings received";
 
     if (settings.contains("renderingEnabled")) {
         m_markerSettings->setRenderingEnabled(
@@ -698,7 +697,7 @@ void ChildMinimap::onSettingsReceived(const QJsonObject &settings)
     }
 }
 
-void ChildMinimap::syncMinimapSettings()
+void ChildMapRenderer::syncMapSettings()
 {
     if (!m_minimapRenderer || !m_markerSettings) return;
 
@@ -714,7 +713,7 @@ void ChildMinimap::syncMinimapSettings()
     m_minimapRenderer->setShowBigMapMarkers(
         mainOn && m_markerSettings->renderBigMapEnabled());
 
-    qInfo() << "[DEV][MINIMAP] Settings synced:"
+    qInfo() << "[DEV][MAP] Settings synced:"
             << "rendering:" << mainOn
             << "minimap:" << m_markerSettings->renderMinimapEnabled()
             << "bigMap:" << m_markerSettings->renderBigMapEnabled()
@@ -722,9 +721,9 @@ void ChildMinimap::syncMinimapSettings()
             << "markerScale:" << m_markerSettings->minimapMarkerScale();
 }
 
-void ChildMinimap::onReloadPacks()
+void ChildMapRenderer::onReloadPacks()
 {
-    qInfo() << "ChildMinimap: Reloading pack data from disk";
+    qInfo() << "ChildMapRenderer: Reloading pack data from disk";
 
     if (m_markerSettings) {
         m_markerSettings->loadForProfile(profileId());
@@ -733,7 +732,7 @@ void ChildMinimap::onReloadPacks()
     if (m_markerManager) {
         m_markerManager->loadPacksFromDirectory(
             AppConfig::instance().markerPacksDir());
-        qInfo() << "ChildMinimap: Packs reloaded, count:"
+        qInfo() << "ChildMapRenderer: Packs reloaded, count:"
                 << m_markerManager->packs().size();
 
         if (m_queryContext && m_queryContext->mapId > 0) {

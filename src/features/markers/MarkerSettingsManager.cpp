@@ -471,6 +471,15 @@ void MarkerSettingsManager::setRender3dEnabled(bool enabled) {
   emit settingsChanged();
 }
 
+void MarkerSettingsManager::setRenderMapEnabled(bool enabled) {
+  if (m_renderMapEnabled == enabled)
+    return;
+  m_renderMapEnabled = enabled;
+  m_displayDirty = true;
+  scheduleSave();
+  emit settingsChanged();
+}
+
 void MarkerSettingsManager::setRenderMinimapEnabled(bool enabled) {
   if (m_renderMinimapEnabled == enabled)
     return;
@@ -651,6 +660,9 @@ void MarkerSettingsManager::applyDisplayJson(const QJsonObject &obj) {
   if (obj.contains("renderBigMapEnabled")) {
     setRenderBigMapEnabled(obj["renderBigMapEnabled"].toBool(true));
   }
+  if (obj.contains("renderMapEnabled")) {
+    setRenderMapEnabled(obj["renderMapEnabled"].toBool(true));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -726,7 +738,7 @@ void MarkerSettingsManager::packFromJson(const QString &packId,
 QJsonObject MarkerSettingsManager::displayToJson() const {
   QJsonObject obj;
   obj["type"] = "markerDisplaySettings";
-  obj["version"] = 7;
+  obj["version"] = 8;
   obj["overlayOpacity"] = m_overlayOpacity;
   obj["minimapOpacity"] = m_minimapOpacity;
   obj["maxRenderDistance"] = m_maxRenderDistance;
@@ -742,9 +754,10 @@ QJsonObject MarkerSettingsManager::displayToJson() const {
   obj["minimapMarkerScale"] = m_minimapMarkerScale;
   obj["minimapMarkerOpacity"] = m_minimapMarkerOpacity;
 
-  // Rendering layer toggles (v7)
+  // Rendering layer toggles (v8 — added renderMapEnabled)
   obj["renderingEnabled"] = m_renderingEnabled;
   obj["render3dEnabled"] = m_render3dEnabled;
+  obj["renderMapEnabled"] = m_renderMapEnabled;
   obj["renderMinimapEnabled"] = m_renderMinimapEnabled;
   obj["renderBigMapEnabled"] = m_renderBigMapEnabled;
 
@@ -808,11 +821,17 @@ void MarkerSettingsManager::displayFromJson(const QJsonObject &obj) {
   m_minimapMarkerOpacity =
       qBound(0.0, obj["minimapMarkerOpacity"].toDouble(1.0), 1.0);
 
-  // Rendering layer toggles (v7 — backward-compat: default true)
+  // Rendering layer toggles (v8 — backward-compat: default true)
   m_renderingEnabled = obj["renderingEnabled"].toBool(true);
   m_render3dEnabled = obj["render3dEnabled"].toBool(true);
   m_renderMinimapEnabled = obj["renderMinimapEnabled"].toBool(true);
   m_renderBigMapEnabled = obj["renderBigMapEnabled"].toBool(true);
+  // Backward-compat: if renderMapEnabled missing, infer from sub-toggles
+  if (obj.contains("renderMapEnabled")) {
+    m_renderMapEnabled = obj["renderMapEnabled"].toBool(true);
+  } else {
+    m_renderMapEnabled = m_renderMinimapEnabled || m_renderBigMapEnabled;
+  }
 
   // Exclusion zones (v3 migration — defaults if absent)
   if (obj.contains("exclusionZones")) {
@@ -876,6 +895,7 @@ void MarkerSettingsManager::resetToDefaults() {
   m_minimapMarkerOpacity = 1.0;
   m_renderingEnabled = true;
   m_render3dEnabled = true;
+  m_renderMapEnabled = true;
   m_renderMinimapEnabled = true;
   m_renderBigMapEnabled = true;
   m_exclusionEnabled = true;

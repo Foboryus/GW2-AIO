@@ -1,23 +1,24 @@
 #pragma once
 
 /**
- * @file ChildMinimap.h
- * @deprecated Replaced by ChildMapRenderer.h (Phase 5.11). Kept for history.
- * @brief Minimap child process — renders minimap markers + trails
+ * @file ChildMapRenderer.h
+ * @brief Unified map child process — renders minimap + big map markers/trails
  *
  * Owns: MinimapRenderer (QPainter 2D → QImage), TrailPipeline (GPU minimap/
  *       bigmap trails), SharedTextureProducer, MarkerManager,
  *       MarkerSettingsManager, ImageCache
  *
- * Architecture (Phase 5.9.1):
+ * Architecture (Phase 5.11):
  * 1. MinimapRenderer paints 2D markers/dots to a QImage via renderToImage()
  * 2. QImage is uploaded to an intermediate D3D11 render target
  * 3. TrailPipeline renders GPU minimap/bigmap trails on top of the markers
  * 4. Intermediate RT is copied to SharedTexture for compositor sampling
  *
- * This child owns ALL minimap/bigmap rendering — both QPainter markers
- * and GPU trails. The 3D child (Child3DOverlay) only handles 3D world
- * rendering. This ensures minimap continues working when 3D is toggled off.
+ * This child owns ALL 2D map rendering — both minimap and big map content.
+ * Sub-toggles (renderMinimapEnabled, renderBigMapEnabled) control which
+ * views are active independently. The compositor layer key is "map".
+ *
+ * Replaces the previous ChildMinimap + ChildBigMap (stub) architecture.
  *
  * GPU footprint: Uses D3D11Context::initializeOffscreen() (device + blend
  * states + rasterizer, no swap chain). Heavier than the old bare device
@@ -45,17 +46,17 @@ struct MarkerQueryContext;
 
 using Microsoft::WRL::ComPtr;
 
-class ChildMinimap : public ChildProcess {
+class ChildMapRenderer : public ChildProcess {
   Q_OBJECT
 
 public:
-  ChildMinimap(const QString &profileId,
-               const QString &mumbleName,
-               qint64 gw2Pid,
-               const QString &pipeName,
-               const QString &profileName,
-               QObject *parent = nullptr);
-  ~ChildMinimap() override;
+  ChildMapRenderer(const QString &profileId,
+                   const QString &mumbleName,
+                   qint64 gw2Pid,
+                   const QString &pipeName,
+                   const QString &profileName,
+                   QObject *parent = nullptr);
+  ~ChildMapRenderer() override;
 
 protected:
   bool onInitialize() override;
@@ -67,7 +68,7 @@ protected:
   void onReloadPacks() override;
 
 private:
-  void syncMinimapSettings();
+  void syncMapSettings();
   void onRenderFrame();
   void pollGW2WindowSize();
 

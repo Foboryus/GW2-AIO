@@ -24,6 +24,12 @@
 #include <QPainterPath>
 #include <QSvgRenderer>
 
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #pragma comment(lib, "dcomp.lib")
 
 // Static hook map for WinEventHook callback routing
@@ -42,7 +48,7 @@ ChildCompositor::ChildCompositor(const QString &profileId,
     : ChildProcess(profileId, mumbleName, gw2Pid, pipeName, profileName, parent)
 {
   // Layer draw order: bottom to top
-  m_layerOrder = {"3d", "minimap", "radial", "hud"};
+  m_layerOrder = {"3d", "map", "radial", "hud"};
 
   // Unique window class per profile
   std::wstring uuid = profileId.toStdWString();
@@ -157,6 +163,12 @@ void ChildCompositor::onFocusChanged(bool focused)
       ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
       updatePosition();
 
+      // Reset stall detection — stale tick timestamps from before unfocus
+      // would trigger false stall on first frames after refocus.
+      m_lastUiTick = 0;
+      m_lastTickChangeMs = 0;
+      m_tickStalled = false;
+
       // Start loading bar only if player is in-game (not loading/char select)
       if (mumbleLink() && mumbleLink()->isConnected() &&
           mumbleLink()->mapId() > 0) {
@@ -165,6 +177,14 @@ void ChildCompositor::onFocusChanged(bool focused)
       }
     } else {
       m_loadingBarActive = false;
+
+      // Clear render target before hiding — prevents DComp from showing
+      // the last committed frame (3D markers, etc.) as a brief flash.
+      if (m_d3dContext && m_d3dContext->isInitialized()) {
+        m_d3dContext->beginFrame();  // Clears RT to transparent
+        m_d3dContext->endFrame();    // Present cleared frame
+      }
+
       ShowWindow(m_hwnd, SW_HIDE);
     }
   }
@@ -185,6 +205,29 @@ void ChildCompositor::onSettingsReceived(const QJsonObject &settings)
                          r["w"].toInt(), r["h"].toInt()));
     }
     updateInteractiveRects(layer, rects);
+  }
+
+  // Handle theme updates (THEME pipe → base class wraps as {"theme": {...}})
+  if (settings.contains("theme")) {
+    QJsonObject t = settings["theme"].toObject();
+    if (t.contains("panelBorder"))
+      m_borderColor = QColor(t["panelBorder"].toString());
+    if (t.contains("error"))
+      m_combatColor = QColor(t["error"].toString());
+    if (t.contains("windowBg")) {
+      m_loadingBarBg = QColor(t["windowBg"].toString());
+      m_loadingBarBg.setAlpha(230);  // Semi-transparent
+    }
+    if (t.contains("iconColor"))
+      m_loadingBarFill = QColor(t["iconColor"].toString());
+    if (t.contains("textPrimary")) {
+      // Warm-tinted text for loading bar
+      QColor base(t["textPrimary"].toString());
+      m_loadingBarText = QColor::fromHslF(
+          0.1, 0.3, qBound(0.0, base.lightnessF() * 0.95, 1.0));
+    }
+    qInfo() << "[DEV][COMPOSITOR] Theme updated — border:"
+            << m_borderColor.name() << "combat:" << m_combatColor.name();
   }
 }
 
@@ -517,6 +560,21 @@ void ChildCompositor::onRenderFrame()
   if (!m_hwnd || !m_d3dContext || !m_d3dContext->isInitialized()) return;
   if (!m_contentVisible) return;
 
+  // --- uiTick stall detection (B24/B25: instant loading screen hide) ---
+  if (mumbleLink() && mumbleLink()->isConnected()) {
+    uint32_t currentTick = mumbleLink()->uiTick();
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    if (currentTick != m_lastUiTick) {
+      m_lastUiTick = currentTick;
+      m_lastTickChangeMs = now;
+    }
+
+    // 100ms stall threshold — matches Child3DOverlay for consistency
+    m_tickStalled = (m_lastTickChangeMs > 0 &&
+                     (now - m_lastTickChangeMs) >= 100);
+  }
+
   // Dev log: emit frame count every 1000 frames (~16s at 62.5Hz)
   static uint64_t s_frameCount = 0;
   s_frameCount++;
@@ -526,7 +584,8 @@ void ChildCompositor::onRenderFrame()
     qInfo() << "[DEV][COMPOSITOR] Frame" << s_frameCount
             << "layers:" << m_layers.size()
             << "open:" << openCount
-            << "interactiveRects:" << m_interactiveRects.size();
+            << "interactiveRects:" << m_interactiveRects.size()
+            << "stalled:" << m_tickStalled;
   }
 
   // Lazy-open: try to open consumers that haven't connected yet.
@@ -538,8 +597,15 @@ void ChildCompositor::onRenderFrame()
 
   m_d3dContext->beginFrame();
 
-  // Composite shared texture layers from feature children
-  renderLayers();
+  // When stalled (loading/char-select), show only the loading bar —
+  // skip feature layers and decorations for instant hide.
+  if (!m_tickStalled) {
+    // Composite shared texture layers from feature children
+    renderLayers();
+
+    // Decorations: border + player location icon (on top of layers)
+    renderDecorations();
+  }
 
   // Loading bar overlay (renders on top of everything)
   if (m_loadingBarActive) {
@@ -738,12 +804,12 @@ void ChildCompositor::updateLoadingBarImage(float progress)
   p.setRenderHint(QPainter::Antialiasing, true);
   p.setRenderHint(QPainter::TextAntialiasing, true);
 
-  // --- Theme colors ---
-  const QColor bgColor(0x1E, 0x1E, 0x1E, 230);  // Dark, slightly transparent
-  const QColor borderColor(0xC0, 0x9C, 0x57);     // AIO gold
-  const QColor barBg(0x3A, 0x3A, 0x3A);           // Progress track
-  const QColor barFill(0xC0, 0x9C, 0x57);         // Gold fill
-  const QColor textColor(0xE0, 0xD0, 0xB0);       // Warm white
+  // --- Theme colors (from THEME IPC, defaults to Classic Gold) ---
+  const QColor bgColor = m_loadingBarBg;
+  const QColor borderColor = m_borderColor;          // Gold border
+  const QColor barBg(0x3A, 0x3A, 0x3A);              // Progress track (neutral)
+  const QColor barFill = m_loadingBarFill;             // Gold fill
+  const QColor textColor = m_loadingBarText;           // Warm white
 
   const int pad = 4;
   const QRectF outer(0.5, 0.5, kBarWidth - 1, kBarHeight - 1);
@@ -823,7 +889,7 @@ void ChildCompositor::renderLoadingBar()
   // Upload bar QImage into the top-center region of the fullscreen texture.
   int screenW = m_d3dContext->width();
   int destX = (screenW - kBarWidth) / 2;
-  int destY = 15;  // 15px from top border
+  int destY = 25;  // 25px from top border
 
   D3D11_BOX box = {};
   box.left = static_cast<UINT>(destX);
@@ -878,6 +944,328 @@ void ChildCompositor::renderLoadingBar()
 }
 
 // ============================================================================
+// Decorations — Border + Player Location Icon
+// ============================================================================
+
+bool ChildCompositor::ensureDecorTexture()
+{
+  if (!m_d3dContext || !m_d3dContext->device()) return false;
+
+  int screenW = m_d3dContext->width();
+  int screenH = m_d3dContext->height();
+
+  // Recreate if screen size changed
+  if (m_decorTex) {
+    D3D11_TEXTURE2D_DESC existing = {};
+    m_decorTex->GetDesc(&existing);
+    if (static_cast<int>(existing.Width) == screenW &&
+        static_cast<int>(existing.Height) == screenH) {
+      return true;  // Same size — reuse
+    }
+    m_decorSRV.Reset();
+    m_decorTex.Reset();
+  }
+
+  D3D11_TEXTURE2D_DESC desc = {};
+  desc.Width = static_cast<UINT>(screenW);
+  desc.Height = static_cast<UINT>(screenH);
+  desc.MipLevels = 1;
+  desc.ArraySize = 1;
+  desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  desc.SampleDesc.Count = 1;
+  desc.Usage = D3D11_USAGE_DEFAULT;
+  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+
+  HRESULT hr = m_d3dContext->device()->CreateTexture2D(
+      &desc, nullptr, m_decorTex.GetAddressOf());
+  if (FAILED(hr)) {
+    qWarning() << "[DEV][COMPOSITOR] Decoration texture creation failed:" << hr;
+    return false;
+  }
+
+  hr = m_d3dContext->device()->CreateShaderResourceView(
+      m_decorTex.Get(), nullptr, m_decorSRV.GetAddressOf());
+  if (FAILED(hr)) {
+    m_decorTex.Reset();
+    return false;
+  }
+
+  // Clear to transparent
+  ComPtr<ID3D11RenderTargetView> tempRTV;
+  hr = m_d3dContext->device()->CreateRenderTargetView(
+      m_decorTex.Get(), nullptr, tempRTV.GetAddressOf());
+  if (SUCCEEDED(hr) && m_d3dContext->context()) {
+    float clear[4] = {0, 0, 0, 0};
+    m_d3dContext->context()->ClearRenderTargetView(tempRTV.Get(), clear);
+  }
+
+  qInfo() << "[DEV][COMPOSITOR] Decoration texture created"
+          << screenW << "x" << screenH;
+  return true;
+}
+
+QRectF ChildCompositor::computeMinimapRect(int screenW, int screenH) const
+{
+  if (!mumbleLink() || !mumbleLink()->isConnected()) {
+    return QRectF();
+  }
+
+  const CompassData &compass = mumbleLink()->minimapData();
+  if (compass.compassWidth <= 0 || compass.compassHeight <= 0) {
+    return QRectF();
+  }
+
+  // GW2 window-too-small scaling (TacO: GetWindowTooSmallScale)
+  constexpr float kMinWindowWidth = 1024.0f;
+  constexpr float kMinWindowHeight = 768.0f;
+  float wtsW = (screenW < kMinWindowWidth)
+                   ? static_cast<float>(screenW) / kMinWindowWidth
+                   : 1.0f;
+  float wtsH = (screenH < kMinWindowHeight)
+                   ? static_cast<float>(screenH) / kMinWindowHeight
+                   : 1.0f;
+  float windowTooSmallScale = qMin(wtsW, wtsH);
+
+  float cw = static_cast<float>(compass.compassWidth) * windowTooSmallScale;
+  float ch = static_cast<float>(compass.compassHeight) * windowTooSmallScale;
+
+  float x, y;
+  if (mumbleLink()->isMinimapTopRight()) {
+    x = static_cast<float>(screenW) - cw;
+    y = 1.0f * windowTooSmallScale;
+  } else {
+    // Default: bottom-right with delta for bottom UI bar
+    int uiSize = mumbleLink()->uiSize();
+    float delta = 37.0f; // Normal UI
+    if (uiSize == 0)
+      delta = 33.0f; // Small
+    else if (uiSize == 2)
+      delta = 41.0f; // Large
+    else if (uiSize == 3)
+      delta = 45.0f; // Larger
+
+    delta *= windowTooSmallScale;
+
+    x = static_cast<float>(screenW) - cw;
+    y = static_cast<float>(screenH) - ch - delta;
+  }
+
+  return QRectF(x, y, cw, ch);
+}
+
+void ChildCompositor::paintDecorations(QPainter &p, int screenW, int screenH)
+{
+  if (!mumbleLink() || !mumbleLink()->isConnected()) return;
+  if (mumbleLink()->mapId() == 0) return;
+
+  bool bigMapOpen = mumbleLink()->isMapOpen();
+  bool inCombat = mumbleLink()->isInCombat();
+
+  // Compute minimap rect (always needed for minimap border)
+  QRectF miniRect = computeMinimapRect(screenW, screenH);
+
+  // Render rect: big map = fullscreen, minimap = compass rect
+  QRectF renderRect = bigMapOpen
+      ? QRectF(0, 0, screenW, screenH)
+      : miniRect;
+
+  if (renderRect.isEmpty()) return;
+
+  // Choose compass data based on map mode
+  const CompassData &compass =
+      bigMapOpen ? mumbleLink()->bigMapData() : mumbleLink()->minimapData();
+
+  // Build transformation matrix (world → screen pixel coords)
+  bool ignoreRotation = bigMapOpen;
+  QMatrix4x4 transform = compass.buildTransformationMatrix(
+      renderRect, mumbleLink()->playerPosition(), ignoreRotation);
+
+  // --- Player position indicator ---
+  {
+    QVector3D playerPos = mumbleLink()->playerPosition();
+    QVector4D playerWorld(playerPos.x(), playerPos.y(), playerPos.z(), 1.0f);
+    QVector4D playerScreen = transform * playerWorld;
+    QPointF playerPt(static_cast<qreal>(playerScreen.x()),
+                     static_cast<qreal>(playerScreen.y()));
+
+    qreal iconRadius = bigMapOpen ? 10.0 : 7.0;
+    qreal borderRadius = iconRadius + 3.0;
+
+    // Facing direction
+    QVector3D front = mumbleLink()->playerFront();
+    qreal targetAngle = std::atan2(static_cast<qreal>(front.x()),
+                                   static_cast<qreal>(front.z()));
+
+    // On minimap, compass rotates — subtract compass rotation
+    if (!bigMapOpen) {
+      targetAngle -= static_cast<qreal>(compass.compassRotation);
+    }
+
+    m_smoothedFacingAngle = targetAngle;
+    qreal facingAngle = m_smoothedFacingAngle;
+
+    // Theme color for indicator
+    QColor indicatorColor;
+    if (inCombat) {
+      indicatorColor = m_combatColor;
+    } else {
+      // Lighten border color: keep hue, reduce saturation, high lightness
+      indicatorColor = QColor::fromHslF(
+          m_borderColor.hslHueF(),
+          m_borderColor.hslSaturationF() * 0.5,
+          0.80);
+    }
+
+    // Clip to render rect
+    p.save();
+    p.setClipRect(renderRect);
+    p.setOpacity(1.0);
+
+    // --- Directional arrow (behind disc) ---
+    {
+      qreal arrowLen = bigMapOpen ? 10.0 : 8.0;
+      qreal arrowHalfWidth = bigMapOpen ? 9.0 : 7.0;
+      qreal baseDist = borderRadius - 3.0;
+      qreal tipDist = borderRadius + arrowLen;
+
+      QPointF tip(playerPt.x() + tipDist * std::sin(facingAngle),
+                  playerPt.y() - tipDist * std::cos(facingAngle));
+
+      QPointF base1(
+          playerPt.x() +
+              baseDist * std::sin(facingAngle) -
+              arrowHalfWidth * std::cos(facingAngle),
+          playerPt.y() -
+              baseDist * std::cos(facingAngle) -
+              arrowHalfWidth * std::sin(facingAngle));
+      QPointF base2(
+          playerPt.x() +
+              baseDist * std::sin(facingAngle) +
+              arrowHalfWidth * std::cos(facingAngle),
+          playerPt.y() -
+              baseDist * std::cos(facingAngle) +
+              arrowHalfWidth * std::sin(facingAngle));
+
+      QPainterPath arrowPath;
+      arrowPath.moveTo(tip);
+      arrowPath.lineTo(base1);
+      arrowPath.lineTo(base2);
+      arrowPath.closeSubpath();
+
+      p.setBrush(indicatorColor);
+      p.setPen(QPen(Qt::black, 1.5));
+      p.drawPath(arrowPath);
+    }
+
+    // --- Solid black disc ---
+    p.setBrush(QColor(0, 0, 0));
+    p.setPen(Qt::NoPen);
+    p.drawEllipse(playerPt, borderRadius, borderRadius);
+
+    // --- AIO gear icon ---
+    {
+      if (m_playerIcon.isNull()) {
+        m_playerIcon =
+            QPixmap(QStringLiteral(":/icons/player-indicator.svg"));
+      }
+
+      if (!m_playerIcon.isNull()) {
+        qreal iconSize = iconRadius * 2.0;
+        QRectF iconRect(playerPt.x() - iconRadius,
+                        playerPt.y() - iconRadius, iconSize, iconSize);
+        p.drawPixmap(iconRect.toRect(), m_playerIcon);
+      } else {
+        // Fallback: black dot
+        p.setBrush(QColor(0, 0, 0));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(playerPt, iconRadius, iconRadius);
+      }
+    }
+
+    p.restore();
+  }
+
+  // --- Border (drawn on top of everything) ---
+  QColor borderColor = inCombat ? m_combatColor : m_borderColor;
+  p.setBrush(Qt::NoBrush);
+  p.setPen(QPen(borderColor, inCombat ? 3.0 : 2.0));
+  p.drawRect(renderRect);
+}
+
+void ChildCompositor::renderDecorations()
+{
+  if (!mumbleLink() || !mumbleLink()->isConnected()) return;
+  if (mumbleLink()->mapId() == 0) return;
+
+  int screenW = m_d3dContext->width();
+  int screenH = m_d3dContext->height();
+  if (screenW <= 0 || screenH <= 0) return;
+
+  if (!ensureDecorTexture()) return;
+
+  // Ensure premultiplied alpha blend state exists (shared with loading bar)
+  if (!m_premulBlend) return;
+
+  auto *ctx = m_d3dContext->context();
+  if (!ctx) return;
+
+  // Paint decorations onto QImage
+  // Use a region-sized image to minimize upload cost
+  // For simplicity, use fullscreen image — decorations span minimap + bigmap
+  if (m_decorImage.width() != screenW || m_decorImage.height() != screenH) {
+    m_decorImage = QImage(screenW, screenH,
+                          QImage::Format_ARGB32_Premultiplied);
+  }
+  m_decorImage.fill(Qt::transparent);
+
+  QPainter painter(&m_decorImage);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  paintDecorations(painter, screenW, screenH);
+  painter.end();
+
+  // Upload full image to GPU
+  ctx->UpdateSubresource(
+      m_decorTex.Get(), 0, nullptr,
+      m_decorImage.constBits(),
+      static_cast<UINT>(m_decorImage.bytesPerLine()),
+      0);
+
+  // Draw fullscreen quad with decoration texture
+  float blendFactor[4] = {0, 0, 0, 0};
+  ctx->OMSetBlendState(m_premulBlend.Get(), blendFactor, 0xFFFFFFFF);
+
+  ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  ctx->IASetInputLayout(nullptr);
+  ctx->VSSetShader(m_quadVS.Get(), nullptr, 0);
+  ctx->PSSetShader(m_quadPS.Get(), nullptr, 0);
+
+  if (m_screenSizeCB) {
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    if (SUCCEEDED(ctx->Map(m_screenSizeCB.Get(), 0,
+                           D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+      float cbData[4] = {
+        static_cast<float>(screenW),
+        static_cast<float>(screenH),
+        0.0f, 0.0f
+      };
+      memcpy(mapped.pData, cbData, sizeof(cbData));
+      ctx->Unmap(m_screenSizeCB.Get(), 0);
+    }
+    ID3D11Buffer *cbs[] = {m_screenSizeCB.Get()};
+    ctx->PSSetConstantBuffers(0, 1, cbs);
+  }
+
+  ID3D11SamplerState *samplers[] = {m_linearSampler.Get()};
+  ctx->PSSetSamplers(0, 1, samplers);
+
+  ctx->PSSetShaderResources(0, 1, m_decorSRV.GetAddressOf());
+  ctx->Draw(3, 0);
+
+  // Restore default blend state
+  ctx->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFF);
+}
+
+// ============================================================================
 // Position Tracking
 // ============================================================================
 
@@ -920,6 +1308,20 @@ void ChildCompositor::updatePosition()
   QSize newSize(width, height);
   if (width != m_d3dContext->width() || height != m_d3dContext->height()) {
     m_d3dContext->resize(newSize);
+
+    // Close all shared texture consumers — producers will recreate their
+    // textures at the new size (via pollGW2WindowSize), invalidating the
+    // old NT handles. Without this, acquireForRead() returns stale staging
+    // copies forever because consumer->isOpen() stays true on the dead handle.
+    // tryOpenConsumers() on the next render frame will reopen with fresh textures.
+    for (const QString &layerKey : m_layerOrder) {
+      auto *consumer = m_layers.value(layerKey, nullptr);
+      if (consumer && consumer->isOpen()) {
+        consumer->shutdown();
+        qInfo() << "[DEV][COMPOSITOR] Closed consumer for resize:" << layerKey;
+      }
+    }
+
     // Notify feature children of resize
     sendToGrandfather(("RESIZE:" + QString::number(width) + ":" +
                     QString::number(height) + "\n").toUtf8());

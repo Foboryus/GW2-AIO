@@ -75,6 +75,13 @@ void OverlayMenuWidget::setMarkerSettings(MarkerSettingsManager *settings) {
 void OverlayMenuWidget::setRadialEnabled(bool enabled) {
   if (m_radialEnabled == enabled) return;
   m_radialEnabled = enabled;
+  m_radialSettings.radialEnabled = enabled;
+  update();
+}
+
+void OverlayMenuWidget::setRadialSettings(const RadialSettings &settings) {
+  m_radialSettings = settings;
+  m_radialEnabled = settings.radialEnabled;
   update();
 }
 
@@ -388,8 +395,10 @@ void OverlayMenuWidget::drawPanel(QPainter &painter) {
     m_maxScroll = qMax(0, totalHeight - static_cast<int>(contentArea.height()));
 
     painter.restore();
-  } else {
+  } else if (m_activeTab == Tab::Settings) {
     drawSettingsPage(painter, contentArea);
+  } else if (m_activeTab == Tab::Radial) {
+    drawRadialPage(painter, contentArea);
   }
 }
 
@@ -400,36 +409,41 @@ void OverlayMenuWidget::drawPanel(QPainter &painter) {
 void OverlayMenuWidget::drawTabBar(QPainter &painter, const QRectF &tabArea) {
   const auto &tok = overlayTokens();
 
-  qreal halfWidth = tabArea.width() / 2.0;
+  qreal thirdWidth = tabArea.width() / 3.0;
   m_packsTabRect =
-      QRectF(tabArea.left(), tabArea.top(), halfWidth, tabArea.height());
-  m_settingsTabRect = QRectF(tabArea.left() + halfWidth, tabArea.top(),
-                             halfWidth, tabArea.height());
+      QRectF(tabArea.left(), tabArea.top(), thirdWidth, tabArea.height());
+  m_settingsTabRect = QRectF(tabArea.left() + thirdWidth, tabArea.top(),
+                             thirdWidth, tabArea.height());
+  m_radialTabRect = QRectF(tabArea.left() + thirdWidth * 2, tabArea.top(),
+                           thirdWidth, tabArea.height());
 
   QFont tabFont("Segoe UI", 9, QFont::DemiBold);
   painter.setFont(tabFont);
 
-  // Packs tab
-  if (m_activeTab == Tab::Packs) {
-    painter.fillRect(m_packsTabRect, QColor(tok.headerBg));
-    painter.setPen(QColor(tok.panelBorder));
-  } else {
-    painter.setPen(QColor(tok.textSecondary));
-  }
-  painter.drawText(m_packsTabRect, Qt::AlignCenter, "Packs");
+  // Helper to draw a single tab
+  auto drawTab = [&](const QRectF &rect, Tab tab, const QString &label) {
+    if (m_activeTab == tab) {
+      painter.fillRect(rect, QColor(tok.headerBg));
+      painter.setPen(QColor(tok.panelBorder));
+    } else {
+      painter.setPen(QColor(tok.textSecondary));
+    }
+    painter.drawText(rect, Qt::AlignCenter, label);
+  };
 
-  // Settings tab
-  if (m_activeTab == Tab::Settings) {
-    painter.fillRect(m_settingsTabRect, QColor(tok.headerBg));
-    painter.setPen(QColor(tok.panelBorder));
-  } else {
-    painter.setPen(QColor(tok.textSecondary));
-  }
-  painter.drawText(m_settingsTabRect, Qt::AlignCenter, "Settings");
+  drawTab(m_packsTabRect, Tab::Packs, "Packs");
+  drawTab(m_settingsTabRect, Tab::Settings, "Settings");
+  drawTab(m_radialTabRect, Tab::Radial, "Radial");
 
   // Active tab underline indicator
-  const QRectF &activeRect =
-      (m_activeTab == Tab::Packs) ? m_packsTabRect : m_settingsTabRect;
+  QRectF activeRect;
+  if (m_activeTab == Tab::Packs)
+    activeRect = m_packsTabRect;
+  else if (m_activeTab == Tab::Settings)
+    activeRect = m_settingsTabRect;
+  else
+    activeRect = m_radialTabRect;
+
   painter.setPen(Qt::NoPen);
   painter.setBrush(QColor(tok.panelBorder));
   painter.drawRect(QRectF(activeRect.left() + 8, activeRect.bottom() - 2,
@@ -503,17 +517,36 @@ void OverlayMenuWidget::drawSettingsPage(QPainter &painter,
     if (mainOn) {
       bool show3d =
           m_markerSettings ? m_markerSettings->render3dEnabled() : true;
+      bool showMap =
+          m_markerSettings ? m_markerSettings->renderMapEnabled() : true;
       bool showMinimap =
           m_markerSettings ? m_markerSettings->renderMinimapEnabled() : true;
       bool showBigMap =
           m_markerSettings ? m_markerSettings->renderBigMapEnabled() : true;
 
       drawToggleRow("  3D World", show3d, m_3dRenderToggleRect);
-      drawToggleRow("  Minimap", showMinimap, m_minimapRenderToggleRect);
-      drawToggleRow("  Big Map (M)", showBigMap, m_bigMapRenderToggleRect);
+      drawToggleRow("  Map Markers", showMap, m_mapRenderToggleRect);
+
+      // Sub-toggles under Map Markers — double-indented, greyed when parent OFF
+      if (showMap) {
+        drawToggleRow("      Minimap", showMinimap, m_minimapRenderToggleRect);
+        drawToggleRow("      Big Map (M)", showBigMap, m_bigMapRenderToggleRect);
+      } else {
+        // Greyed-out sub-toggles (draw but non-interactive)
+        painter.save();
+        painter.setOpacity(painter.opacity() * 0.4);
+        drawToggleRow("      Minimap", showMinimap, m_minimapRenderToggleRect);
+        drawToggleRow("      Big Map (M)", showBigMap, m_bigMapRenderToggleRect);
+        painter.restore();
+        // Clear hit rects so clicks don't register
+        m_minimapRenderToggleRect = QRectF();
+        m_bigMapRenderToggleRect = QRectF();
+      }
+
       drawToggleRow("  Radial Menu", m_radialEnabled, m_radialToggleRect);
     } else {
       m_3dRenderToggleRect = QRectF();
+      m_mapRenderToggleRect = QRectF();
       m_minimapRenderToggleRect = QRectF();
       m_bigMapRenderToggleRect = QRectF();
       m_radialToggleRect = QRectF();
@@ -957,6 +990,192 @@ void OverlayMenuWidget::drawSettingsPage(QPainter &painter,
   painter.restore();
 }
 
+// ============================================================================
+// Radial Settings Page
+// ============================================================================
+
+void OverlayMenuWidget::drawRadialPage(QPainter &painter,
+                                       const QRectF &contentArea) {
+  const auto &tok = overlayTokens();
+  painter.save();
+  painter.setClipRect(contentArea);
+
+  // Apply scroll offset
+  painter.translate(0, -m_radialScrollOffset);
+
+  qreal x = contentArea.left() + 12;
+  qreal y = contentArea.top() + 8;
+  qreal w = contentArea.width() - 24;
+
+  QFont labelFont("Segoe UI", 9, QFont::DemiBold);
+  QFont valueFont("Segoe UI", 8);
+  QFont sectionFont("Segoe UI", 10, QFont::Bold);
+
+  // -- Toggle row lambda (same pattern as Settings page) --
+  auto drawToggleRow = [&](const QString &label, bool enabled,
+                           QRectF &toggleRect) {
+    painter.setFont(labelFont);
+    painter.setPen(QColor(tok.textPrimary));
+    painter.drawText(QRectF(x, y, w - 24, kItemHeight),
+                     Qt::AlignLeft | Qt::AlignVCenter, label);
+    toggleRect = QRectF(x + w - 20, y + (kItemHeight - 16) / 2.0, 16, 16);
+    drawToggleIndicator(painter, toggleRect, enabled);
+    y += kItemHeight;
+  };
+
+  // ==========================
+  // Mount Wheel Section
+  // ==========================
+  painter.setFont(sectionFont);
+  painter.setPen(QColor(tok.panelBorder));
+  painter.drawText(QRectF(x, y, w, 20), Qt::AlignLeft | Qt::AlignVCenter,
+                   "Mount Wheel");
+  y += 24;
+
+  // Section separator
+  painter.setPen(QPen(QColor(tok.panelBorder), 0.5));
+  painter.drawLine(QPointF(x, y), QPointF(x + w, y));
+  y += 6;
+
+  // Mount wheel master toggle
+  drawToggleRow("Enable Mount Wheel", m_radialSettings.mountWheelEnabled,
+                m_mountWheelToggleRect);
+
+  // Per-mount toggles
+  if (m_radialSettings.mountWheelEnabled) {
+    const QStringList mountOrder = {"raptor",  "springer", "skimmer",
+                                    "jackal",  "griffon",  "beetle",
+                                    "warclaw",  "skyscale", "turtle",
+                                    "skiff"};
+    const QMap<QString, QString> mountNames = {
+        {"raptor", "Raptor"},     {"springer", "Springer"},
+        {"skimmer", "Skimmer"},   {"jackal", "Jackal"},
+        {"griffon", "Griffon"},   {"beetle", "Roller Beetle"},
+        {"warclaw", "Warclaw"},   {"skyscale", "Skyscale"},
+        {"turtle", "Siege Turtle"}, {"skiff", "Skiff"}};
+
+    int mountIdx = 0;
+    for (const auto &key : mountOrder) {
+      if (!m_radialSettings.mounts.contains(key))
+        continue;
+      bool enabled = m_radialSettings.mounts[key].enabled;
+      QString label = "  " + mountNames.value(key, key);
+
+      // Ensure enough toggle rects
+      if (mountIdx >= m_mountToggleRects.size())
+        m_mountToggleRects.resize(mountIdx + 1);
+
+      drawToggleRow(label, enabled, m_mountToggleRects[mountIdx]);
+      ++mountIdx;
+    }
+  }
+
+  y += 8;
+
+  // ==========================
+  // Display Section
+  // ==========================
+  painter.setFont(sectionFont);
+  painter.setPen(QColor(tok.panelBorder));
+  painter.drawText(QRectF(x, y, w, 20), Qt::AlignLeft | Qt::AlignVCenter,
+                   "Display");
+  y += 24;
+
+  painter.setPen(QPen(QColor(tok.panelBorder), 0.5));
+  painter.drawLine(QPointF(x, y), QPointF(x + w, y));
+  y += 6;
+
+  // Wheel Scale slider (0.5 - 2.0)
+  {
+    painter.setFont(labelFont);
+    painter.setPen(QColor(tok.textPrimary));
+    painter.drawText(QRectF(x, y, w * 0.5, kItemHeight),
+                     Qt::AlignLeft | Qt::AlignVCenter, "Wheel Scale");
+    painter.setFont(valueFont);
+    painter.setPen(QColor(tok.textSecondary));
+    QString valStr = QString::number(m_radialSettings.wheelScale, 'f', 2);
+    painter.drawText(QRectF(x + w * 0.5, y, w * 0.5, kItemHeight),
+                     Qt::AlignRight | Qt::AlignVCenter, valStr);
+    y += kItemHeight;
+
+    m_radialScaleSliderRect = QRectF(x, y, w, kSliderHeight);
+    qreal normalized =
+        (m_radialSettings.wheelScale - 0.5) / 1.5; // 0.5-2.0 → 0-1
+    drawSlider(painter, m_radialScaleSliderRect, normalized, "");
+    y += kSliderHeight + 8;
+  }
+
+  // Opacity slider (0.0 - 1.0)
+  {
+    painter.setFont(labelFont);
+    painter.setPen(QColor(tok.textPrimary));
+    painter.drawText(QRectF(x, y, w * 0.5, kItemHeight),
+                     Qt::AlignLeft | Qt::AlignVCenter, "Opacity");
+    painter.setFont(valueFont);
+    painter.setPen(QColor(tok.textSecondary));
+    int pct = static_cast<int>(m_radialSettings.opacity * 100);
+    painter.drawText(QRectF(x + w * 0.5, y, w * 0.5, kItemHeight),
+                     Qt::AlignRight | Qt::AlignVCenter,
+                     QString::number(pct) + "%");
+    y += kItemHeight;
+
+    m_radialOpacitySliderRect = QRectF(x, y, w, kSliderHeight);
+    drawSlider(painter, m_radialOpacitySliderRect, m_radialSettings.opacity,
+               "");
+    y += kSliderHeight + 8;
+  }
+
+  // Animation Time slider (50 - 500ms)
+  {
+    painter.setFont(labelFont);
+    painter.setPen(QColor(tok.textPrimary));
+    painter.drawText(QRectF(x, y, w * 0.5, kItemHeight),
+                     Qt::AlignLeft | Qt::AlignVCenter, "Animation");
+    painter.setFont(valueFont);
+    painter.setPen(QColor(tok.textSecondary));
+    painter.drawText(
+        QRectF(x + w * 0.5, y, w * 0.5, kItemHeight),
+        Qt::AlignRight | Qt::AlignVCenter,
+        QString::number(m_radialSettings.animationTimeMs) + "ms");
+    y += kItemHeight;
+
+    m_radialAnimSliderRect = QRectF(x, y, w, kSliderHeight);
+    qreal normalized =
+        static_cast<qreal>(m_radialSettings.animationTimeMs - 50) / 450.0;
+    drawSlider(painter, m_radialAnimSliderRect, qBound(0.0, normalized, 1.0),
+               "");
+    y += kSliderHeight + 8;
+  }
+
+  y += 4;
+
+  // ==========================
+  // Interaction Section
+  // ==========================
+  painter.setFont(sectionFont);
+  painter.setPen(QColor(tok.panelBorder));
+  painter.drawText(QRectF(x, y, w, 20), Qt::AlignLeft | Qt::AlignVCenter,
+                   "Interaction");
+  y += 24;
+
+  painter.setPen(QPen(QColor(tok.panelBorder), 0.5));
+  painter.drawLine(QPointF(x, y), QPointF(x + w, y));
+  y += 6;
+
+  drawToggleRow("No-Hold Mode", m_radialSettings.noHoldMode,
+                m_noHoldToggleRect);
+  drawToggleRow("Reset Cursor", m_radialSettings.resetCursorAfterKeybind,
+                m_resetCursorToggleRect);
+
+  // Compute max scroll
+  qreal totalContentHeight = y - contentArea.top() + 12;
+  qreal visibleHeight = contentArea.height();
+  m_radialMaxScroll =
+      qMax(0, static_cast<int>(totalContentHeight - visibleHeight));
+
+  painter.restore();
+}
+
 void OverlayMenuWidget::drawSlider(QPainter &painter, const QRectF &sliderRect,
                                    qreal value, const QString &label) {
   Q_UNUSED(label);
@@ -1129,6 +1348,13 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
       }
       return;
     }
+    if (m_radialTabRect.contains(pos)) {
+      if (m_activeTab != Tab::Radial) {
+        m_activeTab = Tab::Radial;
+        update();
+      }
+      return;
+    }
 
     // Settings page slider interactions
     // Hit-test rects are in scrolled (translated) coordinates,
@@ -1177,6 +1403,15 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
         if (m_markerSettings) {
           m_markerSettings->setRender3dEnabled(
               !m_markerSettings->render3dEnabled());
+        }
+        update();
+        return;
+      }
+      if (m_mapRenderToggleRect.isValid() &&
+          m_mapRenderToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
+        if (m_markerSettings) {
+          m_markerSettings->setRenderMapEnabled(
+              !m_markerSettings->renderMapEnabled());
         }
         update();
         return;
@@ -1457,6 +1692,115 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
       return; // Consume click in settings area
     }
 
+    // Radial tab: toggle and slider interactions
+    if (m_activeTab == Tab::Radial) {
+      QPointF scrolledPos(pos.x(), pos.y() + m_radialScrollOffset);
+
+      // Mount wheel master toggle
+      if (m_mountWheelToggleRect.isValid() &&
+          m_mountWheelToggleRect.adjusted(-8, -4, 8, 4)
+              .contains(scrolledPos)) {
+        m_radialSettings.mountWheelEnabled =
+            !m_radialSettings.mountWheelEnabled;
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      // Per-mount toggles
+      const QStringList mountOrder = {"raptor",  "springer", "skimmer",
+                                      "jackal",  "griffon",  "beetle",
+                                      "warclaw", "skyscale", "turtle",
+                                      "skiff"};
+      int mountIdx = 0;
+      for (const auto &key : mountOrder) {
+        if (!m_radialSettings.mounts.contains(key))
+          continue;
+        if (mountIdx < m_mountToggleRects.size() &&
+            m_mountToggleRects[mountIdx].isValid() &&
+            m_mountToggleRects[mountIdx]
+                .adjusted(-8, -4, 8, 4)
+                .contains(scrolledPos)) {
+          m_radialSettings.mounts[key].enabled =
+              !m_radialSettings.mounts[key].enabled;
+          emit radialSettingsChanged(m_radialSettings);
+          update();
+          return;
+        }
+        ++mountIdx;
+      }
+
+      // No-Hold Mode toggle
+      if (m_noHoldToggleRect.isValid() &&
+          m_noHoldToggleRect.adjusted(-8, -4, 8, 4).contains(scrolledPos)) {
+        m_radialSettings.noHoldMode = !m_radialSettings.noHoldMode;
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      // Reset Cursor toggle
+      if (m_resetCursorToggleRect.isValid() &&
+          m_resetCursorToggleRect.adjusted(-8, -4, 8, 4)
+              .contains(scrolledPos)) {
+        m_radialSettings.resetCursorAfterKeybind =
+            !m_radialSettings.resetCursorAfterKeybind;
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      // Wheel Scale slider (drag index 20)
+      if (m_radialScaleSliderRect.isValid() &&
+          m_radialScaleSliderRect.contains(scrolledPos)) {
+        m_isDraggingSlider = true;
+        m_dragSliderIndex = 20;
+        qreal value = qBound(
+            0.0,
+            (pos.x() - m_radialScaleSliderRect.left()) /
+                m_radialScaleSliderRect.width(),
+            1.0);
+        m_radialSettings.wheelScale = 0.5 + value * 1.5; // 0.5-2.0
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      // Opacity slider (drag index 21)
+      if (m_radialOpacitySliderRect.isValid() &&
+          m_radialOpacitySliderRect.contains(scrolledPos)) {
+        m_isDraggingSlider = true;
+        m_dragSliderIndex = 21;
+        qreal value = qBound(
+            0.0,
+            (pos.x() - m_radialOpacitySliderRect.left()) /
+                m_radialOpacitySliderRect.width(),
+            1.0);
+        m_radialSettings.opacity = value;
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      // Animation slider (drag index 22)
+      if (m_radialAnimSliderRect.isValid() &&
+          m_radialAnimSliderRect.contains(scrolledPos)) {
+        m_isDraggingSlider = true;
+        m_dragSliderIndex = 22;
+        qreal value = qBound(
+            0.0,
+            (pos.x() - m_radialAnimSliderRect.left()) /
+                m_radialAnimSliderRect.width(),
+            1.0);
+        m_radialSettings.animationTimeMs = 50 + static_cast<int>(value * 450);
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      return; // Consume click in radial area
+    }
+
     // Packs tab: tree interactions
     int idx = hitTestTreeItem(pos);
     if (idx >= 0 && idx < m_flatItems.size()) {
@@ -1606,7 +1950,34 @@ void OverlayMenuWidget::mouseMoveEvent(QMouseEvent *event) {
   }
 
   // Slider dragging
-  if (m_isDraggingSlider && m_markerSettings) {
+  if (m_isDraggingSlider) {
+    // Radial tab sliders (indices 20-22)
+    if (m_dragSliderIndex >= 20 && m_dragSliderIndex <= 22) {
+      QRectF sliderRect;
+      if (m_dragSliderIndex == 20)
+        sliderRect = m_radialScaleSliderRect;
+      else if (m_dragSliderIndex == 21)
+        sliderRect = m_radialOpacitySliderRect;
+      else
+        sliderRect = m_radialAnimSliderRect;
+
+      qreal value = qBound(
+          0.0, (pos.x() - sliderRect.left()) / sliderRect.width(), 1.0);
+
+      if (m_dragSliderIndex == 20) {
+        m_radialSettings.wheelScale = 0.5 + value * 1.5;
+      } else if (m_dragSliderIndex == 21) {
+        m_radialSettings.opacity = value;
+      } else {
+        m_radialSettings.animationTimeMs = 50 + static_cast<int>(value * 450);
+      }
+      emit radialSettingsChanged(m_radialSettings);
+      update();
+      return;
+    }
+
+    // Marker settings sliders (indices 0-10)
+    if (m_markerSettings) {
     QRectF sliderRect;
     if (m_dragSliderIndex == 0)
       sliderRect = m_overlaySliderRect;
@@ -1667,6 +2038,7 @@ void OverlayMenuWidget::mouseMoveEvent(QMouseEvent *event) {
     }
     update();
     return;
+    }
   }
 
   // Track hover over tree items (Packs tab only)
@@ -1696,6 +2068,9 @@ void OverlayMenuWidget::wheelEvent(QWheelEvent *event) {
   if (m_activeTab == Tab::Settings) {
     m_settingsScrollOffset =
         qBound(0, m_settingsScrollOffset - delta / 4, m_settingsMaxScroll);
+  } else if (m_activeTab == Tab::Radial) {
+    m_radialScrollOffset =
+        qBound(0, m_radialScrollOffset - delta / 4, m_radialMaxScroll);
   } else {
     m_scrollOffset = qBound(0, m_scrollOffset - delta / 4, m_maxScroll);
   }

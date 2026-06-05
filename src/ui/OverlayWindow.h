@@ -13,7 +13,6 @@
 
 class MarkerManager;
 class MarkerSettingsManager;
-class MinimapRenderer;
 class OverlayMenuWidget;
 class ExclusionZoneEditor;
 
@@ -84,10 +83,11 @@ public:
   OverlayMenuWidget *overlayMenu() const { return m_menuWidget; }
 
   /**
-   * @brief Set the per-instance MinimapRenderer for resize tracking
-   * Called by OverlayInstance after reparenting the renderer.
+   * @brief Set focus state (true = GW2 foreground, false = paused icon)
+   * Called by WinEvent hook internally and by ChildOverlay on IPC focus.
    */
-  void setMinimapRenderer(MinimapRenderer *renderer);
+  void setGameFocused(bool focused);
+
 
 protected:
   void paintEvent(QPaintEvent *event) override;
@@ -192,9 +192,6 @@ private:
   OverlayMenuWidget *m_menuWidget = nullptr;
   ExclusionZoneEditor *m_zoneEditor = nullptr;
 
-  // Minimap marker renderer (child widget, fills entire overlay)
-  MinimapRenderer *m_minimapRenderer = nullptr;
-
   // Marker settings (for minimap auto-hide: combat, toggles)
   MarkerSettingsManager *m_markerSettings = nullptr;
 
@@ -206,8 +203,5 @@ private:
   int m_zOrderTickCount = 0;     // Throttle counter for ensureZOrder() calls
   HWND m_lastInsertAfterHwnd = nullptr; // Z-order cache: skip redundant SetWindowPos
 
-  // Focus state: true when this overlay's GW2 is the foreground window.
-  // When unfocused, overlay hides content and shows paused icon.
-  bool m_gameFocused = true;
-  void setGameFocused(bool focused);
+  bool m_gameFocused = false;
 };

@@ -22,9 +22,9 @@
 #include "MarkerManager.h"
 #include "MarkerModels.h"
 #include "core/MumbleLink.h"
-#include "core/ThemeManager.h"
 
 #include <QDebug>
+#include <QEvent>
 #include <QMatrix4x4>
 #include <QPainter>
 #include <QPainterPath>
@@ -75,14 +75,9 @@ void MinimapRenderer::onDataUpdated() {
   // Skip repaints when focus-throttled (unfocused instance)
   if (!m_renderingEnabled) return;
 
-  // Frame guard: cap minimap repaints at ~30fps (33ms)
-  // Minimap markers/trails are static geometry — 30fps is visually smooth.
-  // Halves QPainter work and DWM composition cost vs 60fps.
-  qint64 now = m_elapsedTimer.elapsed();
-  if ((now - m_lastPaintMs) < 33) {
-    return;
-  }
-  m_lastPaintMs = now;
+  // Render at full MumbleLink poll rate (~62.5Hz when focused).
+  // No artificial 30fps cap — tighter tracking reduces visible drift
+  // during map drag/zoom. CPU cost is negligible (QPainter markers only).
   update();
 }
 
@@ -127,14 +122,6 @@ void MinimapRenderer::setShouldBeVisible(bool visible) {
   }
   m_shouldBeVisible = visible;
   update(); // Start fade animation
-}
-
-void MinimapRenderer::setInCombat(bool combat) {
-  if (m_inCombat == combat) {
-    return;
-  }
-  m_inCombat = combat;
-  update();
 }
 
 void MinimapRenderer::changeEvent(QEvent *e) {
@@ -354,132 +341,9 @@ void MinimapRenderer::renderContent(QPainter &painter, int screenW, int screenH)
     painter.setOpacity(savedOpacity); // Restore for subsequent drawing
   }
 
-  // --- Player position indicator (AIO logo + themed directional border) ---
-  // Always drawn at full opacity regardless of minimap settings.
-  {
-    qreal indicatorSavedOpacity = painter.opacity();
-    painter.setOpacity(1.0);
-    QVector3D playerPos = m_mumble->playerPosition();
-    QVector4D playerWorld(playerPos.x(), playerPos.y(), playerPos.z(), 1.0f);
-    QVector4D playerScreen = transform * playerWorld;
-    QPointF playerPt(static_cast<qreal>(playerScreen.x()),
-                     static_cast<qreal>(playerScreen.y()));
 
-    // Player indicator uses fixed pixel sizes — stays readable regardless
-    // of minimap/compass dimensions (user requirement).
-    qreal iconRadius = bigMapOpen ? 10.0 : 7.0;
-    qreal borderRadius = iconRadius + 3.0;
-    qreal borderWidth = bigMapOpen ? 3.5 : 3.0;
-
-    // --- Facing direction ---
-    // playerFront() is a unit vector in world space (X/Z plane = minimap)
-    QVector3D front = m_mumble->playerFront();
-    qreal targetAngle = std::atan2(static_cast<qreal>(front.x()),
-                                   static_cast<qreal>(front.z()));
-
-    // On minimap, the compass rotates — subtract compass rotation
-    if (!bigMapOpen) {
-      targetAngle -= static_cast<qreal>(compass.compassRotation);
-    }
-
-    // Smooth the facing angle to reduce perceived lag (exponential lerp).
-    // Shortest-path interpolation: normalize delta to [-PI, PI].
-    qreal delta = targetAngle - m_smoothedFacingAngle;
-    // Wrap delta to [-PI, PI]
-    while (delta > M_PI) delta -= 2.0 * M_PI;
-    while (delta < -M_PI) delta += 2.0 * M_PI;
-    // No smoothing — instant response like TacO/Blish HUD
-    m_smoothedFacingAngle = targetAngle;
-
-    qreal facingAngle = m_smoothedFacingAngle;
-
-    // Theme color for the indicator
-    // Normal: almost-white with a tint of the theme color
-    // Combat: full red (no lightening)
-    const auto &theme = ThemeManager::instance().activeTheme();
-    QColor indicatorColor;
-    if (m_inCombat) {
-      indicatorColor = QColor(theme.colors.error);
-    } else {
-      QColor themeColor(theme.overlay.panelBorder);
-      // Lighten to almost-white: keep hue, reduce saturation, high lightness
-      indicatorColor = QColor::fromHslF(
-          themeColor.hslHueF(),
-          themeColor.hslSaturationF() * 0.5,
-          0.80);
-    }
-
-    // --- Draw directional arrow FIRST (behind disc) ---
-    {
-      qreal arrowLen = bigMapOpen ? 10.0 : 8.0;
-      qreal arrowHalfWidth = bigMapOpen ? 9.0 : 7.0;
-      qreal baseDist = borderRadius - 3.0;
-      qreal tipDist = borderRadius + arrowLen;
-
-      QPointF tip(playerPt.x() + tipDist * std::sin(facingAngle),
-                  playerPt.y() - tipDist * std::cos(facingAngle));
-
-      QPointF base1(
-          playerPt.x() +
-              baseDist * std::sin(facingAngle) -
-              arrowHalfWidth * std::cos(facingAngle),
-          playerPt.y() -
-              baseDist * std::cos(facingAngle) -
-              arrowHalfWidth * std::sin(facingAngle));
-      QPointF base2(
-          playerPt.x() +
-              baseDist * std::sin(facingAngle) +
-              arrowHalfWidth * std::cos(facingAngle),
-          playerPt.y() -
-              baseDist * std::cos(facingAngle) +
-              arrowHalfWidth * std::sin(facingAngle));
-
-      QPainterPath arrowPath;
-      arrowPath.moveTo(tip);
-      arrowPath.lineTo(base1);
-      arrowPath.lineTo(base2);
-      arrowPath.closeSubpath();
-
-      painter.setBrush(indicatorColor);
-      painter.setPen(QPen(Qt::black, 1.5));
-      painter.drawPath(arrowPath);
-    }
-
-    // --- Draw solid black disc (no border) ---
-    painter.setBrush(QColor(0, 0, 0));
-    painter.setPen(Qt::NoPen);
-    painter.drawEllipse(playerPt, borderRadius, borderRadius);
-
-    // --- Draw simplified AIO gear icon ---
-    {
-      static QPixmap s_playerIcon;
-      if (s_playerIcon.isNull()) {
-        s_playerIcon =
-            QPixmap(QStringLiteral(":/icons/player-indicator.svg"));
-      }
-
-      if (!s_playerIcon.isNull()) {
-        qreal iconSize = iconRadius * 2.0;
-        QRectF iconRect(playerPt.x() - iconRadius,
-                        playerPt.y() - iconRadius, iconSize, iconSize);
-        painter.drawPixmap(iconRect.toRect(), s_playerIcon);
-      } else {
-        // Fallback: black dot with themed border
-        painter.setBrush(QColor(0, 0, 0));
-        painter.setPen(Qt::NoPen);
-        painter.drawEllipse(playerPt, iconRadius, iconRadius);
-      }
-    }
-    painter.setOpacity(indicatorSavedOpacity); // Restore for border drawing
-  }
-
-  // --- Border: themable colors, red in combat (drawn on top of everything) ---
-  const auto &theme = ThemeManager::instance().activeTheme();
-  QColor borderColor = m_inCombat ? QColor(theme.colors.error)
-                                  : QColor(theme.overlay.panelBorder);
-  painter.setBrush(Qt::NoBrush);
-  painter.setPen(QPen(borderColor, m_inCombat ? 3.0 : 2.0));
-  painter.drawRect(renderRect);
+  // --- Border + player icon now drawn by ChildCompositor (Phase 5.10) ---
+  // MinimapRenderer is markers + trails only.
 }
 
 void MinimapRenderer::drawMinimapMarker(QPainter &painter, const Marker &marker,

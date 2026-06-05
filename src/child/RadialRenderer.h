@@ -64,12 +64,36 @@ public:
   ComPtr<ID3D11ShaderResourceView> loadIconTexture(D3D11Context *ctx,
                                                     const QString &qrcPath);
 
+  /**
+   * @brief Load an icon with a debug text label burned into the texture.
+   * @param ctx D3D11 context for texture creation
+   * @param qrcPath QRC path to the icon
+   * @param label Text to render on the icon (e.g., "Raptor\nCtrl+R")
+   * @return SRV for the loaded texture, or nullptr on failure
+   *
+   * TEMPORARY: For debugging keybind-to-icon mapping issues.
+   */
+  ComPtr<ID3D11ShaderResourceView> loadIconTextureWithLabel(
+      D3D11Context *ctx, const QString &qrcPath, const QString &label);
+
   // --- Draw Methods ---
 
   /**
    * @brief Draw the background wheel ring
    */
   void drawWheel(D3D11Context *ctx, RadialWheel *wheel);
+
+  /**
+   * @brief Draw colored transparent sectors for debug visualization.
+   * Each element gets a unique color wedge extending to the screen edges.
+   *
+   * TEMPORARY: For debugging which angular section maps to which mount.
+   *
+   * @param elementCount Number of visible elements
+   * @param hoveredIndex Currently hovered index (-1 for none)
+   */
+  void drawDebugSectors(D3D11Context *ctx, int elementCount,
+                        int hoveredIndex);
 
   /**
    * @brief Draw a single element icon slice
@@ -143,4 +167,8 @@ private:
 
   // Blend state (premultiplied alpha for DComp)
   ComPtr<ID3D11BlendState> m_blendState;
+
+  // TEMPORARY: Debug sector overlay texture (cached)
+  ComPtr<ID3D11ShaderResourceView> m_debugSectorSRV;
+  int m_debugSectorCount = 0;  // Invalidation key
 };

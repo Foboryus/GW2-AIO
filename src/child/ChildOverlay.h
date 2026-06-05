@@ -25,6 +25,7 @@ class MarkerManager;
 class MarkerSettingsManager;
 class ImageCache;
 class OverlayWindow;
+class RadialSettingsManager;
 
 class ChildOverlay : public ChildProcess {
   Q_OBJECT
@@ -55,4 +56,5 @@ private:
 
   bool m_packsLoaded = false;
   bool m_radialEnabled = true;  // Cached radial enabled state for IPC
+  RadialSettingsManager *m_radialSettingsManager = nullptr;
 };

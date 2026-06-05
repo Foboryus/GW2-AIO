@@ -308,6 +308,31 @@ void ChildProcess::onMapChanged(uint32_t mapId)
         m_inGame = true;
         onMapEntered(mapId);
 
+        // Fix focus/visibility race: children start at 5s idle poll rate,
+        // so onMumbleDataUpdated() may not have detected focus yet. If GW2
+        // is already foreground when we enter a map, trigger focus gain NOW
+        // instead of waiting up to 5 seconds for the next poll tick.
+        if (!m_focused) {
+            HWND fgWnd = GetForegroundWindow();
+            DWORD fgPid = 0;
+            if (fgWnd) {
+                GetWindowThreadProcessId(fgWnd, &fgPid);
+            }
+            const DWORD selfPid = GetCurrentProcessId();
+            if (fgPid == static_cast<DWORD>(m_gw2Pid) || fgPid == selfPid) {
+                m_focused = true;
+                m_focusLossPending = false;
+                setFocusedPollRate();
+                qInfo() << "[DIAG] ChildProcess: FOCUS_CHANGED"
+                        << m_profileName
+                        << "focused: true"
+                        << "source: onMapChanged (instant fix)"
+                        << "inGame:" << m_inGame
+                        << "mapId:" << m_currentMapId;
+                onFocusChanged(true);
+            }
+        }
+
         // Notify grandfather via pipe that we entered a map
         if (m_pipeHandle != INVALID_HANDLE_VALUE) {
             QString msg = QString("MAP %1\n").arg(mapId);
