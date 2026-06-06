@@ -121,6 +121,9 @@ QJsonObject RadialSettings::toJson() const {
 
   // Smart features
   obj["smartRadialMounts"] = smartRadialMounts;
+  obj["fastMountSwap"] = fastMountSwap;
+  obj["dismountScanCode"] = dismountScanCode;
+  obj["dismountModifiers"] = dismountModifiers;
 
   return obj;
 }
@@ -138,32 +141,32 @@ RadialSettings RadialSettings::fromJson(const QJsonObject &obj) {
   QJsonObject mountObj = obj["mountWheel"].toObject();
   s.mountWheelEnabled = mountObj["enabled"].toBool(true);
   s.mountHotkey = mountObj["hotkey"].toInt(0x58);             // VK_X
-  s.mountHotkeyModifiers = mountObj["hotkeyModifiers"].toInt(1); // GW2: 1=Alt
+  s.mountHotkeyModifiers = mountObj["hotkeyModifiers"].toInt(4); // GW2: 4=Alt
   s.mounts = elementMapFromJson(mountObj["elements"].toObject());
 
   // Novelty wheel
   QJsonObject noveltyObj = obj["noveltyWheel"].toObject();
   s.noveltyWheelEnabled = noveltyObj["enabled"].toBool(true);
   s.noveltyHotkey = noveltyObj["hotkey"].toInt(0x4E);          // VK_N
-  s.noveltyHotkeyModifiers = noveltyObj["hotkeyModifiers"].toInt(1); // GW2: 1=Alt
+  s.noveltyHotkeyModifiers = noveltyObj["hotkeyModifiers"].toInt(4); // GW2: 4=Alt
   s.novelties = elementMapFromJson(noveltyObj["elements"].toObject());
 
   // Marker wheel
   QJsonObject markerObj = obj["markerWheel"].toObject();
   s.markerWheelEnabled = markerObj["enabled"].toBool(true);
   s.markerHotkey = markerObj["hotkey"].toInt(0x4D);            // VK_M
-  s.markerHotkeyModifiers = markerObj["hotkeyModifiers"].toInt(1); // GW2: 1=Alt
+  s.markerHotkeyModifiers = markerObj["hotkeyModifiers"].toInt(4); // GW2: 4=Alt
   s.markers = elementMapFromJson(markerObj["elements"].toObject());
 
-  // Migrate old Qt modifier flags → GW2 bitmask (1=Alt, 2=Ctrl, 4=Shift).
+  // Migrate old Qt modifier flags → GW2 bitmask (1=Shift, 2=Ctrl, 4=Alt).
   // GW2 bitmask max is 7 (Ctrl+Shift+Alt), so values > 7 are Qt flags
   // from pre-migration saves (e.g., Qt::ControlModifier = 0x04000000).
   auto migrateModifiers = [](int &mods) {
     if (mods > 7) {
       int gw2Mods = 0;
-      if (mods & 0x08000000) gw2Mods |= 1; // Qt::AltModifier → Alt
+      if (mods & 0x02000000) gw2Mods |= 1; // Qt::ShiftModifier → Shift
       if (mods & 0x04000000) gw2Mods |= 2; // Qt::ControlModifier → Ctrl
-      if (mods & 0x02000000) gw2Mods |= 4; // Qt::ShiftModifier → Shift
+      if (mods & 0x08000000) gw2Mods |= 4; // Qt::AltModifier → Alt
       mods = gw2Mods;
     }
   };
@@ -182,13 +185,13 @@ RadialSettings RadialSettings::fromJson(const QJsonObject &obj) {
   // Interaction
   QJsonObject interObj = obj["interaction"].toObject();
   s.centerBehavior = static_cast<RadialCenterBehavior>(
-      interObj["centerBehavior"].toInt(0));
+      interObj["centerBehavior"].toInt(4)); // Default: MountDismount
   s.noHoldMode = interObj["noHoldMode"].toBool(false);
   s.clickSelectMode = interObj["clickSelectMode"].toBool(false);
   s.resetCursorAfterKeybind =
       interObj["resetCursorAfterKeybind"].toBool(true);
   s.lockCameraWhenOverlayed =
-      interObj["lockCameraWhenOverlayed"].toBool(true);
+      interObj["lockCameraWhenOverlayed"].toBool(false);
 
   // Queuing
   QJsonObject queueObj = obj["queuing"].toObject();
@@ -198,6 +201,9 @@ RadialSettings RadialSettings::fromJson(const QJsonObject &obj) {
 
   // Smart features
   s.smartRadialMounts = obj["smartRadialMounts"].toBool(false);
+  s.fastMountSwap = obj["fastMountSwap"].toBool(true);
+  s.dismountScanCode = obj["dismountScanCode"].toInt(0);
+  s.dismountModifiers = obj["dismountModifiers"].toInt(0);
 
   return s;
 }

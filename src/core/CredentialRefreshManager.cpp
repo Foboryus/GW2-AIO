@@ -21,9 +21,10 @@ CredentialRefreshManager::CredentialRefreshManager(
           &CredentialRefreshManager::onTimeout);
 }
 
-QList<AccountProfile> CredentialRefreshManager::getStaleProfiles(
-    const QList<AccountProfile> &profiles, int thresholdHours) const {
-  QList<AccountProfile> stale;
+QList<AccountProfile> CredentialRefreshManager::getProfilesNeedingRefresh(
+    const QList<AccountProfile> &profiles, int remoteBuildId,
+    int thresholdHours) const {
+  QList<AccountProfile> needRefresh;
   for (const auto &p : profiles) {
     // Only standalone profiles with a saved Local.dat need refresh.
     // Steam/Epic use platform auth — no .dat file involved.
@@ -32,23 +33,33 @@ QList<AccountProfile> CredentialRefreshManager::getStaleProfiles(
     if (p.localDatPath.isEmpty())
       continue;
 
+    // Check 1: Build staleness — Local.dat hasn't been through current build
+    if (remoteBuildId > 0 && p.lastVerifiedBuild != remoteBuildId) {
+      qInfo() << "Needs refresh:" << p.nickname
+              << "— build stale (profile:" << p.lastVerifiedBuild
+              << "remote:" << remoteBuildId << ")";
+      needRefresh.append(p);
+      continue;
+    }
+
+    // Check 2: Credential staleness — session token expired
     // Use AIO-tracked lastLoginTime (set on character select)
     // instead of filesystem timestamp for reliable staleness detection
     if (!p.lastLoginTime.isValid()) {
-      qInfo() << "Stale credentials for" << p.nickname
+      qInfo() << "Needs refresh:" << p.nickname
               << "— never reached character select";
-      stale.append(p);
+      needRefresh.append(p);
       continue;
     }
 
     qint64 ageSecs = p.lastLoginTime.secsTo(QDateTime::currentDateTime());
     if (ageSecs > thresholdHours * 3600) {
-      qInfo() << "Stale credentials for" << p.nickname
-              << "— last character select:" << (ageSecs / 3600) << "hours ago";
-      stale.append(p);
+      qInfo() << "Needs refresh:" << p.nickname
+              << "— credentials stale:" << (ageSecs / 3600) << "hours ago";
+      needRefresh.append(p);
     }
   }
-  return stale;
+  return needRefresh;
 }
 
 void CredentialRefreshManager::refreshProfiles(

@@ -29,7 +29,7 @@
 
 struct Gw2Keybind {
   int virtualKey = 0; // Windows VK code (0 = unbound)
-  int modifiers = 0;  // Bitmask: 1=Alt, 2=Ctrl, 4=Shift
+  int modifiers = 0;  // Bitmask: 1=Shift, 2=Ctrl, 4=Alt
 };
 
 /**
@@ -186,6 +186,8 @@ public:
   // GW2 action name → AIO settings key
   // Covers mounts, novelty-like actions, and skiff
   static inline const QMap<QString, QString> kActionToSettingsKey = {
+      // Generic mount/dismount (used by Fast Mount Swap)
+      {"Mount/Dismount", "_dismount"},
       // Mounts
       {"Raptor Mount/Dismount", "raptor"},
       {"Springer Mount/Dismount", "springer"},
@@ -305,14 +307,14 @@ public:
    * Used for display in status messages.
    */
   static QString vkToDisplayName(int vk, int mod) {
-    // GW2 mod bitmask: 1=Alt, 2=Ctrl, 4=Shift
+    // GW2 mod bitmask: 1=Shift, 2=Ctrl, 4=Alt
     QString name;
     if (mod & 1)
-      name += "Alt+";
+      name += "Shift+";
     if (mod & 2)
       name += "Ctrl+";
     if (mod & 4)
-      name += "Shift+";
+      name += "Alt+";
 
     // Common VK names
     if (vk >= 0x60 && vk <= 0x69) {

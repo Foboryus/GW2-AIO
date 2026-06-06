@@ -36,10 +36,10 @@
 class RadialInputSender {
 public:
   // Modifier flags matching GW2 InputBinds XML mod bitmask
-  // From GW2 docs: Alt=1 (001), Ctrl=2 (010), Shift=4 (100)
-  static constexpr int kModAlt = 1;
+  // Verified from live game: Shift=1 (001), Ctrl=2 (010), Alt=4 (100)
+  static constexpr int kModShift = 1;
   static constexpr int kModCtrl = 2;
-  static constexpr int kModShift = 4;
+  static constexpr int kModAlt = 4;
 
   // Timing constants (frame-safe for GW2's DirectInput polling)
   // GW2 polls at frame rate: ~16ms@60fps, ~33ms@30fps.
@@ -118,6 +118,136 @@ public:
 
     // Brief settle time before any cursor restore
     Sleep(kPostSendDelayMs);
+  }
+
+  /**
+   * @brief Send a keybind as an instant press-release (no hold delay).
+   *
+   * Used for fast swap auto-dismount: the key just needs to be tapped,
+   * not held. No trigger release, no post-send delay.
+   * This minimizes blocking on the render thread.
+   */
+  static void sendKeybindInstant(int virtualKey, int modifiers) {
+    if (virtualKey == 0) {
+      qWarning() << "RadialInputSender: Cannot send instant — virtualKey is 0";
+      return;
+    }
+
+    UINT scanCode = MapVirtualKeyW(
+        static_cast<UINT>(virtualKey), MAPVK_VK_TO_VSC);
+    if (scanCode == 0) {
+      qWarning() << "RadialInputSender: MapVirtualKey failed for VK:" << virtualKey;
+      return;
+    }
+
+    DWORD extendedFlag = isExtendedKey(virtualKey) ? KEYEVENTF_EXTENDEDKEY : 0;
+
+    qInfo() << "RadialInputSender: Instant send VK:" << virtualKey
+            << "scan:" << scanCode << "mod:" << modifiers;
+
+    // Press modifiers
+    if (modifiers & kModCtrl)
+      sendKey(VK_CONTROL, MapVirtualKeyW(VK_CONTROL, MAPVK_VK_TO_VSC), 0, false);
+    if (modifiers & kModShift)
+      sendKey(VK_SHIFT, MapVirtualKeyW(VK_SHIFT, MAPVK_VK_TO_VSC), 0, false);
+    if (modifiers & kModAlt)
+      sendKey(VK_MENU, MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC), 0, false);
+
+    // Press key
+    sendKey(static_cast<UINT>(virtualKey), scanCode, extendedFlag, false);
+
+    // Immediate release (no hold) — GW2 only needs one poll cycle to see it
+    Sleep(16);  // ~1 frame at 60fps
+
+    // Release key
+    sendKey(static_cast<UINT>(virtualKey), scanCode, extendedFlag, true);
+
+    // Release modifiers
+    if (modifiers & kModAlt)
+      sendKey(VK_MENU, MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC), 0, true);
+    if (modifiers & kModShift)
+      sendKey(VK_SHIFT, MapVirtualKeyW(VK_SHIFT, MAPVK_VK_TO_VSC), 0, true);
+    if (modifiers & kModCtrl)
+      sendKey(VK_CONTROL, MapVirtualKeyW(VK_CONTROL, MAPVK_VK_TO_VSC), 0, true);
+  }
+
+  /**
+   * @brief Send a keybind using scan codes only (no VK).
+   *
+   * GW2 uses DirectInput for keyboard reading. DirectInput reads raw
+   * scan codes, not Windows virtual keys. Using KEYEVENTF_SCANCODE
+   * ensures the input goes through the raw input path that GW2 reads.
+   *
+   * Used for delayed remount in fast mount swap where no keys are held.
+   */
+  static void sendKeybindDirect(int virtualKey, int modifiers) {
+    if (virtualKey == 0) {
+      qWarning() << "RadialInputSender: Cannot send — virtualKey is 0";
+      return;
+    }
+
+    UINT scanCode = MapVirtualKeyW(
+        static_cast<UINT>(virtualKey), MAPVK_VK_TO_VSC);
+    if (scanCode == 0) {
+      qWarning() << "RadialInputSender: MapVirtualKey failed for VK:"
+                 << virtualKey;
+      return;
+    }
+
+    qInfo() << "RadialInputSender: SendDirect (scancode mode) VK:" << virtualKey
+            << "scan:" << scanCode << "mod:" << modifiers;
+
+    // Press modifier keys (scan code mode)
+    if (modifiers & kModCtrl)
+      sendKeyScanOnly(MapVirtualKeyW(VK_CONTROL, MAPVK_VK_TO_VSC), false);
+    if (modifiers & kModShift)
+      sendKeyScanOnly(MapVirtualKeyW(VK_SHIFT, MAPVK_VK_TO_VSC), false);
+    if (modifiers & kModAlt)
+      sendKeyScanOnly(MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC), false);
+
+    // Key down (scan code only)
+    sendKeyScanOnly(scanCode, false);
+
+    // Hold
+    Sleep(kKeyHoldDurationMs);
+
+    // Key up (scan code only)
+    sendKeyScanOnly(scanCode, true);
+
+    // Release modifiers
+    if (modifiers & kModAlt)
+      sendKeyScanOnly(MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC), true);
+    if (modifiers & kModShift)
+      sendKeyScanOnly(MapVirtualKeyW(VK_SHIFT, MAPVK_VK_TO_VSC), true);
+    if (modifiers & kModCtrl)
+      sendKeyScanOnly(MapVirtualKeyW(VK_CONTROL, MAPVK_VK_TO_VSC), true);
+
+    Sleep(kPostSendDelayMs);
+  }
+
+  /**
+   * @brief Send key using KEYEVENTF_SCANCODE — bypasses VK translation.
+   *
+   * DirectInput games read raw scan codes. This ensures the input
+   * appears as a real hardware keypress to DirectInput.
+   */
+  static void sendKeyScanOnly(UINT scanCode, bool keyUp) {
+    INPUT ip = {};
+    ip.type = INPUT_KEYBOARD;
+    ip.ki.wVk = 0;  // No VK — let the system derive it from scan code
+    ip.ki.wScan = static_cast<WORD>(scanCode);
+    ip.ki.dwFlags = KEYEVENTF_SCANCODE;
+    if (keyUp) {
+      ip.ki.dwFlags |= KEYEVENTF_KEYUP;
+    }
+    ip.ki.time = 0;
+    ip.ki.dwExtraInfo = 0;
+
+    UINT sent = SendInput(1, &ip, sizeof(INPUT));
+    if (sent == 0) {
+      qWarning() << "RadialInputSender: SendInput(scancode) failed, error:"
+                 << GetLastError();
+    }
   }
 
   /**
@@ -236,8 +366,11 @@ private:
    * Only releases keys that are actually held (checked via GetAsyncKeyState).
    */
   static void releaseHeldKeys(int triggerVK) {
-    // Release the trigger key first (most important — it's still held)
-    if (triggerVK != 0 && (GetAsyncKeyState(triggerVK) & 0x8000)) {
+    // Always release the trigger key via SendInput.
+    // GW2 may still think it's held even if GetAsyncKeyState says otherwise,
+    // because AIO consumed the key-up event and GW2 never saw it.
+    // Sending an unconditional key-up is harmless (no-op if already up).
+    if (triggerVK != 0) {
       UINT triggerScan = MapVirtualKeyW(
           static_cast<UINT>(triggerVK), MAPVK_VK_TO_VSC);
       if (triggerScan != 0) {

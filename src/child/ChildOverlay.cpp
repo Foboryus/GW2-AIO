@@ -254,8 +254,20 @@ void ChildOverlay::onSettingsReceived(const QJsonObject &settings)
             settings["renderingEnabled"].toBool(true));
     }
 
-    // Radial enabled state (from sibling SETTING_CHANGED relay)
-    if (settings.contains("radialEnabled")) {
+    // Full radial settings push (from main app save or sibling relay)
+    if (settings.contains("radialSettings")) {
+        RadialSettings rs = RadialSettings::fromJson(
+            settings["radialSettings"].toObject());
+        m_radialSettingsManager->setSettings(rs);
+        m_radialEnabled = rs.radialEnabled;
+        if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
+            m_overlayWindow->overlayMenu()->setRadialSettings(rs);
+            m_overlayWindow->overlayMenu()->setRadialEnabled(rs.radialEnabled);
+        }
+        qInfo() << "ChildOverlay: Applied full radialSettings from pipe";
+    }
+    // Radial enabled state only (from sibling SETTING_CHANGED relay)
+    else if (settings.contains("radialEnabled")) {
         m_radialEnabled = settings["radialEnabled"].toBool(true);
         if (m_overlayWindow && m_overlayWindow->overlayMenu()) {
             m_overlayWindow->overlayMenu()->setRadialEnabled(m_radialEnabled);

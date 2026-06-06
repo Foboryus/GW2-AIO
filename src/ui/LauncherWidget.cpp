@@ -821,11 +821,20 @@ void LauncherWidget::launchOrFocusProfile(const QString &profileId) {
       }
     }
 
-    // Per-profile build update: ensure this profile's Local.dat
-    // has been through the current GW2 build before launching with args
+    // Per-profile build update: ensure Gw2.dat is current (-image only)
     if (!runPerProfileBuildUpdate(*profile)) {
       qInfo() << "launchOrFocusProfile: Profile build update cancelled";
       return;
+    }
+
+    // Pre-flight refresh: auto-detect character select to refresh
+    // stale credentials or stale Local.dat (build mismatch)
+    {
+      QList<AccountProfile> singleList = {*profile};
+      if (!runPreFlightRefresh(singleList)) {
+        qInfo() << "launchOrFocusProfile: Pre-flight refresh cancelled";
+        return;
+      }
     }
 
     m_launchManager->launchWithProfile(*profile);
@@ -1337,9 +1346,13 @@ void LauncherWidget::onLaunchSelected() {
       }
     }
 
-    // Check if any standalone profile needs credential refresh
-    if (m_credRefreshMgr && m_multiBoxToggle->isChecked()) {
-      auto stale = m_credRefreshMgr->getStaleProfiles(launchingProfiles);
+    // Check if any standalone profile needs pre-flight refresh
+    if (m_credRefreshMgr) {
+      int remoteBuild2 = 0;
+      auto *um2 = m_dataService->updateManager();
+      if (um2) remoteBuild2 = um2->remoteBuildId();
+      auto stale = m_credRefreshMgr->getProfilesNeedingRefresh(
+          launchingProfiles, remoteBuild2);
       needsRefresh = !stale.isEmpty();
     }
 
@@ -1404,11 +1417,10 @@ void LauncherWidget::onLaunchSelected() {
       return;
   }
 
-  // === PHASE 2: CREDENTIAL REFRESH (after updates) ===
-  // If ANY standalone profile is stale, refresh ALL standalone profiles
-  // in the launch set. This prevents the gap where some launch with
-  // -shareArchive before being refreshed.
-  if (m_multiBoxToggle->isChecked() && profilesToLaunch > 0) {
+  // === PHASE 2: PRE-FLIGHT REFRESH (credential + build staleness) ===
+  // Checks ALL standalone profiles for stale credentials OR stale build.
+  // Uses automatic DLL-based detection — no manual user action needed.
+  if (profilesToLaunch > 0) {
     if (!runPreFlightRefresh(launchingProfiles))
       return;
   }
@@ -1715,8 +1727,12 @@ void LauncherWidget::onLaunchAll() {
       }
     }
 
-    if (m_credRefreshMgr && m_multiBoxToggle->isChecked()) {
-      auto stale = m_credRefreshMgr->getStaleProfiles(launchingProfiles);
+    if (m_credRefreshMgr) {
+      int remoteBuild = 0;
+      auto *um2 = m_dataService->updateManager();
+      if (um2) remoteBuild = um2->remoteBuildId();
+      auto stale = m_credRefreshMgr->getProfilesNeedingRefresh(
+          launchingProfiles, remoteBuild);
       needsRefresh = !stale.isEmpty();
     }
 
@@ -1773,8 +1789,8 @@ void LauncherWidget::onLaunchAll() {
       return;
   }
 
-  // === PHASE 2: CREDENTIAL REFRESH (after updates) ===
-  if (m_multiBoxToggle->isChecked() && profilesToLaunch > 0) {
+  // === PHASE 2: PRE-FLIGHT REFRESH (credential + build staleness) ===
+  if (profilesToLaunch > 0) {
     if (!runPreFlightRefresh(launchingProfiles))
       return;
   }
@@ -2917,7 +2933,13 @@ bool LauncherWidget::runPreFlightRefresh(
   if (!m_credRefreshMgr)
     return true;
 
-  auto stale = m_credRefreshMgr->getStaleProfiles(profiles);
+  // Get remote build ID for build staleness check
+  int remoteBuildId = 0;
+  auto *um = m_dataService->updateManager();
+  if (um) remoteBuildId = um->remoteBuildId();
+
+  auto stale = m_credRefreshMgr->getProfilesNeedingRefresh(
+      profiles, remoteBuildId);
   if (stale.isEmpty())
     return true; // All fresh — proceed
 
@@ -3151,133 +3173,14 @@ bool LauncherWidget::runPerProfileBuildUpdate(AccountProfile &profile) {
     return false; // User cancelled
   }
 
-  // -image completed successfully — Gw2.dat is up to date.
-  // Now we need to update the profile's Local.dat too.
-  // -image only updates the shared game archive, NOT the per-profile Local.dat.
-  // With -shareArchive, GW2 opens Local.dat read-only — if it's stale (wrong
-  // build), GW2 can't reconcile and shows "Download failed (error 5)".
-  // Fix: launch with junction active + -autologin ONLY (no -shareArchive)
-  // so GW2 can update Local.dat in write mode.
+  // -image completed — Gw2.dat is up to date.
+  // Local.dat refresh (per-profile) is handled by runPreFlightRefresh()
+  // which uses the automatic CredentialRefreshManager (DLL-based detection).
+  // No manual Phase 2 needed here.
 
-  qInfo() << "Per-profile update: Phase 2 — refreshing Local.dat for"
-          << profile.nickname;
-
-  auto *localDatMgr = m_dataService->localDatManager();
-  if (localDatMgr && !profile.id.isEmpty()) {
-    localDatMgr->activateProfile(profile.id);
-  }
-
-  // Create new dialog for Phase 2
-  auto *d2 = UIHelpers::createStyledDialog(this, 440);
-  auto *ol2 = new QVBoxLayout(d2);
-  ol2->setContentsMargins(0, 0, 0, 0);
-  auto *bg2 = new QWidget();
-  UIHelpers::applyPopupBackgroundRole(bg2);
-  ol2->addWidget(bg2);
-  auto *ly2 = new QVBoxLayout(bg2);
-  ly2->setContentsMargins(20, 16, 20, 20);
-
-  auto *titleBar2 = UIHelpers::createTitleBar(
-      bg2, "Refreshing Profile Data", ":/icons/refresh.svg", [d2]() {
-        d2->reject();
-      });
-  ly2->addWidget(titleBar2);
-
-  auto *ct2 = UIHelpers::createMessageContainer(bg2);
-  auto *cl2 = qobject_cast<QVBoxLayout *>(ct2->layout());
-  auto *statusLbl2 = UIHelpers::createLabel(
-      ct2,
-      QString("Refreshing profile data for <b>%1</b>...<br>"
-              "GW2 is logging in to update this profile's Local.dat.")
-          .arg(profile.nickname));
-  statusLbl2->setAlignment(Qt::AlignCenter);
-  statusLbl2->setWordWrap(true);
-  cl2->addWidget(statusLbl2);
-
-  auto *hintLbl2 = UIHelpers::createLabel(
-      ct2,
-      "Close GW2 after it reaches the character select screen.\n"
-      "AIO will then relaunch with your full profile settings.");
-  hintLbl2->setAlignment(Qt::AlignCenter);
-  hintLbl2->setWordWrap(true);
-  UIHelpers::applyHintRole(hintLbl2);
-  cl2->addWidget(hintLbl2);
-  ly2->addWidget(ct2);
-
-  auto *cancelBtn2 = new QPushButton("Cancel");
-  cancelBtn2->setMinimumHeight(36);
-  UIHelpers::applyCancelStyle(cancelBtn2);
-  connect(cancelBtn2, &QPushButton::clicked, d2, &QDialog::reject);
-  ly2->addWidget(cancelBtn2);
-
-  UIHelpers::centerDialog(d2);
-
-  // Launch with -autologin. If GW2 is already running, we MUST add
-  // -shareArchive (exclusive Gw2.dat lock) and close the mutex first.
-  QStringList phase2Args = {"-autologin"};
-  if (m_launchManager->isGW2Running()) {
-    phase2Args << "-shareArchive";
-    m_launchManager->closeMutexForMultiBox();
-    qInfo() << "Per-profile update: GW2 running — added -shareArchive";
-  }
-  QProcess *refreshProc = new QProcess(d2);
-  refreshProc->setProgram(exePath);
-  refreshProc->setArguments(phase2Args);
-  refreshProc->setWorkingDirectory(effectivePath);
-  refreshProc->start();
-
-  if (!refreshProc->waitForStarted(5000)) {
-    qWarning() << "Per-profile update: Phase 2 failed to start for"
-               << profile.nickname;
-    d2->deleteLater();
-    // Deactivate junction
-    if (localDatMgr && localDatMgr->isJunctionActive()) {
-      localDatMgr->deactivateProfile();
-    }
-    return true; // Allow normal launch anyway
-  }
-
-  qInfo() << "Per-profile update: Phase 2 launched -autologin (no "
-             "-shareArchive), PID:"
-          << refreshProc->processId() << "for" << profile.nickname;
-
-  // Wait for GW2 to exit — user closes it after reaching character select.
-  // No timers — updates can take longer than any fixed timeout.
-  connect(refreshProc,
-          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), d2,
-          &QDialog::accept);
-
-  int result2 = d2->exec();
-
-  // Ensure process is stopped
-  if (refreshProc->state() != QProcess::NotRunning) {
-    refreshProc->terminate();
-    refreshProc->waitForFinished(3000);
-    if (refreshProc->state() != QProcess::NotRunning) {
-      refreshProc->kill();
-    }
-  }
-
-  d2->deleteLater();
-
-  // Deactivate junction after Local.dat refresh
-  if (localDatMgr && localDatMgr->isJunctionActive()) {
-    localDatMgr->deactivateProfile();
-  }
-
-  bool phase2Success = (result2 == QDialog::Accepted);
-
-  if (phase2Success) {
-    profile.lastVerifiedBuild = remoteBuild;
-    m_profileManager->updateProfile(profile);
-    qInfo() << "Per-profile update complete:" << profile.nickname
-            << "verified at build" << remoteBuild;
-  } else {
-    qInfo() << "Per-profile update: Phase 2 cancelled — NOT marking"
-            << profile.nickname << "as verified (will retry next launch)";
-  }
-
-  return phase2Success;
+  qInfo() << "Per-profile update: Phase 1 (-image) complete for"
+          << profile.nickname << "— Local.dat refresh deferred to pre-flight";
+  return true;
 }
 
 bool LauncherWidget::runBatchBuildUpdate(QList<AccountProfile> &profiles) {
@@ -3350,147 +3253,12 @@ bool LauncherWidget::runBatchBuildUpdate(QList<AccountProfile> &profiles) {
     qInfo() << "Batch update: -image completed for path:" << effectivePath;
   }
 
-  // === Phase 2: Per-profile Local.dat refresh ===
-  auto *localDatMgr = m_dataService->localDatManager();
+  // Local.dat refresh (per-profile) is handled by runPreFlightRefresh()
+  // which uses the automatic CredentialRefreshManager (DLL-based detection).
+  // No manual Phase 2 needed here.
 
-  for (int step = 0; step < needUpdate.size(); step++) {
-    int idx = needUpdate[step];
-    auto &profile = profiles[idx];
-
-    QString effectivePath =
-        LaunchManager::getEffectiveGw2Path(profile, m_gw2Path);
-    if (effectivePath.endsWith(".exe", Qt::CaseInsensitive)) {
-      QFileInfo fi(effectivePath);
-      effectivePath = fi.absolutePath();
-    }
-
-    QString exePath = effectivePath + "/Gw2-64.exe";
-    if (!QFileInfo::exists(exePath))
-      continue;
-
-    qInfo() << "Batch update: Phase 2 — refreshing Local.dat for"
-            << profile.nickname << "(" << (step + 1) << "/"
-            << needUpdate.size() << ")";
-
-    // Activate junction for this profile
-    if (localDatMgr && !profile.id.isEmpty()) {
-      localDatMgr->activateProfile(profile.id);
-    }
-
-    // Create dialog for this profile
-    auto *d = UIHelpers::createStyledDialog(this, 440);
-    auto *ol = new QVBoxLayout(d);
-    ol->setContentsMargins(0, 0, 0, 0);
-    auto *bg = new QWidget();
-    UIHelpers::applyPopupBackgroundRole(bg);
-    ol->addWidget(bg);
-    auto *ly = new QVBoxLayout(bg);
-    ly->setContentsMargins(20, 16, 20, 20);
-
-    auto *titleBar = UIHelpers::createTitleBar(
-        bg, "Refreshing Profile Data", ":/icons/refresh.svg", [d]() {
-          d->reject();
-        });
-    ly->addWidget(titleBar);
-
-    auto *ct = UIHelpers::createMessageContainer(bg);
-    auto *cl = qobject_cast<QVBoxLayout *>(ct->layout());
-    auto *statusLbl = UIHelpers::createLabel(
-        ct,
-        QString("Refreshing profile data for <b>%1</b>...<br>"
-                "Profile %2 of %3")
-            .arg(profile.nickname)
-            .arg(step + 1)
-            .arg(needUpdate.size()));
-    statusLbl->setAlignment(Qt::AlignCenter);
-    statusLbl->setWordWrap(true);
-    cl->addWidget(statusLbl);
-
-    auto *hintLbl = UIHelpers::createLabel(
-        ct,
-        "Close GW2 after it reaches the character select screen.\n"
-        "AIO will then continue with the next profile.");
-    hintLbl->setAlignment(Qt::AlignCenter);
-    hintLbl->setWordWrap(true);
-    UIHelpers::applyHintRole(hintLbl);
-    cl->addWidget(hintLbl);
-    ly->addWidget(ct);
-
-    auto *cancelBtn = new QPushButton("Cancel");
-    cancelBtn->setMinimumHeight(36);
-    UIHelpers::applyCancelStyle(cancelBtn);
-    connect(cancelBtn, &QPushButton::clicked, d, &QDialog::reject);
-    ly->addWidget(cancelBtn);
-
-    UIHelpers::centerDialog(d);
-
-    // Launch with -autologin. If GW2 is already running, we MUST add
-    // -shareArchive (exclusive Gw2.dat lock) and close the mutex first.
-    QStringList batchArgs = {"-autologin"};
-    if (m_launchManager->isGW2Running()) {
-      batchArgs << "-shareArchive";
-      m_launchManager->closeMutexForMultiBox();
-      qInfo() << "Batch update: GW2 running — added -shareArchive";
-    }
-    QProcess *refreshProc = new QProcess(d);
-    refreshProc->setProgram(exePath);
-    refreshProc->setArguments(batchArgs);
-    refreshProc->setWorkingDirectory(effectivePath);
-    refreshProc->start();
-
-    if (!refreshProc->waitForStarted(5000)) {
-      qWarning() << "Batch update: Phase 2 failed to start for"
-                 << profile.nickname;
-      d->deleteLater();
-      if (localDatMgr && localDatMgr->isJunctionActive()) {
-        localDatMgr->deactivateProfile();
-      }
-      continue; // Skip this profile, try next
-    }
-
-    qInfo() << "Batch update: Phase 2 launched -autologin, PID:"
-            << refreshProc->processId() << "for" << profile.nickname;
-
-    // Wait for GW2 to exit — user closes after reaching character select
-    connect(refreshProc,
-            QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), d,
-            &QDialog::accept);
-
-    int result = d->exec();
-
-    // If user cancelled, terminate process and abort remaining
-    if (result != QDialog::Accepted) {
-      if (refreshProc->state() != QProcess::NotRunning) {
-        refreshProc->terminate();
-        refreshProc->waitForFinished(3000);
-        if (refreshProc->state() != QProcess::NotRunning) {
-          refreshProc->kill();
-        }
-      }
-      d->deleteLater();
-      if (localDatMgr && localDatMgr->isJunctionActive()) {
-        localDatMgr->deactivateProfile();
-      }
-      qInfo() << "Batch update: User cancelled at profile"
-              << profile.nickname;
-      return false; // Cancel all remaining launches
-    }
-
-    d->deleteLater();
-
-    // Deactivate junction
-    if (localDatMgr && localDatMgr->isJunctionActive()) {
-      localDatMgr->deactivateProfile();
-    }
-
-    // Mark profile as verified
-    profile.lastVerifiedBuild = remoteBuild;
-    m_profileManager->updateProfile(profile);
-    qInfo() << "Batch update: Profile" << profile.nickname
-            << "verified at build" << remoteBuild;
-  }
-
-  qInfo() << "Batch build update complete:" << needUpdate.size()
-          << "profiles updated";
+  qInfo() << "Batch build update Phase 1 (-image) complete:"
+          << updatedPaths.size() << "paths updated"
+          << "— Local.dat refresh deferred to pre-flight";
   return true;
 }

@@ -1166,6 +1166,8 @@ void OverlayMenuWidget::drawRadialPage(QPainter &painter,
                 m_noHoldToggleRect);
   drawToggleRow("Reset Cursor", m_radialSettings.resetCursorAfterKeybind,
                 m_resetCursorToggleRect);
+  drawToggleRow("Fast Mount Swap", m_radialSettings.fastMountSwap,
+                m_fastMountSwapToggleRect);
 
   // Compute max scroll
   qreal totalContentHeight = y - contentArea.top() + 12;
@@ -1745,6 +1747,17 @@ void OverlayMenuWidget::mousePressEvent(QMouseEvent *event) {
               .contains(scrolledPos)) {
         m_radialSettings.resetCursorAfterKeybind =
             !m_radialSettings.resetCursorAfterKeybind;
+        emit radialSettingsChanged(m_radialSettings);
+        update();
+        return;
+      }
+
+      // Fast Mount Swap toggle
+      if (m_fastMountSwapToggleRect.isValid() &&
+          m_fastMountSwapToggleRect.adjusted(-8, -4, 8, 4)
+              .contains(scrolledPos)) {
+        m_radialSettings.fastMountSwap =
+            !m_radialSettings.fastMountSwap;
         emit radialSettingsChanged(m_radialSettings);
         update();
         return;

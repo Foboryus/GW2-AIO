@@ -1382,6 +1382,11 @@ void CALLBACK ChildCompositor::winEventProc(
   if (!self || hwnd != self->m_gw2Hwnd) return;
 
   self->updatePosition();
+
+  // GW2 window is being moved/resized — reset focus-loss debounce
+  // to prevent transient foreground changes during resize from
+  // triggering focus loss (which hides the overlay).
+  self->resetFocusLossDebounce();
 }
 
 void CALLBACK ChildCompositor::foregroundProc(

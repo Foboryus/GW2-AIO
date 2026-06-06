@@ -137,6 +137,9 @@ signals:
   void childTerminated(const QString &profileId, const QString &featureKey);
   void childError(const QString &profileId, const QString &featureKey,
                   const QString &error);
+  /// Emitted when a child (overlay) changes radial settings via IPC.
+  /// Main app should reload RadialSettingsManager from disk.
+  void radialSettingsChangedByChild(const QString &profileId);
 
 private slots:
   /**

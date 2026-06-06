@@ -141,6 +141,18 @@ protected:
   virtual bool onInitialize() = 0;
 
   /**
+   * @brief Reset the focus-loss debounce timer.
+   * Called by the compositor when EVENT_OBJECT_LOCATIONCHANGE fires,
+   * proving GW2 is actively being moved/resized. This prevents transient
+   * foreground changes during resize from triggering focus loss.
+   */
+  void resetFocusLossDebounce() {
+    if (m_focusLossPending) {
+      m_focusLossTimer.restart();
+    }
+  }
+
+  /**
    * @brief Notify base class of focus change from overlay's WinEvent hook.
    * Subclasses should connect their overlay window's focusChanged signal
    * to this method for instant focus detection (Layer 2).

@@ -33,6 +33,8 @@
         <file alias="radial/png/mount_warclaw.png">radial/png/Warclaw.png</file>
         <file alias="radial/png/mount_skyscale.png">radial/png/Skyscale.png</file>
         <file alias="radial/png/mount_siegeturtle.png">radial/png/Turtle.png</file>
+        <file alias="radial/png/mount_skiff.png">radial/png/Skiff.png</file>
+        <file alias="radial/png/mount_fishing.png">radial/png/Fishing.png</file>
         <!-- Minimal icons needed by overlay children -->
         <file>icons/overlay-marker.svg</file>
         <file>icons/player-indicator.svg</file>

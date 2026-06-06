@@ -100,7 +100,9 @@ float4 sampleElementIcon(float2 uv, Texture2D tex, SamplerState samp, out float 
 {
     shadow = 0;
     float4 color = tex.Sample(samp, uv);
-    if (premultiplyAlpha)
+    // premultiplyAlpha == true means the icon is ALREADY premultiplied from CPU
+    // premultiplyAlpha == false means SVG icon with straight alpha, needs premultiply
+    if (!premultiplyAlpha)
         color.rgb *= color.a;
     color *= adjustedColor;
     return color;

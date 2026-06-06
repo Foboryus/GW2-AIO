@@ -39,6 +39,17 @@ RadialTabWidget::RadialTabWidget(AccountProfile &profile,
     : QWidget(parent), m_profile(profile), m_dataService(dataService),
       m_radialSettings(dataService ? dataService->radialSettings2() : nullptr) {
   setupUI();
+
+  // Reload when settings change externally (e.g., overlay changed them in-game).
+  // Guard: skip reload when we are the source (save() sets m_saving = true).
+  if (m_radialSettings) {
+    connect(m_radialSettings, &RadialSettingsManager::settingsChanged,
+            this, [this]() {
+      if (!m_saving) {
+        load();
+      }
+    });
+  }
 }
 
 // ============================================================================
@@ -105,8 +116,8 @@ static const QMap<int, int> &qtKeyToVkMap() {
 }
 // clang-format on
 
-// Convert VK code + Qt modifier flags to a QKeySequence for display.
-// modifiers uses GW2 bitmask: 1=Alt, 2=Ctrl, 4=Shift
+// Convert VK code + GW2 modifier flags to a QKeySequence for display.
+// modifiers uses GW2 bitmask: 1=Shift, 2=Ctrl, 4=Alt
 static QKeySequence vkToKeySequence(int vk, int modifiers) {
   if (vk == 0) {
     return QKeySequence();
@@ -114,11 +125,11 @@ static QKeySequence vkToKeySequence(int vk, int modifiers) {
 
   Qt::KeyboardModifiers qtMods;
   if (modifiers & 1)
-    qtMods |= Qt::AltModifier;
+    qtMods |= Qt::ShiftModifier;
   if (modifiers & 2)
     qtMods |= Qt::ControlModifier;
   if (modifiers & 4)
-    qtMods |= Qt::ShiftModifier;
+    qtMods |= Qt::AltModifier;
 
   int qtKey;
   bool isNumpad = (vk >= 0x60 && vk <= 0x69);
@@ -159,13 +170,13 @@ static void keySequenceToVk(const QKeySequence &seq, int &outVk,
     outVk = qtKey;
   }
 
-  // Convert Qt modifier flags → GW2 bitmask (1=Alt, 2=Ctrl, 4=Shift)
+  // Convert Qt modifier flags → GW2 bitmask (1=Shift, 2=Ctrl, 4=Alt)
   outModifiers = 0;
-  if (qtMods & Qt::AltModifier)
+  if (qtMods & Qt::ShiftModifier)
     outModifiers |= 1;
   if (qtMods & Qt::ControlModifier)
     outModifiers |= 2;
-  if (qtMods & Qt::ShiftModifier)
+  if (qtMods & Qt::AltModifier)
     outModifiers |= 4;
 }
 
@@ -330,6 +341,73 @@ QTableWidget *RadialTabWidget::createElementTable(
   return table;
 }
 
+QTableWidget *RadialTabWidget::createOrderedElementTable(
+    const QList<QPair<QString, QString>> &entries) {
+  auto *table = new QTableWidget(entries.size(), 3);
+  table->setHorizontalHeaderLabels({"Element", "GW2 Keybind", "Enabled"});
+  table->horizontalHeader()->setStretchLastSection(false);
+  table->horizontalHeader()->setSectionResizeMode(
+      0, QHeaderView::Stretch);
+  table->horizontalHeader()->setSectionResizeMode(
+      1, QHeaderView::Fixed);
+  table->horizontalHeader()->setSectionResizeMode(
+      2, QHeaderView::Fixed);
+  table->setColumnWidth(1, 140);
+  table->setColumnWidth(2, 80);
+  table->verticalHeader()->setVisible(false);
+  table->setSelectionMode(QAbstractItemView::NoSelection);
+  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  UIHelpers::applyRole(table, "table");
+
+  // Fixed row height for compact layout
+  table->verticalHeader()->setDefaultSectionSize(36);
+  int maxRows = qMin(static_cast<int>(entries.size()), 12);
+  table->setFixedHeight(table->horizontalHeader()->height() +
+                        maxRows * 36 + 4);
+
+  int row = 0;
+  for (const auto &entry : entries) {
+    const QString &key = entry.first;
+    const QString &label = entry.second;
+
+    // Column 0: Name
+    auto *nameItem = new QTableWidgetItem(label);
+    nameItem->setData(Qt::UserRole, key);
+    table->setItem(row, 0, nameItem);
+
+    // Column 1: GW2 Keybind
+    auto *keybindEdit = new QKeySequenceEdit();
+    keybindEdit->setMaximumSequenceLength(1);
+    UIHelpers::applyRole(keybindEdit, "input");
+    connect(keybindEdit, &QKeySequenceEdit::keySequenceChanged, this,
+            &RadialTabWidget::modified);
+    table->setCellWidget(row, 1, keybindEdit);
+
+    // Column 2: Enabled toggle (skip for _dismount — always enabled)
+    if (key.startsWith(QLatin1Char('_'))) {
+      // No toggle for special rows like _dismount
+      auto *placeholder = new QWidget();
+      table->setCellWidget(row, 2, placeholder);
+    } else {
+      auto *toggle = new ToggleSwitch();
+      toggle->setChecked(true);
+      connect(toggle, &ToggleSwitch::toggled, this,
+              &RadialTabWidget::modified);
+
+      auto *container = new QWidget();
+      auto *hbox = new QHBoxLayout(container);
+      hbox->setContentsMargins(0, 0, 0, 0);
+      hbox->setAlignment(Qt::AlignCenter);
+      hbox->addWidget(toggle);
+      table->setCellWidget(row, 2, container);
+    }
+
+    ++row;
+  }
+
+  return table;
+}
+
 // ============================================================================
 // Mount Section
 // ============================================================================
@@ -369,20 +447,22 @@ void RadialTabWidget::setupMountSection(QVBoxLayout *contentLayout) {
   keybindHint->setWordWrap(true);
   layout->addWidget(keybindHint);
 
-  // Mount element table
-  QMap<QString, QString> mountLabels;
-  mountLabels["raptor"] = "Raptor";
-  mountLabels["springer"] = "Springer";
-  mountLabels["skimmer"] = "Skimmer";
-  mountLabels["jackal"] = "Jackal";
-  mountLabels["griffon"] = "Griffon";
-  mountLabels["beetle"] = "Roller Beetle";
-  mountLabels["warclaw"] = "Warclaw";
-  mountLabels["skyscale"] = "Skyscale";
-  mountLabels["turtle"] = "Siege Turtle";
-  mountLabels["skiff"] = "Skiff";
+  // Mount element table — ordered list (not QMap which sorts alphabetically)
+  // _dismount is the generic Mount/Dismount keybind (no toggle needed)
+  QList<QPair<QString, QString>> mountEntries;
+  mountEntries << qMakePair(QStringLiteral("_dismount"), QStringLiteral("Mount / Dismount"));
+  mountEntries << qMakePair(QStringLiteral("raptor"), QStringLiteral("Raptor"));
+  mountEntries << qMakePair(QStringLiteral("springer"), QStringLiteral("Springer"));
+  mountEntries << qMakePair(QStringLiteral("skimmer"), QStringLiteral("Skimmer"));
+  mountEntries << qMakePair(QStringLiteral("jackal"), QStringLiteral("Jackal"));
+  mountEntries << qMakePair(QStringLiteral("griffon"), QStringLiteral("Griffon"));
+  mountEntries << qMakePair(QStringLiteral("beetle"), QStringLiteral("Roller Beetle"));
+  mountEntries << qMakePair(QStringLiteral("warclaw"), QStringLiteral("Warclaw"));
+  mountEntries << qMakePair(QStringLiteral("skyscale"), QStringLiteral("Skyscale"));
+  mountEntries << qMakePair(QStringLiteral("turtle"), QStringLiteral("Siege Turtle"));
+  mountEntries << qMakePair(QStringLiteral("skiff"), QStringLiteral("Skiff"));
 
-  m_mountTable = createElementTable(mountLabels);
+  m_mountTable = createOrderedElementTable(mountEntries);
   layout->addWidget(m_mountTable);
 
   contentLayout->addWidget(group);
@@ -581,6 +661,7 @@ void RadialTabWidget::setupInteractionSection(QVBoxLayout *contentLayout) {
   m_centerBehaviorCombo->addItem("Previous Selection", 1);
   m_centerBehaviorCombo->addItem("Favorite", 2);
   m_centerBehaviorCombo->addItem("Pass to Game", 3);
+  m_centerBehaviorCombo->addItem("Mount / Dismount", 4);
   UIHelpers::applyRole(m_centerBehaviorCombo, "comboBox");
   connect(m_centerBehaviorCombo, &QComboBox::currentIndexChanged, this,
           &RadialTabWidget::modified);
@@ -611,6 +692,12 @@ void RadialTabWidget::setupInteractionSection(QVBoxLayout *contentLayout) {
   connect(m_lockCameraToggle, &LabeledToggle::toggled, this,
           &RadialTabWidget::modified);
   layout->addWidget(m_lockCameraToggle);
+
+  m_fastMountSwapToggle =
+      new LabeledToggle("Fast Mount Swap (dismount before remount)", group);
+  connect(m_fastMountSwapToggle, &LabeledToggle::toggled, this,
+          &RadialTabWidget::modified);
+  layout->addWidget(m_fastMountSwapToggle);
 
   // Queuing sub-section
   auto *queueSeparator = new QLabel("Queuing", group);
@@ -663,6 +750,38 @@ void RadialTabWidget::setupInteractionSection(QVBoxLayout *contentLayout) {
 // ============================================================================
 // Load / Save
 // ============================================================================
+
+// Load the _dismount row from dedicated dismount keybind fields
+static void loadDismountRow(QTableWidget *table, int vk, int modifiers) {
+  for (int row = 0; row < table->rowCount(); ++row) {
+    auto *nameItem = table->item(row, 0);
+    if (!nameItem) continue;
+    if (nameItem->data(Qt::UserRole).toString() == QLatin1String("_dismount")) {
+      auto *keybindEdit =
+          qobject_cast<QKeySequenceEdit *>(table->cellWidget(row, 1));
+      if (keybindEdit) {
+        keybindEdit->setKeySequence(vkToKeySequence(vk, modifiers));
+      }
+      break;
+    }
+  }
+}
+
+// Save the _dismount row to dedicated dismount keybind fields
+static void saveDismountRow(QTableWidget *table, int &outVk, int &outModifiers) {
+  for (int row = 0; row < table->rowCount(); ++row) {
+    auto *nameItem = table->item(row, 0);
+    if (!nameItem) continue;
+    if (nameItem->data(Qt::UserRole).toString() == QLatin1String("_dismount")) {
+      auto *keybindEdit =
+          qobject_cast<QKeySequenceEdit *>(table->cellWidget(row, 1));
+      if (keybindEdit) {
+        keySequenceToVk(keybindEdit->keySequence(), outVk, outModifiers);
+      }
+      break;
+    }
+  }
+}
 
 static void loadElementTable(QTableWidget *table,
                              const QMap<QString, RadialElementConfig> &configs) {
@@ -750,6 +869,8 @@ void RadialTabWidget::load() {
   m_mountWheelToggle->setChecked(s.mountWheelEnabled);
   m_mountHotkeyEdit->setKeySequence(
       vkToKeySequence(s.mountHotkey, s.mountHotkeyModifiers));
+  // Load _dismount row from dedicated dismount keybind fields
+  loadDismountRow(m_mountTable, s.dismountScanCode, s.dismountModifiers);
   loadElementTable(m_mountTable, s.mounts);
 
   m_noveltyWheelToggle->setChecked(s.noveltyWheelEnabled);
@@ -777,6 +898,7 @@ void RadialTabWidget::load() {
   m_clickSelectToggle->setChecked(s.clickSelectMode);
   m_resetCursorToggle->setChecked(s.resetCursorAfterKeybind);
   m_lockCameraToggle->setChecked(s.lockCameraWhenOverlayed);
+  m_fastMountSwapToggle->setChecked(s.fastMountSwap);
 
   // Queuing
   m_queuingToggle->setChecked(s.enableQueuing);
@@ -801,6 +923,8 @@ void RadialTabWidget::save() {
   s.mountWheelEnabled = m_mountWheelToggle->isChecked();
   keySequenceToVk(m_mountHotkeyEdit->keySequence(),
                   s.mountHotkey, s.mountHotkeyModifiers);
+  // Save _dismount row to dedicated dismount keybind fields
+  saveDismountRow(m_mountTable, s.dismountScanCode, s.dismountModifiers);
   s.mounts = saveElementTable(m_mountTable, s.mounts);
 
   s.noveltyWheelEnabled = m_noveltyWheelToggle->isChecked();
@@ -825,17 +949,20 @@ void RadialTabWidget::save() {
   s.clickSelectMode = m_clickSelectToggle->isChecked();
   s.resetCursorAfterKeybind = m_resetCursorToggle->isChecked();
   s.lockCameraWhenOverlayed = m_lockCameraToggle->isChecked();
+  s.fastMountSwap = m_fastMountSwapToggle->isChecked();
 
   // Queuing
   s.enableQueuing = m_queuingToggle->isChecked();
   s.maxQueueWaitMs = m_queueTimeoutSpin->value();
   s.conditionalDelayMs = m_queueDelaySpin->value();
 
+  m_saving = true;
   m_radialSettings->setSettings(s);
   if (!m_radialSettings->saveForProfile(m_profile.id)) {
     qWarning() << "RadialTabWidget: Failed to save radial settings for"
                << m_profile.id;
   }
+  m_saving = false;
 
   // Push updated settings to the running radial child process (if any)
   // so changes take effect immediately without requiring a restart.
@@ -885,6 +1012,21 @@ void RadialTabWidget::applyKeybindsFromFile(const QString &xmlPath) {
     return;
   }
 
+  // Extract special _dismount keybind (generic Mount/Dismount, GW2 action 152)
+  // This goes into RadialSettings directly, not into the element tables
+  bool dismountFound = false;
+  if (keybinds.contains(QStringLiteral("_dismount"))) {
+    const auto &kb = keybinds[QStringLiteral("_dismount")];
+    RadialSettings s = m_radialSettings->settings();
+    s.dismountScanCode = kb.virtualKey;
+    s.dismountModifiers = kb.modifiers;
+    m_radialSettings->setSettings(s);
+    keybinds.remove(QStringLiteral("_dismount"));
+    dismountFound = true;
+    qInfo() << "RadialTabWidget: Imported dismount keybind VK:"
+            << kb.virtualKey << "mod:" << kb.modifiers;
+  }
+
   // Apply to all element tables
   int total = 0;
   total += applyKeybindsToTable(m_mountTable, keybinds);
@@ -893,14 +1035,18 @@ void RadialTabWidget::applyKeybindsFromFile(const QString &xmlPath) {
 
   // Show result
   QString fileName = QFileInfo(xmlPath).fileName();
+  QString dismountNote = dismountFound
+      ? " (+ Mount/Dismount key)"
+      : "";
   m_detectStatusLabel->setText(
-      QString("Detected %1 keybinds from \"%2\". Click Save to apply.")
+      QString("Detected %1 keybinds from \"%2\"%3. Click Save to apply.")
           .arg(total)
-          .arg(fileName));
+          .arg(fileName)
+          .arg(dismountNote));
   UIHelpers::applyRole(m_detectStatusLabel, "hintLabel");
 
   // Auto-save so keybinds take effect immediately
-  if (total > 0) {
+  if (total > 0 || dismountFound) {
     save();
     emit modified();
   }

@@ -41,6 +41,7 @@
 // Multibox overlay management
 #include "core/OverlayInstanceManager.h"
 #include "core/ChildProcessManager.h"
+#include "core/RadialSettingsManager.h"
 #include "core/StorageBackend.h"
 
 int main(int argc, char *argv[]) {
@@ -347,6 +348,16 @@ int main(int argc, char *argv[]) {
   // process so changes take effect immediately without restarting AIO/GW2.
   QObject::connect(&dataService, &DataService::radialSettingsPushRequested,
                    &childProcessManager, &ChildProcessManager::pushSettings);
+
+  // When the overlay changes radial settings in-game, reload them in the main
+  // app so the Profile Editor stays in sync and doesn't overwrite changes.
+  QObject::connect(&childProcessManager,
+                   &ChildProcessManager::radialSettingsChangedByChild,
+                   &dataService, [&dataService](const QString &profileId) {
+    dataService.radialSettings2()->loadForProfile(profileId);
+    qInfo() << "Main: Reloaded radial settings from disk for profile"
+            << profileId << "(changed by overlay)";
+  });
 
   // Wire dynamic MumbleLink switching: non-overlay controllers switch their
   // data source instantly when a different GW2 instance gains focus.

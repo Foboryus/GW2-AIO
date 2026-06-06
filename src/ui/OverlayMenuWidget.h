@@ -236,6 +236,7 @@ private:
   QRectF m_radialAnimSliderRect;       // Animation time slider
   QRectF m_noHoldToggleRect;           // No-hold mode toggle
   QRectF m_resetCursorToggleRect;      // Reset cursor toggle
+  QRectF m_fastMountSwapToggleRect;    // Fast mount swap toggle
 
   // --- Radial state (full settings for Radial tab) ---
   bool m_radialEnabled = true;

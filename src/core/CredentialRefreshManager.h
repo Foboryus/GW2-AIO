@@ -33,10 +33,15 @@ public:
                                     LocalDatManager *localDatManager,
                                     QObject *parent = nullptr);
 
-  /// Check which profiles have stale .dat files
+  /// Check which profiles need pre-flight refresh.
+  /// A profile needs refresh if either:
+  ///   - lastLoginTime > thresholdHours (stale credentials)
+  ///   - lastVerifiedBuild != remoteBuildId (stale build)
   /// Only checks standalone profiles with autoLogin and a saved .dat
-  QList<AccountProfile> getStaleProfiles(const QList<AccountProfile> &profiles,
-                                         int thresholdHours = 24) const;
+  QList<AccountProfile> getProfilesNeedingRefresh(
+      const QList<AccountProfile> &profiles,
+      int remoteBuildId,
+      int thresholdHours = 24) const;
 
   /// Start sequential refresh of stale profiles
   /// Emits refreshProgress/refreshComplete/refreshFailed signals

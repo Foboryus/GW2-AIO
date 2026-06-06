@@ -914,6 +914,11 @@ void ChildProcessManager::processChildMessage(const QString &profileId,
                             << featureKey << "to parent MarkerSettingsManager for"
                             << profileId;
                 }
+
+                // Notify main app when radial settings change (for Profile Editor sync)
+                if (obj.contains("radialSettings")) {
+                    emit radialSettingsChangedByChild(profileId);
+                }
             }
         }
 

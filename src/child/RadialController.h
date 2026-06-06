@@ -4,14 +4,12 @@
  * @file RadialController.h
  * @brief Central controller for radial menu rendering in the ChildRadial process
  *
- * Manages RadialOverlayWindow, RadialRenderer, and RadialWheel.
- * Detects hotkey press-and-hold (X key) via GetAsyncKeyState polling,
- * shows/hides the radial wheel, and handles element selection on release.
+ * Manages RadialOverlayWindow, RadialRenderer, and three independent RadialWheels
+ * (mount, novelty, marker), each with its own hotkey.
  *
  * DO NOT ADD:
  * - Inline implementations (use RadialController.cpp)
  * - UI code (belongs in RadialTabWidget)
- * - Marker/trail logic (belongs in marker pipelines)
  */
 
 #include <QObject>
@@ -25,6 +23,18 @@ class RadialOverlayWindow;
 class RadialRenderer;
 class RadialWheel;
 
+/**
+ * @brief Per-wheel hotkey and state tracking
+ */
+struct WheelState {
+  RadialWheel *wheel = nullptr;
+  int triggerVK = 0;          // Virtual key code for this wheel's hotkey
+  int triggerModifiers = 0;   // GW2 bitmask: 1=Shift, 2=Ctrl, 4=Alt
+  bool wasKeyDown = false;    // Previous frame key state
+  bool noHoldOpen = false;    // Tracks wheel open state in no-hold mode
+  QString wheelType;          // "mount", "novelty", or "marker"
+};
+
 class RadialController : public QObject {
   Q_OBJECT
 
@@ -33,119 +43,74 @@ public:
                             QObject *parent = nullptr);
   ~RadialController();
 
-  /**
-   * @brief Start the overlay (creates window, begins tracking)
-   */
   void start();
-
-  /**
-   * @brief Stop the overlay (destroys window, stops tracking)
-   */
   void stop();
-
-  /**
-   * @brief Handle settings received from IPC
-   */
   void onSettingsReceived(const QJsonObject &settings);
-
-  /**
-   * @brief Apply radial settings (from disk or IPC)
-   *
-   * Replaces all hardcoded configuration with per-profile values.
-   * Rebuilds wheel elements, updates hotkey VK, display params.
-   */
   void applySettings(const RadialSettings &settings);
-
-  /**
-   * @brief Handle focus change from parent process
-   */
   void onFocusChanged(bool focused);
 
-  /**
-   * @brief Get the overlay window (for connecting focusChanged signal)
-   * @note Returns nullptr in headless mode.
-   */
   RadialOverlayWindow *overlayWindow() const { return m_overlayWindow; }
 
   // --- Headless mode (SharedTexture) ---
-
-  /**
-   * @brief Set the D3D11 context for headless rendering (no overlay window)
-   */
   void setD3DContext(D3D11Context *ctx) { m_externalCtx = ctx; }
-
-  /**
-   * @brief Invalidate all GPU resources (shaders, textures, CBs)
-   *
-   * Called by ChildRadial::teardownD3D11() when the D3D11 device is destroyed.
-   * The renderer and icon textures were created on the old device and are now
-   * dangling. This forces re-initialization on the next renderToTarget() call.
-   */
   void invalidateGPUResources();
-
-  /**
-   * @brief Start in headless mode (no overlay window, no swap chain)
-   */
   void startHeadless();
-
-  /**
-   * @brief Check if wheel needs GPU rendering (active or fading)
-   */
   bool needsRendering() const;
-
-  /**
-   * @brief Render wheel to the currently-bound RTV.
-   * Caller must set OMSetRenderTargets, ClearRenderTargetView, RSSetViewports.
-   * @param ctx D3D11 context
-   * @param cursorX Client-space cursor X
-   * @param cursorY Client-space cursor Y
-   * @param viewW Viewport width
-   * @param viewH Viewport height
-   */
   void renderToTarget(D3D11Context *ctx, int cursorX, int cursorY,
                       int viewW, int viewH);
-
-  /**
-   * @brief Poll hotkey state and manage wheel lifecycle (public for headless)
-   */
   void pollHotkey();
-
-  /**
-   * @brief Set loading screen state (Phase 5.8)
-   * When true, deactivates active wheel and blocks new activations.
-   */
   void setLoadingScreen(bool loading);
 
 private:
-  /**
-   * @brief Render callback — called by RadialOverlayWindow each frame
-   * @return true if content was drawn (needs Present), false if idle
-   */
   bool renderFrame(D3D11Context *ctx);
-
-  /**
-   * @brief Populate mount elements from m_settings (replaces setupTestElements)
-   */
   void rebuildElements();
+  void loadIconTextures(D3D11Context *ctx);
 
   /**
-   * @brief Load icon textures for all elements (called after renderer init)
+   * @brief Check one wheel's hotkey and manage its lifecycle
+   * @return true if this wheel consumed a key event (blocks other wheels)
    */
-  void loadIconTextures(D3D11Context *ctx);
+  bool pollWheelHotkey(WheelState &ws);
+
+  /**
+   * @brief Handle element selection when a wheel is deactivated
+   */
+  void handleSelection(const QString &selectedId, const WheelState &ws);
+
+  /**
+   * @brief Deactivate whichever wheel is currently active
+   */
+  void deactivateActiveWheel();
+
+  /**
+   * @brief Build elements for a specific wheel type
+   */
+  void buildMountElements(RadialWheel *wheel, bool usePng);
+  void buildNoveltyElements(RadialWheel *wheel, bool usePng);
+  void buildMarkerElements(RadialWheel *wheel, bool usePng);
+
+  /**
+   * @brief Look up keybind for selected element in the right settings map
+   */
+  const RadialElementConfig* findElementConfig(const QString &settingsKey,
+                                                const WheelState &ws) const;
 
   MumbleLink *m_mumbleLink = nullptr;
   uint32_t m_targetPid = 0;
   RadialOverlayWindow *m_overlayWindow = nullptr;
   RadialRenderer *m_renderer = nullptr;
-  RadialWheel *m_wheel = nullptr;
-  // Per-profile settings (from RadialSettingsManager)
   RadialSettings m_settings;
 
-  // Hotkey state
-  int m_triggerVK = 0;        // From m_settings.mountHotkey (0 = disabled)
-  int m_triggerModifiers = 0; // Qt::KeyboardModifiers flags for the trigger
-  bool m_wasKeyDown = false;
-  bool m_isFocused = false; // Must match ChildProcess::m_focused default
+  // Three independent wheels
+  WheelState m_mountState;
+  WheelState m_noveltyState;
+  WheelState m_markerState;
+
+  // Points to whichever wheel is currently active/fading (or nullptr)
+  RadialWheel *m_activeWheel = nullptr;
+  WheelState *m_activeWheelState = nullptr;
+
+  bool m_isFocused = false;
   bool m_iconsLoaded = false;
 
   // Frame timing
@@ -156,11 +121,20 @@ private:
   D3D11Context *m_externalCtx = nullptr;
   bool m_headless = false;
 
-  // Fade-out state (Phase 1 fix: clear swap chain on deactivation)
-  bool m_wasWheelActive = false;     // Tracks active→inactive transition
-  float m_fadeAlpha = 0.0f;          // 1.0→0.0 during fade-out
-  float m_savedGlobalOpacity = 1.0f; // Restore after fade
+  // Fade-out state
+  bool m_wasWheelActive = false;
+  float m_fadeAlpha = 0.0f;
+  float m_savedGlobalOpacity = 1.0f;
 
-  // Phase 5.8: loading screen state — blocks hotkey activation
+  // Loading screen state — blocks hotkey activation
   bool m_loadingScreen = false;
+
+  // Fast Mount Swap — dismount-on-open approach
+  // Sequence: [mount CD 600ms] → dismount → [dismount CD 400ms] → new mount
+  bool m_fastSwapDismountSent = false;     // True if we auto-dismounted on open
+  QElapsedTimer m_fastSwapDismountTimer;   // When the dismount was sent
+  QElapsedTimer m_lastMountSentTimer;      // When the last mount keybind was sent
+  bool m_lastMountSentValid = false;       // True after first mount sent
+  static constexpr int kMountCooldownMs = 600;      // CD after mount before dismount works
+  static constexpr int kDismountCooldownMs = 400;    // CD after dismount before mount works
 };

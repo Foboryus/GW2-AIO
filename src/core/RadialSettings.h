@@ -29,7 +29,7 @@ struct RadialElementConfig {
   bool enabled = true;   // Element visible in wheel
   int sortOrder = 0;     // Display order (lower = first)
   int scanCode = 0;      // Windows virtual key code for this element's keybind
-  int modifiers = 0;     // Modifier flags (Ctrl=1, Shift=2, Alt=4)
+  int modifiers = 0;     // Modifier flags (Shift=1, Ctrl=2, Alt=4)
 
   QJsonObject toJson() const;
   static RadialElementConfig fromJson(const QJsonObject &obj);
@@ -39,10 +39,11 @@ struct RadialElementConfig {
  * @brief Center behavior when no element is hovered on release
  */
 enum class RadialCenterBehavior {
-  Nothing = 0,    // Do nothing
-  Previous = 1,   // Repeat previous selection
-  Favorite = 2,   // Use configured favorite
-  PassToGame = 3  // Pass the key to the game
+  Nothing = 0,       // Do nothing
+  Previous = 1,      // Repeat previous selection
+  Favorite = 2,      // Use configured favorite
+  PassToGame = 3,    // Pass the key to the game
+  MountDismount = 4  // Send generic Mount/Dismount keybind
 };
 
 /**
@@ -59,19 +60,19 @@ struct RadialSettings {
   // --- Mount wheel ---
   bool mountWheelEnabled = true;
   int mountHotkey = 0x58;          // VK_X  (Ctrl+X default)
-  int mountHotkeyModifiers = 0x04000000; // Qt::ControlModifier
+  int mountHotkeyModifiers = 2;          // GW2 bitmask: Ctrl
   QMap<QString, RadialElementConfig> mounts;
 
   // --- Novelty wheel ---
   bool noveltyWheelEnabled = true;
   int noveltyHotkey = 0x4E;        // VK_N  (Ctrl+N default)
-  int noveltyHotkeyModifiers = 0x04000000; // Qt::ControlModifier
+  int noveltyHotkeyModifiers = 2;          // GW2 bitmask: Ctrl
   QMap<QString, RadialElementConfig> novelties;
 
   // --- Marker wheel ---
   bool markerWheelEnabled = true;
   int markerHotkey = 0x4D;         // VK_M  (Ctrl+M default)
-  int markerHotkeyModifiers = 0x04000000; // Qt::ControlModifier
+  int markerHotkeyModifiers = 2;          // GW2 bitmask: Ctrl
   QMap<QString, RadialElementConfig> markers;
 
   // --- Display ---
@@ -82,11 +83,11 @@ struct RadialSettings {
   int displayDelayMs = 0;        // Delay before showing (for bypass)
 
   // --- Interaction ---
-  RadialCenterBehavior centerBehavior = RadialCenterBehavior::Nothing;
+  RadialCenterBehavior centerBehavior = RadialCenterBehavior::MountDismount;
   bool noHoldMode = false;             // Click to select (no hold required)
   bool clickSelectMode = false;        // Click on element to select
   bool resetCursorAfterKeybind = true;
-  bool lockCameraWhenOverlayed = true;
+  bool lockCameraWhenOverlayed = false;
 
   // --- Queuing ---
   bool enableQueuing = false;      // Queue mount if unusable
@@ -95,6 +96,9 @@ struct RadialSettings {
 
   // --- Smart features ---
   bool smartRadialMounts = false;  // Filter by owned mounts (API integration)
+  bool fastMountSwap = true;      // Dismount current mount before mounting new
+  int dismountScanCode = 0;       // Generic "Mount/Dismount" keybind (GW2 action 152)
+  int dismountModifiers = 0;      // Modifiers for dismount key
 
   // --- Serialization ---
   QJsonObject toJson() const;

@@ -86,6 +86,14 @@ private:
   QTableWidget *createElementTable(
       const QMap<QString, QString> &labels);
 
+  /**
+   * @brief Create a wheel element table with ordered entries
+   * @param entries Ordered list of (key, displayName) pairs
+   * @return The table widget (rows starting with '_' have no toggle)
+   */
+  QTableWidget *createOrderedElementTable(
+      const QList<QPair<QString, QString>> &entries);
+
   AccountProfile &m_profile;
   DataService *m_dataService = nullptr;
   RadialSettingsManager *m_radialSettings = nullptr;
@@ -121,9 +129,13 @@ private:
   LabeledToggle *m_clickSelectToggle = nullptr;
   LabeledToggle *m_resetCursorToggle = nullptr;
   LabeledToggle *m_lockCameraToggle = nullptr;
+  LabeledToggle *m_fastMountSwapToggle = nullptr;
 
   // --- Queuing ---
   LabeledToggle *m_queuingToggle = nullptr;
   QSpinBox *m_queueTimeoutSpin = nullptr;
   QSpinBox *m_queueDelaySpin = nullptr;
+
+  // Guard: prevents circular reload when save() triggers settingsChanged
+  bool m_saving = false;
 };

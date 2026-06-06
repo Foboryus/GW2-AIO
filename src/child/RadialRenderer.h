@@ -76,6 +76,15 @@ public:
   ComPtr<ID3D11ShaderResourceView> loadIconTextureWithLabel(
       D3D11Context *ctx, const QString &qrcPath, const QString &label);
 
+  /**
+   * @brief Create a text-only label texture for elements without icons.
+   * @param ctx D3D11 context for texture creation
+   * @param label Text to render (e.g., "S" for skiff)
+   * @return SRV for the created texture, or nullptr on failure
+   */
+  ComPtr<ID3D11ShaderResourceView> createLabelTexture(
+      D3D11Context *ctx, const QString &label);
+
   // --- Draw Methods ---
 
   /**

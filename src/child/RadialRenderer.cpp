@@ -139,15 +139,58 @@ RadialRenderer::loadIconTexture(D3D11Context *ctx, const QString &qrcPath) {
     svgRenderer.render(&painter);
     painter.end();
   } else {
-    // PNG/other raster: load and convert
+    // PNG mount icons: silhouettes with no alpha channel.
+    // Some are black-on-white (e.g., Raptor), others white-on-black (e.g., Turtle).
+    // Auto-detect polarity by sampling edge pixels, then convert to
+    // white-on-transparent using luminance-to-alpha.
+    // Output is premultiplied alpha for proper DComp compositing.
     QImage source(qrcPath);
     if (source.isNull()) {
       qWarning() << "RadialRenderer: Failed to load icon:" << qrcPath;
       return nullptr;
     }
-    rgba = source.scaled(kIconSize, kIconSize, Qt::KeepAspectRatio,
-                          Qt::SmoothTransformation)
-               .convertToFormat(QImage::Format_RGBA8888);
+    QImage scaled = source.scaled(kIconSize, kIconSize, Qt::KeepAspectRatio,
+                                   Qt::SmoothTransformation)
+                         .convertToFormat(QImage::Format_RGBA8888);
+
+    // Auto-detect polarity: sample 4 corner pixels (2px inset)
+    // If corners are mostly dark → white-on-black icon (luma = alpha directly)
+    // If corners are mostly bright → black-on-white icon (alpha = 1 - luma)
+    auto cornerLuma = [&](int x, int y) -> float {
+      QRgb px = scaled.pixel(x, y);
+      return (0.2126f * qRed(px) + 0.7152f * qGreen(px) + 0.0722f * qBlue(px)) / 255.0f;
+    };
+    int w = scaled.width(), h = scaled.height();
+    float edgeLuma = (cornerLuma(2, 2) + cornerLuma(w - 3, 2) +
+                      cornerLuma(2, h - 3) + cornerLuma(w - 3, h - 3)) / 4.0f;
+    bool isInverted = edgeLuma < 0.3f; // Dark edges = white-on-black icon
+
+    // Center the scaled image on the kIconSize x kIconSize canvas
+    rgba.fill(Qt::transparent);
+    int offsetX = (kIconSize - w) / 2;
+    int offsetY = (kIconSize - h) / 2;
+
+    for (int y = 0; y < h; ++y) {
+      const uchar *srcLine = scaled.constScanLine(y);
+      uchar *dstLine = rgba.scanLine(y + offsetY);
+      for (int x = 0; x < w; ++x) {
+        int si = x * 4;
+        int di = (x + offsetX) * 4;
+        int r = srcLine[si + 0];
+        int g = srcLine[si + 1];
+        int b = srcLine[si + 2];
+        float luma = (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.0f;
+        // Black-on-white: dark=opaque, white=transparent (alpha = 1 - luma)
+        // White-on-black: bright=opaque, dark=transparent (alpha = luma)
+        float alpha = isInverted ? luma : (1.0f - luma);
+        int a = qBound(0, static_cast<int>(alpha * 255.0f + 0.5f), 255);
+        // Premultiplied alpha: RGB = white * alpha = (a, a, a)
+        dstLine[di + 0] = static_cast<uchar>(a);
+        dstLine[di + 1] = static_cast<uchar>(a);
+        dstLine[di + 2] = static_cast<uchar>(a);
+        dstLine[di + 3] = static_cast<uchar>(a);
+      }
+    }
   }
 
   auto srv = ctx->createTextureFromRGBA(rgba.width(), rgba.height(),
@@ -183,15 +226,45 @@ RadialRenderer::loadIconTextureWithLabel(D3D11Context *ctx,
     svgRenderer.render(&painter);
     painter.end();
   } else {
+    // Same auto-detect polarity conversion as loadIconTexture
     QImage source(qrcPath);
     if (source.isNull()) {
       qWarning() << "RadialRenderer: Failed to load icon:" << qrcPath;
       return nullptr;
     }
-    rgba = source
-               .scaled(kIconSize, kIconSize, Qt::KeepAspectRatio,
-                       Qt::SmoothTransformation)
-               .convertToFormat(QImage::Format_RGBA8888);
+    QImage scaled = source
+                .scaled(kIconSize, kIconSize, Qt::KeepAspectRatio,
+                        Qt::SmoothTransformation)
+                .convertToFormat(QImage::Format_RGBA8888);
+    auto cornerLuma = [&](int x, int y) -> float {
+      QRgb px = scaled.pixel(x, y);
+      return (0.2126f * qRed(px) + 0.7152f * qGreen(px) + 0.0722f * qBlue(px)) / 255.0f;
+    };
+    int w = scaled.width(), h = scaled.height();
+    float edgeLuma = (cornerLuma(2, 2) + cornerLuma(w - 3, 2) +
+                      cornerLuma(2, h - 3) + cornerLuma(w - 3, h - 3)) / 4.0f;
+    bool isInverted = edgeLuma < 0.3f;
+    rgba.fill(Qt::transparent);
+    int offsetX = (kIconSize - w) / 2;
+    int offsetY = (kIconSize - h) / 2;
+    for (int y = 0; y < h; ++y) {
+      const uchar *srcLine = scaled.constScanLine(y);
+      uchar *dstLine = rgba.scanLine(y + offsetY);
+      for (int x = 0; x < w; ++x) {
+        int si = x * 4;
+        int di = (x + offsetX) * 4;
+        int r = srcLine[si + 0];
+        int g = srcLine[si + 1];
+        int b = srcLine[si + 2];
+        float luma = (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.0f;
+        float alpha = isInverted ? luma : (1.0f - luma);
+        int a = qBound(0, static_cast<int>(alpha * 255.0f + 0.5f), 255);
+        dstLine[di + 0] = static_cast<uchar>(a);
+        dstLine[di + 1] = static_cast<uchar>(a);
+        dstLine[di + 2] = static_cast<uchar>(a);
+        dstLine[di + 3] = static_cast<uchar>(a);
+      }
+    }
   }
 
   // Paint debug label onto the icon
@@ -230,6 +303,46 @@ RadialRenderer::loadIconTextureWithLabel(D3D11Context *ctx,
 
   qInfo() << "RadialRenderer: Loaded icon with label" << qrcPath
           << "label:" << label;
+  return srv;
+}
+
+ComPtr<ID3D11ShaderResourceView>
+RadialRenderer::createLabelTexture(D3D11Context *ctx, const QString &label) {
+  constexpr int kIconSize = 128;
+  QImage rgba(kIconSize, kIconSize, QImage::Format_RGBA8888);
+  rgba.fill(Qt::transparent);
+
+  QPainter painter(&rgba);
+  painter.setRenderHint(QPainter::Antialiasing);
+
+  // Large bold letter centered in the texture
+  QFont font(QStringLiteral("Arial"), 64, QFont::Bold);
+  painter.setFont(font);
+
+  QRect textRect = rgba.rect();
+
+  // Black outline for readability (4 directions)
+  painter.setPen(QPen(QColor(0, 0, 0, 200), 3));
+  for (int dx = -2; dx <= 2; dx += 2) {
+    for (int dy = -2; dy <= 2; dy += 2) {
+      if (dx == 0 && dy == 0) continue;
+      painter.drawText(textRect.translated(dx, dy), Qt::AlignCenter, label);
+    }
+  }
+
+  // White text
+  painter.setPen(Qt::white);
+  painter.drawText(textRect, Qt::AlignCenter, label);
+  painter.end();
+
+  auto srv = ctx->createTextureFromRGBA(rgba.width(), rgba.height(),
+                                         rgba.constBits());
+  if (!srv) {
+    qWarning() << "RadialRenderer: Failed to create label texture:" << label;
+    return nullptr;
+  }
+
+  qInfo() << "RadialRenderer: Created label texture:" << label;
   return srv;
 }
 
